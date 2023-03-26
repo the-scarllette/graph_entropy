@@ -751,6 +751,42 @@ def get_results(environment: Environment, num_timesteps, options_training_timest
 
 if __name__ == "__main__":
 
+    tiny_town_env = TinyTown(3, 3, pick_every=1)
+    adj_matrix, all_states = tiny_town_env.get_adjacency_matrix()
+
+    print("Finding Goals")
+    print("    Adjacency Matrix Found")
+    inf_values = compute_graph_entropy_values(adj_matrix, weighted=True, beta=1.0)
+    print("    Influence Values Computed")
+    betweenness = compute_betweeness(adj_matrix)
+    print("    Betweenness Values Computed")
+    is_betweeness_local_maxima = find_local_maxima(adj_matrix,
+                                                   [betweenness[i]['betweenness'] for i in range(adj_matrix.shape[0])])
+    betweeness_local_maxima = [all_states[i] for i in range(adj_matrix.shape[0])
+                               if is_betweeness_local_maxima[i]]
+
+    for i in inf_values:
+        state = all_states[i]
+        name = ""
+        for x in range(tiny_town_env.width):
+            for y in range(tiny_town_env.height):
+                name += str(state[y, x])
+            name += '\n'
+        tile = str(state[tiny_town_env.height, tiny_town_env.width])
+
+        inf_values[i]['name'] = name
+        inf_values[i]['tile'] = tile
+        inf_values[i]['betweenness'] = float(betweenness[i]['betweenness'])
+        inf_values[i]['betweenness local maxima'] = str(betweeness_local_maxima[i])
+
+    pick_key = {0: 'random', 1: 'choice'}
+    g = nx.from_numpy_matrix(adj_matrix, create_using=nx.MultiDiGraph())
+    nx.set_node_attributes(g, inf_values)
+    nx.write_gexf(g, 'tiny_towns_' + str(tiny_town_env.height) + 'x' + str(tiny_town_env.width) + '_' +
+                  pick_key[tiny_town_env.pick_every] + '.gexf')
+
+    '''
+
     data = graphing.extract_data('results/railroadrandom')
     graphing.graph_reward_per_timestep(data, window=500,
                                        name='Railroad 3x3 Random',
@@ -790,7 +826,6 @@ if __name__ == "__main__":
                     q_learning_alpha=q_learning_alpha, q_learning_gamma=q_learning_gamma,
                     q_learning_epsilon=q_learning_epsilon, graph_name=graph_names[i])
 
-    '''
     def get_rolling_sum(a):
         total = 0
         rolling_sum = []
