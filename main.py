@@ -750,6 +750,9 @@ def get_results(environment: Environment, num_timesteps, options_training_timest
 
 
 if __name__ == "__main__":
+    
+    print("Hello world")
+    exit()
 
     tiny_town_env = TinyTown(3, 3, pick_every=1)
     adj_matrix, all_states = tiny_town_env.get_adjacency_matrix()
