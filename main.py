@@ -557,8 +557,10 @@ def train_agent(env: Environment, agent, num_episodes, true_state=False, all_act
     agent_successes = []
 
     track_successes = True
+    still_training = True
+    timesteps = 0
 
-    for _ in range(num_episodes):
+    while still_training:
         done = False
         state = env.reset(true_state)
         if not all_actions_valid:
@@ -570,6 +572,10 @@ def train_agent(env: Environment, agent, num_episodes, true_state=False, all_act
             else:
                 action = agent.choose_action(state, possible_actions=current_possible_actions)
             next_state, reward, done, info = env.step(action, true_state)
+            timesteps += 1
+            if timesteps >= num_episodes - 1:
+                still_training = False
+                done = True
 
             if all_actions_valid:
                 agent.learn(state, action, reward, next_state)
@@ -580,6 +586,8 @@ def train_agent(env: Environment, agent, num_episodes, true_state=False, all_act
 
                 agent_returns.append(reward)
                 state = next_state
+               
+           
 
         if track_successes:
             try:
