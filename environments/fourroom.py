@@ -56,46 +56,47 @@ class FourRoom(Environment):
         y = state_code[i]
         return {'x': int(x), 'y': int(y)}
 
-    def get_adjacency_matrix(self):
-        matrix_len = self.width * self.height
+    def get_successor_states(self, state, probability_weights=False):
+        x = state[0]
+        y = state[1]
 
-        adj_matrix = np.zeros((matrix_len, matrix_len))
+        self_transition_actions = 0
+        successors = []
+        num_successors = 0
 
-        def index_to_x_y(index):
-            state_y = index // self.width
-            state_x = index - state_y * self.width
-            return state_x, state_y
+        to_check = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]
 
-        def x_y_to_index(state_x, state_y):
-            return state_y * self.width + state_x
+        for cord in to_check:
+            rooms = self.get_rooms(cord[0], cord[1])
 
-        for i in range(matrix_len):
-            adj_matrix.itemset((i, i), 1)
-
-            x, y = index_to_x_y(i)
-            if not self.valid_state(x, y):
+            if not rooms:
+                self_transition_actions += 1
                 continue
-            connected_states = []
-            for new_x in range(x - 1, x + 2):
-                if new_x == x:
-                    continue
-                if self.valid_state(new_x, y):
-                    connected_states.append(x_y_to_index(new_x, y))
-            for new_y in range(y - 1, y + 2):
-                if new_y == y:
-                    continue
-                if self.valid_state(x, new_y):
-                    connected_states.append(x_y_to_index(x, new_y))
+            successors.append(np.array(cord))
+            num_successors += 1
 
-            for connected_state in connected_states:
-                adj_matrix.itemset((i, connected_state), 1)
+        transition_probability = 1.0
+        self_transition_probability = 1.0
+        if probability_weights:
+            num_actions = len(self.possible_actions)
+            transition_probability = (num_actions - self_transition_actions) / (num_actions * num_successors)
+            self_transition_probability = self_transition_actions / num_actions
 
-        return adj_matrix
+        probability_weights = [transition_probability] * len(successors)
+
+        if self_transition_actions > 0:
+            successors.append(state)
+            probability_weights.append(self_transition_probability)
+
+        return successors, probability_weights
 
     def at_location(self, location: (int, int)) -> bool:
         if self.terminal:
             return False
         return location[0] == self.x and location[1] == self.y
+
+    def get_start_states(self):
+        return [np.array([0, 0])]
 
     def get_current_state(self):
         if self.terminal:

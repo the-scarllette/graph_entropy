@@ -8,7 +8,10 @@ from genericfunctions import max_index, max_key
 
 class QLearningAgent:
 
-    def __init__(self, actions, alpha, epsilon, gamma):
+    default_intrinsic_reward_lambda = 0.5
+
+    def __init__(self, actions, alpha, epsilon, gamma, intrinsic_reward=None,
+                 intrinsic_reward_lambda=None):
         self.actions = actions
 
         self.alpha = alpha
@@ -16,6 +19,14 @@ class QLearningAgent:
         self.gamma = gamma
 
         self.q_values = {}
+        self.intrinsic_reward = intrinsic_reward
+        self.intrinsic_reward_lambda = intrinsic_reward_lambda
+        if self.intrinsic_reward is not None and intrinsic_reward_lambda is None:
+            self.intrinsic_reward_lambda = self.default_intrinsic_reward_lambda
+        return
+
+    def copy_agent(self, copy_from):
+        self.q_values = copy_from.q_values.copy()
         return
 
     def choose_action(self, state, optimal_choice=False, possible_actions=None):
@@ -58,9 +69,26 @@ class QLearningAgent:
         if not next_action_values:
             next_action_values = [0.0]
 
+        if self.intrinsic_reward is not None:
+            intrinsic_reward = self.intrinsic_reward(next_state)
+            reward = reward + (self.intrinsic_reward_lambda * intrinsic_reward)
+
         action_value = action_values[action]
         action_values[action] = action_value + (self.alpha *
                                                 (reward + (self.gamma * max(next_action_values) - action_value)))
+        return
+
+    def load_policy(self, load_path):
+        try:
+            with open(load_path, 'r') as f:
+                self.q_values = json.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError()
+
+        for state in self.q_values:
+            old_dict = self.q_values[state]
+            new_dict = {int(key): old_dict[key] for key in old_dict}
+            self.q_values[state] = new_dict
         return
 
     def save(self, save_path):

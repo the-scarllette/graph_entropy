@@ -1,74 +1,158 @@
 import json
 import random as rand
+import typing
 import networkx as nx
 import numpy as np
+from scipy import sparse
 
 from environments.environment import Environment
 from learning_agents.qlearningagent import QLearningAgent
+from progressbar import print_progress_bar
 
 
-def generate_options_from_goals(environment: Environment, stg: nx.Graph, goals, all_states, training_episodes,
-                                true_state=True, all_actions_valid=True):
+def create_option_goal_initiation_func(goal_index, stg=None, adj_matrix=None, state_indexer=None):
+    if (stg is None) and (adj_matrix is None):
+        raise AttributeError("A state transition graph or adjacency matrix is required"
+                             "to create an initiation function")
 
-    def generate_initiation_func(target):
-        target_index = all_states.index(target.tobytes())
-        def initiation_func(s):
-            if np.array_equal(s, target):
+    if (adj_matrix is not None) and (state_indexer is None):
+        raise AttributeError("A state-indexer is required to create an initiation function using"
+                             "an adjacency matrix")
+
+    if stg is not None:
+        goal_state = stg.nodes[goal_index]['state']
+
+        def get_state_index(state):
+            s_str = np.array2string(np.ndarray.astype(state, dtype=int))
+            for node in stg.nodes:
+                if stg.nodes[node]['state'] == s_str:
+                    return node
+            return None
+
+        def path_function(state_index):
+            if state_index == goal_state:
                 return False
-            s_index = all_states.index(s.tobytes())
-            return nx.has_path(stg, s_index, target_index)
-        return initiation_func
+            return nx.has_path(stg, state_index, goal_index)
+    else:
+        for goal_state in state_indexer:
+            if state_indexer[goal_state] == goal_index:
+                break
 
-    def generate_terminating_func(target):
-        target_index = all_states.index(target.tobytes())
-        def terminating_func(s):
-            if np.array_equal(s, target):
-                return True
-            s_index = all_states.index(s.tobytes())
-            return not nx.has_path(stg, s_index, target_index)
-        return terminating_func
+        distance_matrix = sparse.csgraph.shortest_path(adj_matrix)
+
+        def get_state_index(state):
+            return state_indexer[np.array2string(np.ndarray.astype(state, dtype=int))]
+
+        def path_function(state_index):
+            distance = distance_matrix[int(state_index), int(goal_index)]
+            return (distance != 0) and (distance != np.inf)
+
+    def initiation_func(state):
+        path_exists = path_function(get_state_index(state))
+        return path_exists
+
+    return initiation_func
 
 
-    options = []
-    start_states = [s.tobytes() for s in environment.get_start_states()]
-    for goal in goals:
-        if goal.tobytes() in start_states:
+def generate_option_to_goal(environment: Environment, goal_index,
+                                training_steps,
+                                stg=None, adj_matrix=None, state_indexer=None,
+                                all_actions_valid=True,
+                                alpha=0.9, epsilon=0.1, gamma=0.9,
+                                progress_bar=False, save_path=None):
+    if (stg is None) and (adj_matrix is None):
+        raise AttributeError("Require a state transition graph or adjacency matrix to create option")
+
+    if (adj_matrix is not None) and (state_indexer is None):
+        raise AttributeError("Require a state-indexer if using adjacency matrix to create option")
+
+    if stg is not None:
+        in_edges = stg.in_edges(goal_index)
+        if len(in_edges) <= 0:
+            return None
+
+        def get_state_index(s):
+            try:
+                s_str = np.array2string(np.ndarray.astype(s, dtype=int))
+            except TypeError:
+                s_str = s
+            for node in stg.nodes:
+                if stg.nodes[node]['state'] == s_str:
+                    return node
+            return None
+    else:
+        if adj_matrix.getcol(goal_index).sum() <= 0:
+            return None
+
+        def get_state_index(s):
+            return state_indexer[s]
+
+    initiation_func = create_option_goal_initiation_func(goal_index, stg, adj_matrix, state_indexer)
+
+    def terminating_func(s):
+        return not initiation_func(s)
+
+    policy = QLearningAgent(environment.possible_actions, alpha, epsilon, gamma)
+
+    training_complete = False
+    current_step = 0
+
+    if progress_bar:
+        print("Training option to goal " + str(goal_index))
+
+    while not training_complete:
+        done = False
+        state = environment.reset()
+        if terminating_func(state):
             continue
 
-        policy = QLearningAgent(environment.possible_actions, alpha=0.9, epsilon=0.1, gamma=0.9)
-        option_terminating_func = generate_terminating_func(goal)
+        if not all_actions_valid:
+            current_possible_actions = environment.get_possible_actions()
 
-        for _ in range(training_episodes):
-            done = False
-            state = environment.reset(true_state)
-            if not all_actions_valid:
+        while not done:
+            if all_actions_valid:
+                action = policy.choose_action(state)
+            else:
+                action = policy.choose_action(state, possible_actions=current_possible_actions)
+
+            next_state, _, done, _ = environment.step(action)
+            current_step += 1
+
+            if progress_bar:
+                print_progress_bar(current_step, training_steps,
+                                   prefix='Option Training: ', suffix='Complete')
+
+            reward = -0.001
+            np_array = np.ndarray.astype(next_state, dtype=int)
+            target_index = get_state_index(np.array2string(np_array))
+            if goal_index == target_index:
+                done = True
+                reward = 1.0
+            elif terminating_func(next_state) or done:
+                done = True
+                reward = -1.0
+
+            if all_actions_valid:
+                policy.learn(state, action, reward, next_state, terminal=done)
+            else:
                 current_possible_actions = environment.get_possible_actions()
-            while not done:
-                if all_actions_valid:
-                    action = policy.choose_action(state)
-                else:
-                    action = policy.choose_action(state, possible_actions=current_possible_actions)
-                next_state, _, done, _ = environment.step(action, true_state=true_state)
-                reward = 0.0
-                if np.array_equal(next_state, goal):
-                    done = True
-                    reward = 1.0
-                elif option_terminating_func(next_state):
-                    done = True
+                policy.learn(state, action, reward, next_state, terminal=done,
+                             next_state_possible_actions=current_possible_actions)
 
-                if all_actions_valid:
-                    policy.learn(state, action, reward, next_state)
-                else:
-                    current_possible_actions = environment.get_possible_actions()
-                    policy.learn(state, action, reward, next_state,
-                                 next_state_possible_actions=current_possible_actions)
-                state = next_state
+            state = next_state
 
-        option = Option(environment.possible_actions, policy,
-                        initiation_func=generate_initiation_func(goal),
-                        terminating_func=option_terminating_func)
-        options.append(option)
-    return options
+            if current_step >= training_steps:
+                training_complete = True
+                break
+
+    option = Option(environment.possible_actions, policy,
+                    initiation_func=initiation_func,
+                    terminating_func=terminating_func)
+
+    if save_path is not None:
+        policy.save(save_path)
+
+    return option
 
 
 class Option:
@@ -83,11 +167,15 @@ class Option:
 
     def choose_action(self, state, possible_actions=None):
         if self.policy is None:
-            raise AttributeError('Option must have a defined policy')
+            try:
+                action = self.actions[0]
+                return action
+            except IndexError:
+                raise AttributeError('Option must have a defined policy or a set of actions')
         return self.policy.choose_action(state, True, possible_actions=possible_actions)
 
     def has_policy(self):
-        return self.policy is not None
+        return not (self.policy is None)
 
     def initiated(self, state):
         if self.initiation_func is None:
@@ -108,7 +196,8 @@ class Option:
 
 class OptionsAgent:
 
-    def __init__(self, alpha, epsilon, gamma, options, step_size=None, intra_option=False):
+    def __init__(self, alpha, epsilon, gamma, options, step_size=None, intra_option=False, state_dtype=int,
+                 termination_func=None):
         self.alpha = alpha
         self.epsilon = epsilon
         self.gamma = gamma
@@ -124,13 +213,29 @@ class OptionsAgent:
         self.current_option_step = 0
 
         self.state_option_values = {}
+        self.intra_state_option_values = {}
 
         self.intra_option = intra_option
+        self.state_dtype = state_dtype
+
+        self.termination_func = termination_func
+
+        self.last_possible_actions = None
         return
 
     def choose_action(self, state, optimal_choice=False, possible_actions=None):
+        self.last_possible_actions = possible_actions
+
         if self.current_option is None or (self.step_size is not None and self.current_step % self.step_size == 0):
             self.current_option = self.choose_option(state, optimal_choice, possible_actions)
+            if self.current_option is None:
+                return None
+
+        try:
+            if self.current_option.policy.current_option.terminated(state):
+                self.current_option.policy.current_option = None
+        except AttributeError:
+            ()
 
         if self.current_option.has_policy():
             chosen_action = self.current_option.choose_action(state, possible_actions)
@@ -150,6 +255,8 @@ class OptionsAgent:
         self.option_start_state = state
 
         available_options = self.get_available_options(state, possible_actions=possible_actions)
+        if len(available_options) == 0:
+            return None
 
         if not no_random and rand.uniform(0, 1) < self.epsilon:
             return rand.choice(available_options)
@@ -168,6 +275,11 @@ class OptionsAgent:
                 ops.append(op)
         return rand.choice(ops)
 
+    def copy_agent(self, copy_from):
+        self.state_option_values = copy_from.state_option_values.copy()
+        self.current_option = None
+        return
+
     def get_available_options(self, state, possible_actions=None):
         available_options = []
         for option in self.options:
@@ -180,35 +292,33 @@ class OptionsAgent:
                 available_options.append(option)
         return available_options
 
+    def get_intra_state_option_values(self, state, available_options=None):
+        state_str = state_str = np.array2string(np.ndarray.astype(state, dtype=self.state_dtype))
+
+        try:
+            option_values = self.intra_state_option_values[state_str]
+        except KeyError:
+            if available_options is None:
+                available_options = self.get_available_options(state)
+            option_values = {option: 0.0 for option in available_options}
+            self.intra_state_option_values[state_str] = option_values
+        return option_values
+
     def get_state_option_values(self, state, available_options=None):
-        state_str = np.array2string(state)
+        state_str = np.array2string(np.ndarray.astype(state, dtype=self.state_dtype))
 
         try:
             option_values = self.state_option_values[state_str]
         except KeyError:
-            if self.intra_option:
-                available_options = self.options
-            elif available_options is None:
+            if available_options is None:
                 available_options = self.get_available_options(state)
             option_values = {option: 0.0 for option in available_options}
             self.state_option_values[state_str] = option_values
         return option_values
 
-    def intra_option_learning(self, state, action, reward, next_state, terminal):
-        state_option_value = self.get_state_option_values(state)[self.current_option]
-        next_state_option_values = self.get_state_option_values(next_state)
-
-        option = self.current_option
-        if not terminal and not self.current_option.terminated(next_state):
-            u = next_state_option_values[self.current_option]
-        else:
-            u = max(list(next_state_option_values.values()))
-            self.current_option = None
-            self.option_start_state = None
-
-        state_str = np.array2string(state)
-        self.state_option_values[state_str][option] += self.alpha * \
-                                                       (reward + (self.gamma * u) - state_option_value)
+    def intra_option_learning(self, state, action, reward, next_state,
+                              terminal=None,
+                              next_state_possible_actions=None):
         return
 
     def learn(self, state, action, reward, next_state,
@@ -221,27 +331,27 @@ class OptionsAgent:
         if not (terminal or self.current_option.terminated(next_state)):
             return
 
+        try:
+            self.current_option.policy.current_option = None
+        except AttributeError:
+            ()
+
         option_value = self.get_state_option_values(self.option_start_state)[self.current_option]
-        all_next_options = self.get_state_option_values(next_state)
+        all_next_options = []
+        if not terminal:
+            all_next_options = self.get_state_option_values(next_state)
 
         next_options = all_next_options
         if next_state_possible_actions is not None:
-            next_options = []
-            for option in self.options:
-                if not option.has_policy():
-                    if option.actions[0] in next_state_possible_actions:
-                        next_options.append(option)
-                    continue
+            next_options = self.get_available_options(next_state, next_state_possible_actions)
 
-                if option.initiated(next_state):
-                    next_options.append(option)
-
-        next_option_values = [all_next_options[option] for option in next_options]
-        if not next_options:
+        if (not next_options) or (not all_next_options):
             next_option_values = [0.0]
+        else:
+            next_option_values = [all_next_options[option] for option in next_options]
         max_next_option = max(next_option_values)
 
-        state_str = np.array2string(self.option_start_state)
+        state_str = np.array2string(np.ndarray.astype(self.option_start_state, dtype=self.state_dtype))
 
         self.state_option_values[state_str][self.current_option] += self.alpha * \
                                                                     (self.total_option_reward +
@@ -276,3 +386,8 @@ class OptionsAgent:
         with open(save_path, 'w') as f:
             json.dump(data, f)
         return
+
+    def terminated(self, state):
+        if self.terminating_func is None:
+            return True
+        return self.terminating_func(state)

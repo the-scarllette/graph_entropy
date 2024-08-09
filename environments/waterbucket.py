@@ -30,6 +30,13 @@ class WaterBucket(Environment):
         self.possible_actions = list(range(self.num_actions))
 
         self.current_state = None
+
+        self.environment_name = 'waterbucket'
+        name_details = [self.buckets, self.start, self.goal]
+        for detail in name_details:
+            self.environment_name += '_' + str(detail[0])
+            for i in range(1, self.num_buckets):
+                self.environment_name += 'x' + str(detail[i])
         return
 
     def pour(self, action, state):
@@ -53,12 +60,19 @@ class WaterBucket(Environment):
     def get_start_states(self):
         return [self.start]
 
-    def get_successor_states(self, state):
+    def get_successor_states(self, state, probability_weights=False):
         if np.array_equal(state, self.goal):
-            return []
+            return [], []
         successors = [successor for action in range(self.num_actions)
                       if not np.array_equal(successor := self.pour(action, state), state)]
-        return successors
+
+        weights = [1.0 for successor in successors]
+        if not probability_weights:
+            return successors, weights
+
+        weight = 1/sum(weights)
+        weights = [weight] * len(weights)
+        return successors, weights
 
     def step(self, action, true_state=False) -> (Any, float, bool, Any):
         if self.terminal:

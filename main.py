@@ -1,332 +1,726 @@
+import copy
 import json
 import math
 import os
+import random
 
 import networkx as nx
-from networkx import DiGraph
 import numpy as np
-import random as rand
+from scipy import sparse
+import time
 
-import environments.taxicab
+import environments.environment
 from environments.environment import Environment
-from environments.deepseaexplore import DeepSeaExplore
 from environments.fourroom import FourRoom
-from environments.hanoi import HanoiEnvironment
+from environments.game2048 import Game2048
+from environments.GridworldTron import GridworldTron
 from environments.keycard import KeyCard
+from environments.lavaflow import LavaFlow
+from environments.MasterMind import MasterMind
+from environments.potionmaking import PotionMaking
 from environments.railroad import RailRoad
-from environments.sixroom import SixRoom
+from environments.simplewindgridworld import SimpleWindGridWorld
 from environments.taxicab import TaxiCab
 from environments.tinytown import TinyTown
 from environments.waterbucket import WaterBucket
-from graph import Graph
 import graphing
-from learning_agents.optionsagent import Option, OptionsAgent, generate_options_from_goals
+from learning_agents.dadsagent import DADSAgent
+from learning_agents.diaynagent import DIAYNAgent
+from learning_agents.eigenoptionagent import EigenOptionAgent
+from learning_agents.learningagent import LearningAgent
+from learning_agents.louvainagent import LouvainAgent
+from learning_agents.multilevelgoalagent import MultiLevelGoalAgent
+from learning_agents.optionsagent import Option, OptionsAgent, create_option_goal_initiation_func, \
+    generate_option_to_goal
 from learning_agents.qlearningagent import QLearningAgent
+from learning_agents.softactorcritic import SoftActorCritic
+from learning_agents.vicagent import VICAgent
+from progressbar import print_progress_bar
 
 
-def find_goals(env: Environment, num_steps, assign_frequency, t_o, t_p, alpha, beta):
-    goals = []
-    state_hit_obs = {}
+def add_local_maxima_to_file(env_name, key, num_hops=1, compressed_matrix=False, progress_bar=False):
+    stg_values_filename = env_name + '_stg_values.json'
+    adj_matrix_filename = env_name + '_adj_matrix.txt'
 
-    def add_to_state_hit_obs(s, obs_to_add, hits_to_add):
-        try:
-            state_hit_obs[s][0] += obs_to_add
-            state_hit_obs[s][1] += hits_to_add
-        except KeyError:
-            state_hit_obs[s] = [obs_to_add, hits_to_add]
+    if compressed_matrix:
+        adj_matrix = sparse.load_npz(adj_matrix_filename + '.npz')
+    else:
+        adj_matrix = np.loadtxt(adj_matrix_filename)
+
+    with open(stg_values_filename, 'r') as f:
+        stg_values = json.load(f)
+
+    stg_values = {int(state): stg_values[state] for state in stg_values}
+    progress_bar_prefix = None
+    if progress_bar:
+        progress_bar_prefix = 'Finding local Maxima ' + str(num_hops) + ' hops'
+    local_maxima = find_local_maxima(adj_matrix, stg_values, num_hops, key, progress_bar_prefix)
+
+    local_maxima_key = key + ' - local maxima'
+
+    for state in stg_values:
+        if adj_matrix[:, state].sum() <= 0:
+            local_maxima[int(state)] = False
+        stg_values[state][local_maxima_key] = str(local_maxima[int(state)])
+
+    with open(stg_values_filename, 'w') as f:
+        json.dump(stg_values, f)
+
+    if compressed_matrix:
         return
 
-    def add_transition_to_graph(graph, s, s_prime):
-        s_added = graph.add_node(s)
-        s_prime_added = graph.add_node(s_prime)
+    stg_values = {str(state): stg_values[state] for state in stg_values}
 
-        s_node = graph.get_node(s)
-        try:
-            s_node.pointers[s_prime] += 1
-        except KeyError:
-            s_prime_node = graph.get_node(s_prime)
-            s_node.add_pointer(s_prime_node, 1)
+    stg_filename = env_name + '_stg.gexf'
+    stg = nx.read_gexf(stg_filename)
+    nx.set_node_attributes(stg, stg_values)
+    nx.write_gexf(stg, stg_filename)
+    return
 
-        if s_added:
-            add_to_state_hit_obs(s, 1, 0)
-        if s_prime_added:
-            add_to_state_hit_obs(s_prime, 1, 0)
 
+def add_preparedness_subgoals_to_file(env_name, min_num_subgoals, min_num_hops=1, max_num_hops=5,
+                                      use_stg=False, beta=None):
+    stg_values_filename = env_name + '_stg_values.json'
+
+    if use_stg:
+        stg_filename = env_name + '_stg.gexf'
+        stg = nx.read_gexf(stg_filename)
+
+        def subgoal_function(x):
+            return find_preparedness_subgoals(x, min_num_subgoals, stg=stg)
+    else:
+        adj_matrix_filename = env_name + '_adj_matrix.txt.npz'
+        adj_matrix = sparse.load_npz(adj_matrix_filename)
+
+        def subgoal_function(x):
+            return find_preparedness_subgoals(x, min_num_subgoals, adj_matrix=adj_matrix)
+
+    with open(stg_values_filename, 'r') as f:
+        data = json.load(f)
+
+    for num_hops in range(min_num_hops, max_num_hops + 1):
+        key = 'preparedness - ' + str(num_hops) + ' hops'
+        if beta is not None:
+            key += ' - beta = ' + str(beta)
+
+        nodes_preparedness = {node: data[node][key] for node in data}
+        subgoals = subgoal_function(nodes_preparedness)
+
+        key += ' subgoal'
+        for node in data:
+            data[node][key] = node in subgoals
+
+    with open(stg_values_filename, 'w') as f:
+        json.dump(data, f)
+
+    if not use_stg:
+        return
+    nx.set_node_attributes(stg, data)
+    nx.write_gexf(stg, stg_filename)
+    return
+
+
+def add_subgoals(env_name,
+                 compressed_matrix=False,
+                 beta=0.5, beta_values=None, min_num_hops=1, max_num_hops=10,
+                 log_base=2, add_betweenness=False,
+                 accuracy=6):
+    adj_matrix_filename = env_name + '_adj_matrix.txt'
+    stg_values_filename = env_name + '_stg_values.json'
+    stg_filename = env_name + '_stg.gexf'
+
+    if compressed_matrix:
+        adj_matrix = sparse.load_npz(adj_matrix_filename + '.npz')
+    else:
+        adj_matrix = np.loadtxt(adj_matrix_filename)
+
+    with open(stg_values_filename, 'r') as f:
+        stg_values = json.load(f)
+
+    if min_num_hops > 0:
+        print("Finding Preparedess Values")
+        if beta_values is None:
+            beta_values = [beta]
+
+        for hops in range(min_num_hops, max_num_hops + 1):
+            preparedness_values = preparedness(adj_matrix, None, beta_values,
+                                               min_num_hops, hops, log_base, accuracy)
+            for state in stg_values:
+                stg_values[state].update(preparedness_values[int(state)])
+
+            with open(stg_values_filename, 'w') as f:
+                json.dump(stg_values, f)
+
+    if add_betweenness:
+        print("Finding betweenness")
+        betweenness_values = compute_betweeness(adj_matrix)
+        betweenness_local_maxima = find_local_maxima(adj_matrix, betweenness_values, key='betweenness')
+
+        for state in stg_values:
+            stg_values[state]['betweenness'] = betweenness_values[int(state)]
+            is_betweenness_local_maxima = betweenness_local_maxima[int(state)]
+            stg_values[state]['betweenness local maxima'] = str(is_betweenness_local_maxima)
+
+        with open(stg_values_filename, 'w') as f:
+            json.dump(stg_values, f)
+
+    if compressed_matrix:
         return
 
-    def rank_states(graph):
-        adjacency_matrix = np.zeros((graph.num_nodes, graph.num_nodes))
-
-        for i in range(graph.num_nodes):
-            node = graph.nodes[i]
-            for j in range(graph.num_nodes):
-                pointing_to = graph.nodes[j]
-                if j == i:
-                    weight = 1.0
-                else:
-                    try:
-                        weight = node.pointers[pointing_to]
-                    except KeyError:
-                        weight = 0.0
-                adjacency_matrix.itemset(i, j, weight)
-
-        def get_key_func(k):
-            def get_value_k(d):
-                return d[k]
-
-            return get_value_k
-
-        li_array = [find_local_influence(adjacency_matrix, node, alpha=alpha) for node in range(graph.num_nodes)]
-        ii_array = [find_indirect_influence(adjacency_matrix, node, li_array) for node in range(graph.num_nodes)]
-        influences_array = [{'state': graph.nodes[node].name,
-                             'local': li_array[node],
-                             'indirect': ii_array[node],
-                             'total': (beta * li_array[node] + (1 - beta) * ii_array[node])}
-                            for node in range(graph.num_nodes)]
-        influences_array.sort(key=get_key_func('total'), reverse=True)
-        return [dic['state'] for dic in influences_array]
-
-    possible_actions = env.possible_actions
-
-    done = True
-    trajectory_graph = None
-    for i in range(num_steps):
-        if done or i % assign_frequency == 0:
-            if trajectory_graph is not None and trajectory_graph.num_nodes > 1:
-                ranked_states = rank_states(trajectory_graph)
-                max_power_state = ranked_states[0]
-
-                add_to_state_hit_obs(max_power_state, 0, 1)
-                num_observations = state_hit_obs[max_power_state][0]
-                if num_observations > t_o:
-                    hit_rate = state_hit_obs[max_power_state][1] / num_observations
-                    if hit_rate > t_p:
-                        if max_power_state not in goals:
-                            goals.append(max_power_state)
-
-            trajectory_graph = Graph()
-        if done:
-            state = env.reset()
-            done = False
-            trajectory_graph.add_node(state)
-            add_to_state_hit_obs(state, 1, 0)
-
-        action = rand.choice(possible_actions)
-        next_state, _, done, _ = env.step(action)
-
-        add_transition_to_graph(trajectory_graph, state, next_state)
-        state = next_state
-
-    return goals
+    stg = nx.read_gexf(stg_filename)
+    nx.set_node_attributes(stg, stg_values)
+    nx.write_gexf(stg, stg_filename)
+    return
 
 
-def find_indirect_influence(adjacency_matrix: np.matrix, node, local_influences=None):
-    nodes = list(range(adjacency_matrix.shape[0]))
+def compute_betweeness(adj_matrix):
+    env_nodes = range(adj_matrix.shape[0])
 
-    if local_influences is None:
-        local_influences = [find_local_influence(adjacency_matrix, i) for i in nodes]
+    def get_neighbours(node_to_get):
+        return [i for i in env_nodes if i != node_to_get and adj_matrix[node_to_get, i] > 0]
 
-    connected_nodes = get_connected_nodes(adjacency_matrix, node)
+    node_betweenness_array = [0 for _ in env_nodes]
+    for node in env_nodes:
+        print_progress_bar(node, adj_matrix.shape[0],
+                           prefix='Betweenness: ', suffix=" complete")
+        S = []
+        S_len = 0
+        Q = [node]
+        Q_len = 1
+        d = [-1 for _ in env_nodes]
+        sigma = [0 for _ in env_nodes]
+        d[node] = 0
+        sigma[node] = 1
+        P = [[] for _ in env_nodes]
 
-    two_hop_paths = {}
-    for i in connected_nodes:
-        connected_to_i = get_connected_nodes(adjacency_matrix, i)
-        for j in connected_to_i:
-            if i == j or j in connected_nodes:
-                continue
-            try:
-                two_hop_paths[j].append((node, i))
-            except KeyError:
-                two_hop_paths[j] = [(node, i)]
+        while Q_len > 0:
+            v = Q.pop(0)
+            Q_len -= 1
+            S.append(v)
+            S_len += 1
+            v_neighbours = get_neighbours(v)
+            for w in v_neighbours:
+                if d[w] < 0:
+                    Q.append(w)
+                    Q_len += 1
+                    d[w] = d[v] + 1
+                if d[w] == d[v] + 1:
+                    sigma[w] += sigma[v]
+                    P[w].append(v)
 
-    ii = 0
-    num_two_hop_neighbours = 0
-    for two_hop_neighbour in two_hop_paths:
-        num_two_hop_neighbours += 1
-        paths = two_hop_paths[two_hop_neighbour]
-        to_add = sum([local_influences[path[0]] * local_influences[path[1]] for path in paths]) / len(paths)
-        ii += to_add
-    if num_two_hop_neighbours == 0:
-        return 0
-    ii *= 1 / num_two_hop_neighbours
-    return ii
+        delta = [0 for _ in env_nodes]
+        while S_len > 0:
+            w = S.pop(S_len - 1)
+            S_len -= 1
+            for v in P[w]:
+                delta[v] += (sigma[v] / sigma[w]) * (1 + delta[w])
+                if w != node:
+                    node_betweenness_array[w] += delta[w]
 
+    betweenness_values = {i: {'betweenness': node_betweenness_array[i]}
+                          for i in env_nodes}
 
-def find_local_influence(adjacency_matrix: np.matrix, node, alpha=1, log_base=10, weighted=False):
-    if not weighted:
-        alpha = 0
-
-    connected_nodes = get_connected_nodes(adjacency_matrix, node)
-    num_one_hop_nodes = len(connected_nodes)
-    one_hop_nodes = np.zeros((num_one_hop_nodes, num_one_hop_nodes))
-    for i in range(num_one_hop_nodes):
-        for j in range(num_one_hop_nodes):
-            one_hop_nodes.itemset(i, j, adjacency_matrix.item(connected_nodes[i], connected_nodes[j]))
-
-    sdc_values = []
-    for i in range(num_one_hop_nodes):
-        sdc = 0
-        k = 0
-        for j in range(num_one_hop_nodes):
-            if i == j:
-                continue
-            weight_j_i = one_hop_nodes.item(j, i)
-            sdc += weight_j_i
-            if weight_j_i > 0:
-                k += 1
-        sdc *= (k / num_one_hop_nodes) ** alpha
-        sdc_values.append(sdc)
-    sdc_sum = sum(sdc_values)
-
-    if sdc_sum <= 0:
-        return 0
-    li = math.log(sdc_sum, log_base)
-    to_add = 0
-    for sdc in sdc_values:
-        if sdc > 0:
-            to_add += sdc * math.log(sdc, log_base)
-    li -= to_add / sdc_sum
-
-    return li
+    return betweenness_values
 
 
-def find_local_maxima(adjacency_matrix: np.matrix, values):
+def compute_entropy(distribution, log_base=10):
+    entropy = 0
+    for prob in distribution:
+        if prob <= 0:
+            continue
+        entropy -= prob * np.emath.logn(log_base, prob)
+    return entropy
+
+
+def create_preparedness_reward_function(environment_name, hops, beta=None):
+    with open(environment_name + '_stg_values.json', 'r') as f:
+        stg_values = json.load(f)
+
+    key = 'preparedness - ' + str(hops) + ' hops'
+    if beta is not None:
+        key += ' - beta = ' + str(beta)
+
+    stg_lookup = {stg_values[state_index]['state']: stg_values[state_index][key]
+                  for state_index in stg_values}
+
+    return lambda state: stg_lookup[np.array2string(state)]
+
+
+def extract_graph_entropy_values(values_dict):
+    extracted_graph_entropies = {values_dict[node]['state']: values_dict[node]['graph entropy']
+                                 for node in values_dict}
+    return extracted_graph_entropies
+
+
+def find_local_maxima(adjacency_matrix, values, num_hops=1, key=None, progress_bar_prefix=None):
     nodes = range(adjacency_matrix.shape[0])
     local_maxima = []
 
     for node in nodes:
-        connected_nodes = get_undirected_connected_nodes(adjacency_matrix, node)
-        is_maxima = all([values[node] > values[connected_node] for connected_node in connected_nodes])
+        if progress_bar_prefix is not None:
+            print_progress_bar(node, adjacency_matrix.shape[0], progress_bar_prefix)
+
+        connected_nodes = get_neighbours(adjacency_matrix, node, num_hops, directed=False)
+        if key is None:
+            is_maxima = all([values[node] > values[connected_node] for connected_node in connected_nodes])
+        else:
+            node_value = values[node][key]
+            is_maxima = True
+            for connected_node in connected_nodes:
+                if connected_node == node:
+                    continue
+                if values[connected_node][key] >= values[node][key]:
+                    is_maxima = False
+                    break
         local_maxima.append(is_maxima)
     return local_maxima
 
 
-def find_weighted_local_influence(adjacency_matrix: np.matrix, node, theta=0.5, log_base=10, accuracy=4):
-    connected_nodes = get_connected_nodes(adjacency_matrix, node)
-    num_one_hop_nodes = len(connected_nodes)
-    one_hop_nodes = np.zeros((num_one_hop_nodes, num_one_hop_nodes))
-    for i in range(num_one_hop_nodes):
-        for j in range(num_one_hop_nodes):
-            one_hop_nodes.itemset(i, j, adjacency_matrix.item(connected_nodes[i], connected_nodes[j]))
+def find_preparedness_subgoals(preparedness_values, min_num_subgoals, stg=None, adj_matrix=None):
+    if (stg is None) and (adj_matrix is None):
+        raise AttributeError("One of stg or adj_matrix must not be None")
 
-    out_degree_values = [0 for _ in range(num_one_hop_nodes)]
-    in_degree_values = [0 for _ in range(num_one_hop_nodes)]
-    for i in range(num_one_hop_nodes):
-        for j in range(num_one_hop_nodes):
-            if i == j:
+    sorted_keys = sorted(preparedness_values, key=lambda x: preparedness_values[x], reverse=True)
+
+    if stg is not None:
+        def has_no_in_edges(x):
+            return len(stg.in_edges(x)) <= 0
+    else:
+        def has_no_in_edges(x):
+            return adj_matrix.getcol(x).sum() <= 0
+
+    subgoals = []
+    subgoals_added = 0
+    for subgoal in sorted_keys:
+        if has_no_in_edges(subgoal):
+            continue
+
+        subgoals.append(subgoal)
+        subgoals_added += 1
+        if subgoals_added >= min_num_subgoals:
+            break
+
+    k = min_num_subgoals
+    smallest_passing_value = preparedness_values[subgoals[-1]]
+    while smallest_passing_value == preparedness_values[sorted_keys[k]]:
+        subgoals.append(sorted_keys[k])
+        k += 1
+
+    return subgoals
+
+
+# TODO: Add capability for compressed adjancecy matricies
+def find_save_environment_stg(env: Environment, save_file_prefix: str):
+    adjacency_matrix_save_path = save_file_prefix + '_adj_matrix.npy'
+    all_states_save_path = save_file_prefix + '_all_states.npy'
+    stg_save_path = save_file_prefix + '_stg.gexf'
+
+    adjacency_matrix, all_states = env.get_adjacency_matrix(True, True)
+    all_states_numpy = np.array(all_states)
+
+    graph = nx.from_numpy_array(adjacency_matrix)
+
+    np.save(all_states_save_path, all_states_numpy)
+    np.save(adjacency_matrix_save_path, adjacency_matrix)
+    nx.write_gexf(graph, stg_save_path)
+    return
+
+
+def find_save_stg_subgoals(env: Environment, env_name, probability_weights=False, compressed_matrix=False,
+                           state_labels=None,
+                           beta=0.5, beta_values=None, min_num_hops=1, max_num_hops=10, log_base=2,
+                           find_betweenness=False,
+                           accuracy=6):
+    adj_matrix_filename = env_name + '_adj_matrix.txt'
+    stg_values_filename = env_name + '_stg_values.json'
+    stg_filename = env_name + '_stg.gexf'
+
+    if beta_values is None:
+        beta_values = [beta]
+
+    print("Finding Adjacency Matrix")
+    adj_matrix, all_states = env.get_adjacency_matrix(directed=True, probability_weights=probability_weights,
+                                                      compressed_matrix=compressed_matrix)
+    print("Finding Preparedness")
+    preparedness_values = preparedness(adj_matrix, None, beta_values, min_num_hops, max_num_hops, log_base, accuracy)
+
+    if find_betweenness:
+        print("Finding Betweenness")
+        betweenness_values = compute_betweeness(adj_matrix)
+        print("Finding Betweenness Local Maxima")
+        betweenness_local_maxima = find_local_maxima(adj_matrix, betweenness_values, key='betweenness')
+
+    num_state_labels = None
+    if state_labels is not None:
+        num_state_labels = len(state_labels)
+
+    betweeness_subgoal_indexes = []
+    for i in preparedness_values:
+        state = all_states[i]
+        preparedness_values[i]['state'] = np.array2string(state)
+
+        if find_betweenness:
+            preparedness_values[i]['betweenness'] = float(betweenness_values[i]['betweenness'])
+            is_betweenness_local_maxima = betweenness_local_maxima[i]
+            preparedness_values[i]['betweenness local maxima'] = str(is_betweenness_local_maxima)
+            if is_betweenness_local_maxima:
+                betweeness_subgoal_indexes.append(i)
+
+        if state_labels is not None:
+            for k in range(num_state_labels):
+                preparedness_values[i][state_labels[k]] = int(state[k])
+
+    f = open(stg_values_filename, 'w')
+    f.close()
+    with open(stg_values_filename, 'w') as f:
+        json.dump(preparedness_values, f)
+
+    if compressed_matrix:
+        sparse.save_npz(adj_matrix_filename, adj_matrix)
+        return
+    np.savetxt(adj_matrix_filename, adj_matrix)
+
+    g = nx.from_numpy_array(adj_matrix, create_using=nx.MultiDiGraph)
+    nx.set_node_attributes(g, preparedness_values)
+    nx.write_gexf(g, stg_filename)
+    return
+
+
+def get_neighbours(adjacency_matrix: np.matrix, node, num_hops=1, directed=True):
+    if num_hops <= 0:
+        return []
+
+    num_hops -= 1
+    N = adjacency_matrix.shape[0]
+    if directed:
+        immediate_neighbours = [i for i in range(N) if adjacency_matrix[node, i] > 0]
+    else:
+        immediate_neighbours = [i for i in range(N) if adjacency_matrix[node, i] > 0 or
+                                adjacency_matrix[i, node] > 0]
+    if num_hops <= 0:
+        return immediate_neighbours
+
+    neighbours = []
+    for neighbour in immediate_neighbours:
+        found_neighbours = get_neighbours(adjacency_matrix, neighbour, num_hops)
+        for found_neighbour in found_neighbours:
+            if found_neighbour in neighbours or found_neighbour in immediate_neighbours:
                 continue
-            weight_i_j = one_hop_nodes.item(i, j)
-            if weight_i_j > 0:
-                out_degree_values[i] += 1
-                in_degree_values[j] += 1
-    sdc_values = [out_degree_values[i] + in_degree_values[i] for i in range(num_one_hop_nodes)]
-    sdc_sum = sum(sdc_values)
+            neighbours.append(found_neighbour)
 
-    if sdc_sum <= 0:
-        return 0
+    neighbours += immediate_neighbours
+    return neighbours
 
-    struc_ent = math.log(sdc_sum, log_base)
-    to_add = 0
-    for sdc in sdc_values:
-        if sdc > 0:
-            to_add += sdc * math.log(sdc, log_base)
-    struc_ent -= to_add / sdc_sum
-    struc_ent = round(struc_ent, accuracy)
 
-    trans_ent = 0
-    weight_sum = 0.0
-    weight_log_sum = 0.0
-    for j in connected_nodes:
-        if node == j:
+def get_preparedness_key(hops, beta=None):
+    key = 'preparedness - ' + str(hops) + ' hops'
+    if beta is None:
+        return key
+    key += ' - beta = ' + str(beta)
+    return key
+
+
+def get_preparedness_subgoals(environment: Environment, beta=None, compressed_matrix=False):
+    stg_values_filename = environment.environment_name + '_stg_values.json'
+    with open(stg_values_filename, 'r') as f:
+        stg_values = json.load(f)
+
+    all_goals_found = False
+    subgoals = []
+    last_subgoals = []
+    max_hops = 1
+    while not all_goals_found:
+        current_subgoals = []
+        preparedness_key = get_preparedness_key(max_hops, beta) + ' - local maxima'
+        for node in stg_values:
+            try:
+                is_subgoal = stg_values[node][preparedness_key]
+                if is_subgoal == 'True':
+                    subgoal_str = stg_values[node]['state']
+                    current_subgoals.append(subgoal_str)
+                    if subgoal_str in last_subgoals:
+                        last_subgoals.remove(subgoal_str)
+
+            except KeyError:
+                all_goals_found = True
+                max_hops -= 1
+                break
+
+        if (max_hops > 1) and (last_subgoals is None):
+            all_goals_found = True
+            break
+
+        last_subgoals = current_subgoals.copy()
+        subgoals.append(current_subgoals.copy())
+        max_hops += 1
+
+    # Pruning Subgoals
+    for current_hops in range(max_hops - 2, -1, -1):
+        min_hops_to_prune = current_hops + 1
+        subgoals_to_prune = []
+        for i in range(min_hops_to_prune, max_hops):
+            subgoals_to_prune += subgoals[i]
+
+        for subgoal_to_prune in subgoals_to_prune:
+            try:
+                subgoals[current_hops].remove(subgoal_to_prune)
+            except ValueError:
+                ()
+
+    # Removing empty lists
+    filtered_subgoals = []
+    for subgoal_list in subgoals:
+        if not subgoal_list:
+            max_hops -= 1
             continue
-        weight = adjacency_matrix.item(node, j)
-        weight_sum += weight
-        weight_log_sum += weight * math.log(weight, log_base)
-    if weight_sum > 0:
-        trans_ent = math.log(weight_sum, log_base) - (weight_log_sum / weight_sum)
-    trans_ent = round(trans_ent, accuracy)
+        filtered_subgoals.append(subgoal_list)
 
-    li = theta * struc_ent + (1 - theta) * trans_ent
-
-    return round(li, accuracy)
+    return filtered_subgoals
 
 
-def get_undirected_connected_nodes(adjacency_matrix: np.matrix, node):
-    nodes = list(range(adjacency_matrix.shape[0]))
+def get_stg(env_name, no_self_loops=False):
+    adj_matrix_filename = env_name + '_adj_matrix.txt'
+    stg_values_filename = env_name + '_stg_values.json'
+    stg_filename = env_name + '_stg.gexf'
 
+    adj_matrix = np.loadtxt(adj_matrix_filename)
+    if no_self_loops:
+        id = np.identity(adj_matrix.shape[0])
+        adj_matrix = adj_matrix - id
+
+    with open(stg_values_filename, 'r') as f:
+        data = json.load(f)
+    reformatted_data = {int(i): data[i] for i in data}
+    g = nx.from_numpy_array(adj_matrix, create_using=nx.MultiDiGraph)
+    nx.set_node_attributes(g, reformatted_data)
+    nx.write_gexf(g, stg_filename)
+    return
+
+
+def get_subgoals_from_folder(folder_path):
+    subgoal_file_names = os.listdir(folder_path)
+    subgoals = [np.loadtxt(folder_path + '/' + subgoal_file_name)
+                for subgoal_file_name in subgoal_file_names]
+    return subgoals
+
+
+def get_undirected_connected_nodes(adjacency_matrix, node):
     connected_nodes = []
-    for i in nodes:
-        if i == node:
-            continue
-        if adjacency_matrix.item(node, i) > 0 or adjacency_matrix.item(i, node) > 0:
+    for i in range(adjacency_matrix.shape[0]):
+        if adjacency_matrix[node, i] > 0 or adjacency_matrix[i, node] > 0:
             connected_nodes.append(i)
     return connected_nodes
 
 
-def get_connected_nodes(adjacency_matrix: np.matrix, node):
-    nodes = list(range(adjacency_matrix.shape[0]))
+def make_entropy_intrinsic_reward(graph_entropies):
+    def intrinsic_reward_func(state):
+        return graph_entropies[np.array2string(np.ndarray.astype(state, dtype=int))]
 
-    connected_nodes = []
-    for i in nodes:
-        if adjacency_matrix.item(node, i) > 0 or node == i:
-            connected_nodes.append(i)
-    return connected_nodes
+    return intrinsic_reward_func
 
 
-def group_graph_by_local_maxima(adjacency_matrix: np.matrix, values):
-    n = adjacency_matrix.shape[0]
-    groups = [None for _ in range(n)]
-    num_groups = 0
+def node_frequency_entropy(adjacency_matrix: np.matrix, node, num_hops=1,
+                           log_base=10, accuracy=4):
+    N = adjacency_matrix.shape[0]
+    neighbours = get_neighbours(adjacency_matrix, node, num_hops)
 
-    all_grouped = False
+    # P(S_t+n | s_t)
+    def prob(start_node, goal_node, hops_away):
+        p = 0
+        W_start_node = 0.0
+        for j in neighbours:
+            W_start_node += adjacency_matrix[start_node, j]
+        if hops_away == 1:
+            if W_start_node == 0:
+                return 0
+            p = adjacency_matrix[start_node, goal_node] / W_start_node
+            return p
 
-    def get_value(v):
-        return values[v]
+        for j in neighbours:
+            w_start_node_j = adjacency_matrix[start_node, j]
+            if w_start_node_j <= 0:
+                continue
+            p += (w_start_node_j / W_start_node) * prob(j, goal_node, hops_away - 1)
 
-    while not all_grouped:
+        return p
 
-        num_none = sum([1 for g in groups if g is None])
-        all_grouped = True
+    neighbour_probabilities = [prob(node, neighbour, num_hops) for neighbour in neighbours]
 
-        for node in range(n):
-            group = groups[node]
-            if group is not None:
+    return round(compute_entropy(neighbour_probabilities, log_base), accuracy)
+
+
+def node_preparedness(adjacency_matrix: np.matrix, node, beta, num_hops=1, log_base=10, accuracy=4):
+    frequency_entropy = node_frequency_entropy(adjacency_matrix, node, num_hops, log_base, accuracy)
+    structural_entropy = node_structural_entropy(adjacency_matrix, node, num_hops, log_base, accuracy)
+
+    preparedness_found = (beta * frequency_entropy) + ((1 - beta) * structural_entropy)
+    return round(preparedness_found, accuracy)
+
+
+def node_structural_entropy(adjacency_matrix: np.matrix, node, num_hops=1,
+                            log_base=10, accuracy=4):
+    # Find nodes in Neighbourhood
+    neighbours = get_neighbours(adjacency_matrix, node, num_hops)
+    if node not in neighbours:
+        neighbours.append(node)
+
+    num_nodes = adjacency_matrix.shape[0]
+
+    # Compute All Hops
+    # W_n_i_j
+    def weights_out(start_node, hops_away):
+        W = 0.0
+        if hops_away == 1:
+            for j in neighbours:
+                W += adjacency_matrix[start_node, j]
+            return W
+
+        for j in neighbours:
+            w_start_node_j = adjacency_matrix[start_node, j]
+            if w_start_node_j <= 0:
+                continue
+            W += (w_start_node_j * weights_out(j, hops_away - 1))
+        return W
+
+    T = 0
+    for neighbour in neighbours:
+        T += weights_out(neighbour, num_hops)
+
+    # Compute Hops to each neighbourhood
+    def weights_to_node(start_node, goal_node, hops_away):
+        if hops_away == 1:
+            return adjacency_matrix[start_node, goal_node]
+
+        P_hat = 0.0
+        if hops_away == 2:
+            for j in neighbours:
+                P_hat += (adjacency_matrix[start_node, j] * adjacency_matrix[j, goal_node])
+            return P_hat
+
+        for j in neighbours:
+            w_start_node_j = adjacency_matrix[start_node, j]
+            if w_start_node_j <= 0:
+                continue
+            P_hat += (w_start_node_j * weights_to_node(j, goal_node, hops_away - 1))
+        return P_hat
+
+    neighbour_probabilities = []
+    if T == 0:
+        return 0.0
+    for goal_neighbour in neighbours:
+        P = 0
+        for start_neighbour in neighbours:
+            P += weights_to_node(start_neighbour, goal_neighbour, num_hops)
+        neighbour_probabilities.append(P / T)
+
+    # Compute Entropy
+    return round(compute_entropy(neighbour_probabilities, log_base), accuracy)
+
+
+def outweight_sum(adjacency_matrix: np.matrix, node):
+    return adjacency_matrix[node].sum()
+
+
+def preparedness(adjacency_matrix: np.matrix, beta=None, beta_values=None,
+                 min_num_hops=1, max_num_hops=1, log_base=10, accuracy=4):
+    if (beta is None) and (beta_values is None):
+        raise ValueError("One of beta or beta values must not be None")
+
+    def get_name_suffix(x):
+        return '- ' + str(x) + ' hops'
+
+    name_suffix = get_name_suffix(min_num_hops)
+    num_nodes = adjacency_matrix.shape[0]
+    num_hops = min_num_hops
+
+    preparedness_values = {}
+    for i in range(num_nodes):
+        print_progress_bar(i, num_nodes, prefix="     " + str(num_hops) + " hops:", suffix='Complete', length=100)
+        preparedness_values[i] = {'frequency entropy ' + name_suffix:
+                                      node_frequency_entropy(adjacency_matrix, i, min_num_hops, log_base, accuracy),
+                                  'structural entropy ' + name_suffix:
+                                      node_structural_entropy(adjacency_matrix, i, min_num_hops, log_base, accuracy)}
+
+    num_hops += 1
+    while num_hops <= max_num_hops:
+        name_suffix = get_name_suffix(num_hops)
+
+        for i in range(num_nodes):
+            print_progress_bar(i, num_nodes, prefix="     " + str(num_hops) + " hops:", suffix='Complete', length=100)
+            preparedness_values[i]['frequency entropy ' + name_suffix] = \
+                node_frequency_entropy(adjacency_matrix, i, num_hops, log_base, accuracy)
+            preparedness_values[i]['structural entropy ' + name_suffix] = \
+                node_structural_entropy(adjacency_matrix, i, num_hops, log_base, accuracy)
+
+        num_hops += 1
+
+    if beta is not None:
+        beta_values = [beta]
+
+    for beta in beta_values:
+        for num_hops in range(min_num_hops, max_num_hops + 1):
+            name_suffix = get_name_suffix(num_hops)
+            preparedness_key = get_preparedness_key(num_hops, beta)
+            for i in range(num_nodes):
+                preparedness_values[i][preparedness_key] = \
+                    (beta * preparedness_values[i]['frequency entropy ' + name_suffix]) + \
+                    ((1 - beta) * preparedness_values[i]['structural entropy ' + name_suffix])
+    return preparedness_values
+
+
+def print_subgoals(state_values, subgoal_key, value_key=None, state_labels=None):
+    subgoal_count = 0
+    total_states = 0
+
+    def print_subgoal(subgoal):
+        print(subgoal)
+        return
+
+    if state_labels is not None:
+        num_state_labels = len(state_labels)
+
+        def print_subgoal(subgoal):
+            subgoal_holder = subgoal[1: len(subgoal) - 1].split(' ')
+            subgoal = []
+            for elm in subgoal_holder:
+                try:
+                    subgoal.append(int(elm))
+                except ValueError:
+                    continue
+            for i in range(num_state_labels):
+                print(state_labels[i] + ": " + str(subgoal[i]))
+            return
+
+    to_print = {}
+    for state in state_values:
+        total_states += 1
+
+        is_subgoal = state_values[state][subgoal_key]
+        if is_subgoal in ['True', 'False']:
+            is_subgoal = is_subgoal == 'True'
+        if is_subgoal:
+            subgoal_count += 1
+            if value_key is None:
+                print("Subgoal " + str(subgoal_count) + ":")
+                print_subgoal(state_values[state]['state'])
                 continue
 
-            all_grouped = False
-            sorted_connected_nodes = get_undirected_connected_nodes(adjacency_matrix, node)
-            sorted_connected_nodes.sort(key=get_value, reverse=True)
-            node_value = values[node]
-            connected_groups = [groups[connected_node] for connected_node in sorted_connected_nodes]
-            connected_values = [values[connected_node] for connected_node in sorted_connected_nodes]
+            to_print[state_values[state]['state']] = state_values[state][value_key]
 
-            if len(sorted_connected_nodes) == 0 or node_value > values[sorted_connected_nodes[0]]:
-                groups[node] = num_groups
-                num_groups += 1
-                continue
+    if value_key is None:
+        print(str(subgoal_count) + "/" + str(total_states) + " subgoals")
+        print(str((subgoal_count / total_states) * 100) + "% of states are subgoals")
+        return
 
-            group_to_set = None
-            for i in range(1, len(sorted_connected_nodes)):
-                node_bigger = sorted_connected_nodes[i - 1]
-                if values[sorted_connected_nodes[i]] < node_value <= values[node_bigger]:
-                    group_to_set = groups[node_bigger]
-                    break
+    subgoals_sorted = list(to_print.keys())
+    subgoals_sorted.sort(key=lambda x: to_print[x], reverse=True)
 
-            if group_to_set is None:
-                group_to_set = groups[sorted_connected_nodes[-1]]
-
-            groups[node] = group_to_set
-
-    return groups
-
-
-def partition_env_by_ncut(env: Environment, num_partitions):
-    # get matricies
-    # find eigenvalues and vectors, pick second eigenvalue for partition
-    # for each possible partition, find NCUT
-    # choose partition with lowest NCUT value
-
-    # Return array of partitions
+    for i in range(0, subgoal_count):
+        print("Subgoal " + str(i + 1) + ":")
+        print_subgoal(subgoals_sorted[i])
+        print(value_key + ": " + str(to_print[subgoals_sorted[i]]))
+    print(str(subgoal_count) + "/" + str(total_states) + " subgoals")
+    print(str((subgoal_count / total_states) * 100) + "% of states are subgoals")
     return
 
 
@@ -383,626 +777,1145 @@ def rank_environment_evc(env: Environment, accuracy=None):
     return nodes_ranked, values
 
 
-def compute_betweeness(adj_matrix):
-    env_nodes = range(adj_matrix.shape[0])
+def train_agent(env: Environment, agent, num_steps,
+                evaluate_policy_window=np.inf,
+                all_actions_valid=False, agent_save_path=None,
+                total_eval_steps=np.inf,
+                progress_bar=False):
+    current_possible_actions = env.possible_actions
+    episode_returns = []
+    evaluate_agent = copy.copy(agent)
+    evaluate_agent.alpha = 0.0
+    evaluate_agent.epsilon = 0.0
+    evaluate_env = copy.deepcopy(env)
+    total_steps = 0
+    training_returns = []
+    window_steps = 0
+    if evaluate_policy_window == np.inf:
+        window_steps = np.inf
 
-    def get_neighbours(node_to_get):
-        return [i for i in env_nodes if i != node_to_get and adj_matrix[node_to_get][i] > 0]
-
-    node_betweenness_array = [0 for _ in env_nodes]
-    for node in env_nodes:
-        S = []
-        S_len = 0
-        Q = [node]
-        Q_len = 1
-        d = [-1 for _ in env_nodes]
-        sigma = [0 for _ in env_nodes]
-        d[node] = 0
-        sigma[node] = 1
-        P = [[] for _ in env_nodes]
-
-        while Q_len > 0:
-            v = Q.pop(0)
-            Q_len -= 1
-            S.append(v)
-            S_len += 1
-            v_neighbours = get_neighbours(v)
-            for w in v_neighbours:
-                if d[w] < 0:
-                    Q.append(w)
-                    Q_len += 1
-                    d[w] = d[v] + 1
-                if d[w] == d[v] + 1:
-                    sigma[w] += sigma[v]
-                    P[w].append(v)
-
-        delta = [0 for _ in env_nodes]
-        while S_len > 0:
-            w = S.pop(S_len - 1)
-            S_len -= 1
-            for v in P[w]:
-                delta[v] += (sigma[v] / sigma[w]) * (1 + delta[w])
-                if w != node:
-                    node_betweenness_array[w] += delta[w]
-
-    betweenness_values = {i: {'betweenness': node_betweenness_array[i]}
-                          for i in env_nodes}
-
-    return betweenness_values
-
-
-def rank_environment_by_influences(env, alpha=1.0, beta=0.5, accuracy=3, weighted=False):
-    adj_matrix = env.get_adjacency_matrix()
-
-    influences = rank_graph_by_influence(adj_matrix, alpha=alpha, beta=beta, weighted=weighted)
-
-    nodes = []
-    num_nodes = 0
-    for item in influences:
-        x_y = env.index_to_state(item['node'])
-        try:
-            is_valid = env.valid_state(x_y['x'], x_y['y'])
-        except:
-            is_valid = True
-        if is_valid:
-            nodes.append({'node': x_y, 'influence': round(item['total'], accuracy)})
-            num_nodes += 1
-    rankings = []
-    to_add = [nodes[0]['node']]
-    current_influence = nodes[0]['influence']
-    ranking_influences = []
-    for i in range(1, num_nodes):
-        node = nodes[i]
-        influence = node['influence']
-        if influence < current_influence:
-            rankings.append(to_add)
-            to_add = [node['node']]
-            ranking_influences.append(current_influence)
-            current_influence = influence
-        else:
-            to_add.append(node['node'])
-    rankings.append(to_add)
-    ranking_influences.append(current_influence)
-    print('Influences')
-    for influence in ranking_influences:
-        print(influence)
-    return rankings, ranking_influences
-
-
-def rank_environment_by_influences_multiple(env: Environment, num_rankings,
-                                            steps_per_ranking, assign_freq, min_obs, min_hit_rate, a, b):
-    print("Finding Goals")
-    goal_results = []
-    for _ in range(num_rankings):
-        env_goals = find_goals(env, steps_per_ranking, assign_freq, min_obs, min_hit_rate, a, b)
-        for goal in env_goals:
-            goal_result_found = False
-            for goal_result in goal_results:
-                if goal_result['goal'] == goal:
-                    goal_result['result'] += 1
-                    goal_result_found = True
-                    break
-            if not goal_result_found:
-                goal_results.append({'goal': goal, 'result': 1})
-    print("Goals Found:")
-
-    def get_key_func(k):
-        def get_value_k(d):
-            return d[k]
-
-        return get_value_k
-
-    goal_results.sort(key=get_key_func('result'), reverse=True)
-    for goal_result in goal_results:
-        print(goal_result['goal'], ' | ', goal_result['result'])
-
-    rankings = []
-    to_add = [goal_results[0]['goal']]
-    current_value = goal_results[0]['result']
-    ranking_values = [current_value]
-    for i in range(1, len(goal_results)):
-        value = goal_results[i]['result']
-        if value < current_value:
-            rankings.append(to_add)
-            ranking_values.append(value)
-            current_value = value
-            to_add = [goal_results[i]['goal']]
-            continue
-        to_add.append(goal_results[i]['goal'])
-    rankings.append(to_add)
-
-    rankings_adjusted = []
-    for ranking in rankings:
-        ranking = [env.code_to_state(goal) for goal in ranking]
-        try:
-            ranking = [{'x': goal['taxi_x'],
-                        'y': goal['taxi_y'],
-                        'stop': goal['passenger_location']}
-                       for goal in ranking]
-            for goal in ranking:
-                if goal['stop'] < 4:
-                    goal['stop'] += 1
-                elif goal['stop'] == 4:
-                    goal['stop'] = 0
-        except KeyError:
-            ()
-        rankings_adjusted.append(ranking)
-    return rankings_adjusted, ranking_values
-
-
-def rank_graph_by_influence(adjacency_matrix, alpha=1, beta=0.5, log_base=10, weighted=False):
-    def get_key_func(k):
-        def get_value_k(d):
-            return d[k]
-
-        return get_value_k
-
-    num_nodes = range(adjacency_matrix.shape[0])
-
-    li_array = [find_local_influence(adjacency_matrix, node, alpha=alpha, log_base=log_base, weighted=weighted)
-                for node in num_nodes]
-    ii_array = [find_indirect_influence(adjacency_matrix, node, li_array)
-                for node in num_nodes]
-    influences_array = [{'node': node,
-                         'local': li_array[node],
-                         'indirect': ii_array[node],
-                         'total': (beta * li_array[node] + (1 - beta) * ii_array[node])}
-                        for node in num_nodes]
-    influences_array.sort(key=get_key_func('total'), reverse=True)
-    return influences_array
-
-
-def train_agent(env: Environment, agent, num_episodes, true_state=False, all_actions_valid=True, agent_save_path=None):
-    agent_returns = []
-    agent_successes = []
-
-    track_successes = True
-
-    for _ in range(num_episodes):
+    while total_steps < num_steps:
         done = False
-        state = env.reset(true_state)
+        state = env.reset()
         if not all_actions_valid:
             current_possible_actions = env.get_possible_actions()
 
         while not done:
-            if all_actions_valid:
-                action = agent.choose_action(state)
-            else:
-                action = agent.choose_action(state, possible_actions=current_possible_actions)
-            next_state, reward, done, info = env.step(action, true_state)
+            if progress_bar:
+                print_progress_bar(total_steps, num_steps,
+                                   prefix='Agent Training: ', suffix='Complete')
+            if window_steps <= 0:
+                evaluate_agent.copy_agent(agent)
+                episode_return = run_episode(evaluate_env, evaluate_agent, all_actions_valid, total_eval_steps)
+                episode_returns.append(episode_return)
+                window_steps = evaluate_policy_window
+
+            action = agent.choose_action(state, False, possible_actions=current_possible_actions)
+            if action is None:
+                done = True
+                continue
+            next_state, reward, done, _ = env.step(action)
 
             if all_actions_valid:
-                agent.learn(state, action, reward, next_state)
+                agent.learn(state, action, reward, next_state, done)
             else:
                 current_possible_actions = env.get_possible_actions()
                 agent.learn(state, action, reward, next_state, terminal=done,
                             next_state_possible_actions=current_possible_actions)
 
-                agent_returns.append(reward)
-                state = next_state
+            if total_steps >= num_steps:
+                done = True
 
-        if track_successes:
-            try:
-                agent_successes.append(info['success'])
-            except TypeError:
-                track_successes = False
+            state = next_state
+            total_steps += 1
+            training_returns.append(reward)
+            window_steps -= 1
 
     if agent_save_path is not None:
         agent.save(agent_save_path)
 
-    if track_successes:
-        return agent, agent_returns, agent_successes
-    return agent, agent_returns
+    return agent, training_returns, episode_returns
 
 
-def compute_graph_entropy_values(adjacency_matrix, weighted=False, theta=0.5, beta=0.5, accuracy=10,
-                                 print_values=False):
-    if weighted:
-        li_values = [round(find_weighted_local_influence(adjacency_matrix=adjacency_matrix, node=node, theta=theta),
-                           accuracy)
-                     for node in range(adjacency_matrix.shape[0])]
+def run_episode(env: Environment,
+                agent: LearningAgent,
+                all_actions_valid=True,
+                max_steps=np.inf):
+    current_possible_actions = env.possible_actions
+    done = False
+    episode_return = 0
+    state = env.reset()
+    total_steps = 0
+
+    if not all_actions_valid:
+        current_possible_actions = env.get_possible_actions()
+
+    while (not done) and (total_steps < max_steps):
+        action = agent.choose_action(state, True,
+                                     possible_actions=current_possible_actions)
+        if action is None:
+            done = True
+            break
+        next_state, reward, done, _ = env.step(action)
+
+        if not all_actions_valid:
+            current_possible_actions = env.get_possible_actions()
+
+        agent.learn(state, action, reward, next_state, done,
+                    current_possible_actions)
+        total_steps += 1
+
+        episode_return += reward
+        state = next_state
+
+    return episode_return
+
+
+def train_betweenness_agents(environment: Environment, file_name_prefix,
+                             options_directory, agent_directory, results_directory,
+                             training_timesteps, num_agents, evaluate_policy_window=10,
+                             all_actions_valid=True,
+                             total_eval_steps=np.inf,
+                             alpha=0.9, epsilon=0.1, gamma=0.9,
+                             progress_bar=False,
+                             compressed_matrix=False):
+    stg_values_filename = file_name_prefix + '_stg_values.json'
+    with open(stg_values_filename, 'r') as f:
+        stg_values = json.load(f)
+
+    adj_matrix = None
+    stg = None
+    state_indexer = None
+
+    if compressed_matrix:
+        adj_matrix_filename = file_name_prefix + '_adj_matrix.txt.npz'
+        adj_matrix = sparse.load_npz(adj_matrix_filename)
+
+        state_indexer = {stg_values[index]['state']: index
+                         for index in stg_values}
     else:
-        li_values = [round(find_local_influence(adjacency_matrix=adjacency_matrix,
-                                                node=node), accuracy)
-                     for node in range(adjacency_matrix.shape[0])]
+        stg_filename = file_name_prefix + '_stg.gexf'
+        stg = nx.read_gexf(stg_filename)
 
-    ii_values = [round(find_indirect_influence(adjacency_matrix=adjacency_matrix,
-                                               node=node, local_influences=li_values), accuracy)
-                 for node in range(adjacency_matrix.shape[0])]
+    directories_to_make = [agent_directory, results_directory]
+    for directory in directories_to_make:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
 
-    if print_values:
-        for i in range(adjacency_matrix.shape[0]):
-            print(str(i + 1) + " " + str(li_values[i]) + " " + str(round(ii_values[i], accuracy)) + ' ' +
-                  str(round(beta * li_values[i] + (1 - beta) * ii_values[i], accuracy)))
+    primitive_options = [Option(actions=[possible_action]) for possible_action in environment.possible_actions]
 
-    influences = {i: {'local influence': li_values[i],
-                      'indirect influence': ii_values[i],
-                      'total influence': round(beta * li_values[i] + (1 - beta) * ii_values[i], 4)}
-                  for i in range(adjacency_matrix.shape[0])}
-    return influences
+    # Creating Directory
+    agent_save_directory = "betweenness agents"
+    if not os.path.isdir(agent_directory + '/' + agent_save_directory):
+        os.mkdir(agent_directory + '/' + agent_save_directory)
 
+    # Collect Options
+    options = []
+    key = 'betweenness local maxima'
+    for node in stg_values:
+        if stg_values[node][key] == 'True':
+            policy = QLearningAgent(environment.possible_actions,
+                                    alpha, epsilon, gamma)
+            policy.load_policy(options_directory + "/subgoal - " + str(node))
+            initiation_func = create_option_goal_initiation_func(node, stg, adj_matrix, state_indexer)
+            option = Option(policy=policy, initiation_func=initiation_func,
+                            terminating_func=lambda x: not initiation_func(x))
+            options.append(option)
+    options += primitive_options
 
-def get_results(environment: Environment, num_timesteps, options_training_timesteps, num_agents,
-                entropy_cutoff, hand_crafted_goals=None, all_actions_valid=True,
-                agent_save_directory="", results_save_directory="", graph_name="",
-                q_learning_alpha=0.9, q_learning_epsilon=0.1, q_learning_gamma=0.9):
-    adj_matrix, all_states = environment.get_adjacency_matrix(directed=True)
-    all_states_bytes = [state.tobytes() for state in all_states]
-    stg = nx.from_numpy_array(adj_matrix, create_using=nx.MultiDiGraph())
-    print("Finding Goals")
-    print("    Adjacency Matrix Found")
-    inf_values = compute_graph_entropy_values(adj_matrix, weighted=True, beta=1.0)
-    print("    Influence Values Computed")
-    betweenness = compute_betweeness(adj_matrix)
-    print("    Betweenness Values Computed")
+    # Training Agents
+    all_agent_training_returns = {}
+    all_agent_returns = {}
+    agent_training_results_file = 'betweenness training returns'
+    agent_results_file = 'betweenness returns'
+    for i in range(num_agents):
+        if progress_bar:
+            print("Training Betweenness agent " + str(i))
 
-    is_betweeness_local_maxima = find_local_maxima(adj_matrix,
-                                                   [betweenness[i]['betweenness'] for i in range(adj_matrix.shape[0])])
-    betweeness_local_maxima = [all_states[i] for i in range(adj_matrix.shape[0])
-                               if is_betweeness_local_maxima[i]]
+        agent = OptionsAgent(alpha, epsilon, gamma, options)
+        agent, agent_training_returns, agent_returns = train_agent(environment, agent, training_timesteps,
+                                                                   evaluate_policy_window,
+                                                                   all_actions_valid,
+                                                                   agent_save_path=(agent_directory + '/' +
+                                                                                    agent_save_directory + '/' +
+                                                                                    'agent ' + str(i)),
+                                                                   total_eval_steps=total_eval_steps,
+                                                                   progress_bar=progress_bar)
 
-    print("    Entropy Goals")
-    entropy_goals = []
-    for i in inf_values:
-        if inf_values[i]['local influence'] >= entropy_cutoff:
-            entropy_goals.append(all_states[i])
-            print(np.array2string(all_states[i]))
-    print(str(len(entropy_goals)) + " Entropy Goals Found")
+        all_agent_training_returns[i] = agent_training_returns
+        all_agent_returns[i] = agent_returns
 
-    print("    Betweenness Goals")
-    for state in betweeness_local_maxima:
-        print(np.array2string(state))
-    print(str(len(betweeness_local_maxima)) + " Betweenness goals found")
+        # Saving Results
+        with open(results_directory + '/' + agent_training_results_file, 'w') as f:
+            json.dump(all_agent_training_returns, f)
+        with open(results_directory + '/' + agent_results_file, 'w') as f:
+            json.dump(all_agent_returns, f)
 
-    if hand_crafted_goals is not None:
-        print("    Handcrafted Goals")
-
-    all_q_learner_agent_returns = []
-    print("Training Q Learner")
-    for agent in range(num_agents):
-        q_learning_agent = QLearningAgent(environment.possible_actions,
-                                          q_learning_alpha, q_learning_epsilon, q_learning_gamma)
-        save_path = agent_save_directory + 'q_learner' + str(agent) + '.json'
-        q_learning_agent, q_learning_agent_returns = train_agent(environment, q_learning_agent,
-                                                                 num_timesteps, true_state=True,
-                                                                 all_actions_valid=all_actions_valid,
-                                                                 agent_save_path=save_path)
-        all_q_learner_agent_returns.append(q_learning_agent_returns)
-    with open(results_save_directory + 'q_learner_returns.json', 'w') as f:
-        q_learner_returns_data = {i: all_q_learner_agent_returns[i] for i in range(num_agents)}
-        json.dump(q_learner_returns_data, f)
-    print("    Q learner Trained")
-
-    if hand_crafted_goals is not None:
-        print("Training Handcrafted Options")
-        handcrafted_options = generate_options_from_goals(environment, stg, hand_crafted_goals, all_states_bytes,
-                                                          options_training_timesteps,
-                                                          true_state=True, all_actions_valid=all_actions_valid)
-
-        print("    Handcrafted Options Trained")
-        for a in environment.possible_actions:
-            handcrafted_options.append(Option(actions=[a]))
-
-        all_handcrafted_agent_returns = []
-        for agent in range(num_agents):
-            handcrafted_agent = OptionsAgent(alpha=q_learning_alpha, epsilon=q_learning_epsilon, gamma=q_learning_gamma,
-                                             options=handcrafted_options)
-            save_path = agent_save_directory + 'handcrafted_goals' + str(agent) + '.json'
-            handcrafted_agent, handcrafted_agent_returns = train_agent(environment, handcrafted_agent, num_timesteps,
-                                                                       true_state=True,
-                                                                       all_actions_valid=all_actions_valid,
-                                                                       agent_save_path=save_path)
-            all_handcrafted_agent_returns.append(handcrafted_agent_returns)
-        with open(results_save_directory + 'handcrafted_returns.json', 'w') as f:
-            handcrafted_returns_data = {i: all_handcrafted_agent_returns[i] for i in range(num_agents)}
-            json.dump(handcrafted_returns_data, f)
-        print("    Handcrafted Agent Trained")
-
-    print("Entropy Influence Agent")
-
-    entropy_options = generate_options_from_goals(environment, stg, entropy_goals, all_states_bytes,
-                                                  options_training_timesteps,
-                                                  true_state=True, all_actions_valid=all_actions_valid)
-    print("    Entropy Options Trained")
-    for a in environment.possible_actions:
-        entropy_options.append(Option(actions=[a]))
-
-    all_option_agent_returns = []
-    for _ in range(num_agents):
-        options_agent = OptionsAgent(alpha=q_learning_alpha, epsilon=q_learning_epsilon, gamma=q_learning_gamma,
-                                     options=entropy_options)
-        save_path = agent_save_directory + 'entropy_goals' + str(agent) + '.json'
-        options_agent, options_agent_returns, = train_agent(environment, options_agent, num_timesteps,
-                                                            true_state=True, all_actions_valid=all_actions_valid,
-                                                            agent_save_path=save_path)
-        all_option_agent_returns.append(options_agent_returns)
-    with open(results_save_directory + 'entropy_returns.json', 'w') as f:
-        entropy_returns_data = {i: all_option_agent_returns[i] for i in range(num_agents)}
-        json.dump(entropy_returns_data, f)
-    print("    Entropy Options agent trained")
-
-    print("Betweenness Agent")
-
-    betweenness_options = generate_options_from_goals(environment, stg,
-                                                      betweeness_local_maxima, all_states_bytes,
-                                                      options_training_timesteps,
-                                                      true_state=True, all_actions_valid=all_actions_valid)
-    print("    Betweenness Options Trained")
-
-    for a in environment.possible_actions:
-        betweenness_options.append(Option(actions=[a]))
-
-    all_betweenness_agent_returns = []
-    for _ in range(num_agents):
-        betweenness_agent = OptionsAgent(alpha=q_learning_alpha, epsilon=q_learning_epsilon, gamma=q_learning_gamma,
-                                         options=betweenness_options)
-        save_path = agent_save_directory + 'betweenness_goals' + str(agent) + '.json'
-        betweenness_agent, betweenness_agent_returns = train_agent(environment, betweenness_agent, num_timesteps,
-                                                                   true_state=True,
-                                                                   all_actions_valid=all_actions_valid,
-                                                                   agent_save_path=save_path)
-        all_betweenness_agent_returns.append(betweenness_agent_returns)
-    with open(results_save_directory + 'betweenness_returns.json', 'w') as f:
-        betweenness_returns_data = {i: all_betweenness_agent_returns[i] for i in range(num_agents)}
-        json.dump(betweenness_returns_data, f)
-    print("    Betweenness Agent Trained")
     return
 
 
+def train_betweenness_options(environment: Environment, file_name_prefix, training_timesteps,
+                              all_actions_valid=True, compressed_matrix=False,
+                              options_save_directory=None,
+                              alpha=0.9, epsilon=0.1, gamma=0.9,
+                              progress_bar=False, progress_bar_prefix=None):
+    stg_values_filename = file_name_prefix + '_stg_values.json'
+    with open(stg_values_filename, 'r') as f:
+        stg_values = json.load(f)
+
+    adj_matrix = None
+    stg = None
+    state_indexer = None
+
+    if compressed_matrix:
+        adj_matrix_filename = file_name_prefix + '_adj_matrix.txt.npz'
+        adj_matrix = sparse.load_npz(adj_matrix_filename)
+
+        state_indexer = {stg_values[index]['state']: index
+                         for index in stg_values}
+    else:
+        stg_filename = file_name_prefix + '_stg.gexf'
+        stg = nx.read_gexf(stg_filename)
+
+    if (options_save_directory is not None) and (not os.path.isdir(options_save_directory)):
+        os.mkdir(options_save_directory)
+
+    subgoals_with_options = []
+    subgoals = [node for node in stg_values
+                if stg_values[node]['betweenness local maxima'] == 'True']
+
+    for subgoal in subgoals:
+        save_path = options_save_directory + "/subgoal - " + str(subgoal)
+        if (subgoal in subgoals_with_options) or os.path.isfile(save_path):
+            continue
+        if progress_bar_prefix is not None:
+            print(progress_bar_prefix)
+
+        option = generate_option_to_goal(environment, subgoal,
+                                         training_timesteps,
+                                         stg, adj_matrix, state_indexer,
+                                         all_actions_valid,
+                                         alpha, epsilon, gamma,
+                                         progress_bar,
+                                         save_path)
+
+    return
+
+
+def train_dads_agent(environment: Environment,
+                     results_directory,
+                     num_skills,
+                     training_timesteps, num_agents, evaluate_policy_window=10,
+                     skill_training_cycles=10, skill_training_steps=1000,
+                     skill_length=10, model_layers=[128, 128],
+                     all_actions_valid=True,
+                     progress_bar=False, progress_bar_prefix=None):
+    if progress_bar_prefix is None:
+        progress_bar_prefix = ""
+
+    directories_to_make = [agent_directory, results_directory]
+    for directory in directories_to_make:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+
+    base_dads_agent = DADSAgent(environment.possible_actions, environment.state_shape, num_skills, skill_length,
+                                model_layers)
+
+    # Train Skills
+    start_skills_time = time.time()
+    if progress_bar:
+        print("Training DADS skills " + progress_bar_prefix)
+    base_dads_agent.learn_skills(environment, skill_training_cycles, skill_training_steps, all_actions_valid)
+    end_skills_time = time.time()
+
+    # Train agent
+    all_agent_training_returns = {}
+    all_agent_returns = {}
+    agent_training_results_file = 'dads training returns'
+    agent_results_file = 'dads returns'
+    agent_training_times = [0 for _ in range(num_agents)]
+    for i in range(num_agents):
+        agent_start_time = time.time()
+        if progress_bar:
+            print("Training DADS agent " + progress_bar_prefix)
+        dads_agent = copy.deepcopy(base_dads_agent)
+        dads_agent, training_returns, episode_returns = train_agent(environment, dads_agent,
+                                                                    training_timesteps, evaluate_policy_window,
+                                                                    all_actions_valid,
+                                                                    total_eval_steps=total_evaluation_steps,
+                                                                    progress_bar=progress_bar)
+        all_agent_training_returns[i] = training_returns
+        all_agent_returns[i] = episode_returns
+        agent_training_times[i] = time.time() - agent_start_time
+
+    # Saving Results
+    with open(results_directory + '/' + agent_training_results_file, 'w') as f:
+        json.dump(all_agent_training_returns, f)
+    with open(results_directory + '/' + agent_results_file, 'w') as f:
+        json.dump(all_agent_returns, f)
+
+    print("Skill Training Time: " + str(end_skills_time - start_skills_time))
+    print("Agent Training Times: ")
+    for i in range(num_agents):
+        print("Agent " + str(i) + ": " + str(agent_training_times[i]))
+    print("Average Agent Training Time: " + str(sum(agent_training_times) / num_agents))
+
+    return
+
+
+def train_diayn_agent(environment: Environment,
+                     results_directory,
+                     num_skills,
+                     training_timesteps, num_agents, evaluate_policy_window=10,
+                     skill_training_episodes=10, skill_training_max_steps_per_episode=1000,
+                     skill_length=10, model_layers=[128, 128],
+                     all_actions_valid=True,
+                     progress_bar=False, progress_bar_prefix=None):
+    if progress_bar_prefix is None:
+        progress_bar_prefix = ""
+
+    directories_to_make = [agent_directory, results_directory]
+    for directory in directories_to_make:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+
+    base_diayn_agent = DIAYNAgent(environment.possible_actions, environment.state_shape,
+                                  num_skills, skill_length, model_layers)
+
+    # Train Skills
+    start_skills_time = time.time()
+    if progress_bar:
+        print("Training DIAYN skills " + progress_bar_prefix)
+    base_diayn_agent.learn_skills(environment, skill_training_episodes, skill_training_max_steps_per_episode,
+                                  all_actions_valid)
+    end_skills_time = time.time()
+
+    # Train Agent
+    all_agent_training_returns = {}
+    all_agent_returns = {}
+    agent_training_results_file = 'diayn training returns'
+    agent_results_file = 'diayn returns'
+    agent_training_times = [0 for _ in range(num_agents)]
+    for i in range(num_agents):
+        agent_start_time = time.time()
+        if progress_bar:
+            print("Training DIAYN agent " + progress_bar_prefix)
+        diayn_agent = copy.deepcopy(base_diayn_agent)
+        dads_agent, training_returns, episode_returns = train_agent(environment, diayn_agent,
+                                                                    training_timesteps, evaluate_policy_window,
+                                                                    all_actions_valid,
+                                                                    total_eval_steps=total_evaluation_steps,
+                                                                    progress_bar=progress_bar)
+        all_agent_training_returns[i] = training_returns
+        all_agent_returns[i] = episode_returns
+        agent_training_times[i] = time.time() - agent_start_time
+
+        # Saving Results
+        with open(results_directory + '/' + agent_training_results_file, 'w') as f:
+            json.dump(all_agent_training_returns, f)
+        with open(results_directory + '/' + agent_results_file, 'w') as f:
+            json.dump(all_agent_returns, f)
+
+    print("Skill Training Time: " + str(end_skills_time - start_skills_time))
+    print("Agent Training Times: ")
+    for i in range(num_agents):
+        print("Agent " + str(i) + ": " + str(agent_training_times[i]))
+    print("Average Agent Training Time: " + str(sum(agent_training_times) / num_agents))
+    return
+
+
+def train_eigenoption_agents(environment: Environment, file_name_prefix,
+                             agent_directory, results_directory,
+                             option_training_timesteps,
+                             training_timesteps, num_agents, evaluate_policy_window,
+                             all_actions_valid=True,
+                             total_eval_steps=np.inf,
+                             num_options=64, alpha=0.9, epsilon=0.1, gamma=0.9,
+                             progress_bar=False):
+    adjacency_matrix_filename = file_name_prefix + '_adj_matrix.npy'
+    all_states_filename = file_name_prefix +'_all_states.npy'
+    stg_filename = file_name_prefix + '_stg.gexf'
+    agent_save_directory = 'eigenoption_agents'
+
+    adj_matrix = np.load(adjacency_matrix_filename)
+    all_states_numpy = np.load(all_states_filename)
+    all_states = list(all_states_numpy)
+    stg = nx.read_gexf(stg_filename)
+
+    directories_to_make = [agent_directory, results_directory]
+    for directory in directories_to_make:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+    if not os.path.isdir(agent_directory + '/' + agent_save_directory):
+        os.mkdir(agent_directory + '/' + agent_save_directory)
+
+    # Create agent
+    base_agent = EigenOptionAgent(alpha, epsilon, gamma,
+                                  environment.possible_actions,
+                                  environment.state_dtype,
+                                  num_options)
+
+    # Train options
+    base_agent.find_options(environment, all_states, adj_matrix, stg, remove_weights=True)
+    base_agent.train_options(environment, option_training_timesteps,
+                             all_actions_valid, progress_bar)
+    # Save agent
+    base_agent.save(agent_directory + '/' + agent_save_directory + '/' + 'base_eigenoption_agent.json')
+
+    # Training Agent
+    all_agent_training_returns = {}
+    all_agent_returns = {}
+    for i in range(num_agents):
+        if progress_bar:
+            print("Training eigenoptions agent " + str(i))
+
+        # Load agent
+        agent = EigenOptionAgent(alpha, epsilon, gamma,
+                                 environment.possible_actions,
+                                 environment.state_dtype,
+                                 num_options)
+        agent.load(agent_directory + '/' + agent_save_directory + '/' + 'base_eigenoption_agent.json',
+                   all_states, adj_matrix, stg)
+
+        # Train Agent
+        agent, agent_training_returns, agent_returns = train_agent(environment, agent, training_timesteps,
+                                                                   evaluate_policy_window,
+                                                                   all_actions_valid,
+                                                                   agent_save_path=(agent_directory + '/' +
+                                                                                    agent_save_directory + '/' +
+                                                                                    'agent ' + str(i)),
+                                                                   total_eval_steps=total_eval_steps,
+                                                                   progress_bar=progress_bar)
+
+        all_agent_training_returns[i] = agent_training_returns
+        all_agent_returns[i] = agent_returns
+
+        # Save results
+        agent_training_results_file = 'eigenoptions training returns'
+        agent_results_file = 'eigenoptions returns'
+        with open(results_directory + '/' + agent_training_results_file, 'w') as f:
+            json.dump(all_agent_training_returns, f)
+        with open(results_directory + '/' + agent_results_file, 'w') as f:
+            json.dump(all_agent_returns, f)
+    return
+
+
+def train_louvain_agents(environment: Environment, file_name_prefix,
+                        agent_directory, results_directory,
+                        training_timesteps, num_agents, evaluate_policy_window=10,
+                        agent_load_file=None,
+                        initial_agent=None,
+                        all_actions_valid=False,
+                        total_eval_steps=np.inf,
+                        alpha=0.9, epsilon=0.1, gamma=0.9,
+                        state_dtype=int, state_shape=None,
+                        progress_bar=False):
+    stg_filename = file_name_prefix + '_stg.gexf'
+    agent_training_results_file = 'louvain agent training returns'
+    agent_results_file = 'louvain agent returns'
+    agent_save_directory = "louvain_agents"
+
+    stg = nx.read_gexf(stg_filename)
+
+    directories_to_make = [agent_directory, results_directory]
+    for directory in directories_to_make:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+
+    if not os.path.isdir(agent_directory + '/' + agent_save_directory):
+        os.mkdir(agent_directory + '/' + agent_save_directory)
+
+    all_agent_training_returns = {}
+    all_agent_returns = {}
+    if initial_agent is None:
+        initial_agent = LouvainAgent(environment.possible_actions, stg,
+                                     state_dtype, state_shape,
+                                     alpha, epsilon, gamma)
+        initial_agent.apply_louvain()
+
+    for i in range(num_agents):
+        if progress_bar:
+            print("Training Louvain Agent " + str(i))
+        agent = copy.deepcopy(initial_agent)
+        if agent_load_file is not None:
+            agent.load_policy(agent_load_file)
+        agent, agent_training_returns, agent_returns = train_agent(environment, agent,
+                                                                   training_timesteps, evaluate_policy_window,
+                                                                   all_actions_valid,
+                                                                   total_eval_steps=total_eval_steps,
+                                                                   progress_bar=progress_bar)
+
+        # Saving result
+        all_agent_training_returns[i] = agent_training_returns
+        all_agent_returns[i] = agent_returns
+        with open(results_directory + '/' + agent_training_results_file, 'w') as f:
+            json.dump(all_agent_training_returns, f)
+        with open(results_directory + '/' + agent_results_file, 'w') as f:
+            json.dump(all_agent_returns, f)
+
+    return
+
+
+def train_multi_level_preparedness_agents(environment: Environment, file_name_prefix,
+                                          agent_directory, results_directory,
+                                          training_timesteps, num_agents, evaluate_policy_window=10,
+                                          agent_load_file=None,
+                                          initial_agent=None,
+                                          all_actions_valid=False,
+                                          total_eval_steps=np.inf,
+                                          alpha=0.9, epsilon=0.1, gamma=0.9,
+                                          state_dtype=int,
+                                          progress_bar=False):
+    stg_filename = file_name_prefix + '_stg.gexf'
+    agent_training_results_file = 'preparedness multi level agent training returns'
+    agent_results_file = 'preparedness multi level agent returns'
+    agent_save_directory = "preparedness_multi_level_agents"
+
+    stg = nx.read_gexf(stg_filename)
+
+    directories_to_make = [agent_directory, results_directory]
+    for directory in directories_to_make:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+
+    if not os.path.isdir(agent_directory + '/' + agent_save_directory):
+        os.mkdir(agent_directory + '/' + agent_save_directory)
+
+    preparedness_subgoals = get_preparedness_subgoals(environment, beta=0.5)
+
+    all_agent_training_returns = {}
+    all_agent_returns = {}
+    if initial_agent is None:
+        initial_agent = MultiLevelGoalAgent(environment.possible_actions,
+                                            alpha, epsilon, gamma,
+                                            preparedness_subgoals, stg,
+                                            state_dtype=state_dtype)
+    for i in range(num_agents):
+        if progress_bar:
+            print("Training agent " + str(i))
+
+        agent = copy.deepcopy(initial_agent)
+        if agent_load_file is not None:
+            agent.load_policy(agent_load_file)
+        agent, agent_training_returns, agent_returns = train_agent(environment, agent,
+                                                                   training_timesteps, evaluate_policy_window,
+                                                                   all_actions_valid,
+                                                                   total_eval_steps=total_eval_steps,
+                                                                   progress_bar=progress_bar)
+
+        # Saving result
+        all_agent_training_returns[i] = agent_training_returns
+        all_agent_returns[i] = agent_returns
+        with open(results_directory + '/' + agent_training_results_file, 'w') as f:
+            json.dump(all_agent_training_returns, f)
+        with open(results_directory + '/' + agent_results_file, 'w') as f:
+            json.dump(all_agent_returns, f)
+
+    return
+
+
+def train_preparedness_agents(environment: Environment, file_name_prefix,
+                              options_directory, agent_directory, results_directory,
+                              training_timesteps, num_agents, evaluate_policy_window=10,
+                              all_actions_valid=True,
+                              total_eval_steps=np.inf,
+                              min_num_hops=1, max_num_hops=5,
+                              alpha=0.9, epsilon=0.1, gamma=0.9, beta=None,
+                              progress_bar=False,
+                              compressed_matrix=False):
+    stg_values_filename = file_name_prefix + '_stg_values.json'
+    with open(stg_values_filename, 'r') as f:
+        preparedness_values = json.load(f)
+
+    adj_matrix = None
+    stg = None
+    state_indexer = None
+
+    if compressed_matrix:
+        adj_matrix_filename = file_name_prefix + '_adj_matrix.txt.npz'
+        adj_matrix = sparse.load_npz(adj_matrix_filename)
+
+        state_indexer = {preparedness_values[index]['state']: index
+                         for index in preparedness_values}
+    else:
+        stg_filename = file_name_prefix + '_stg.gexf'
+        stg = nx.read_gexf(stg_filename)
+
+    directories_to_make = [agent_directory, results_directory]
+    for directory in directories_to_make:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+
+    primitive_options = [Option(actions=[possible_action]) for possible_action in environment.possible_actions]
+
+    for num_hops in range(min_num_hops, max_num_hops + 1):
+        # Creating Directory
+        agent_save_directory = "preparedness - " + str(num_hops) + ' hops agents'
+        if not os.path.isdir(agent_directory + '/' + agent_save_directory):
+            os.mkdir(agent_directory + '/' + agent_save_directory)
+
+        # Collect Options
+        options = []
+        key = 'preparedness - ' + str(num_hops) + ' hops '
+        if beta is not None:
+            key += '- beta = ' + str(beta) + ' subgoal'
+        else:
+            key += 'subgoal'
+        for node in preparedness_values:
+            if preparedness_values[node][key]:
+                policy = QLearningAgent(environment.possible_actions,
+                                        alpha, epsilon, gamma)
+                policy.load_policy(options_directory + "/subgoal - " + str(node))
+                initiation_func = create_option_goal_initiation_func(node, stg, adj_matrix, state_indexer)
+                option = Option(policy=policy, initiation_func=initiation_func,
+                                terminating_func=lambda x: not initiation_func(x))
+                options.append(option)
+        options += primitive_options
+
+        # Training Agents
+        all_agent_training_returns = {}
+        all_agent_returns = {}
+        for i in range(num_agents):
+            if progress_bar:
+                print("Training " + str(num_hops) + " hops agent " + str(i))
+
+            agent = OptionsAgent(alpha, epsilon, gamma, options)
+            agent, agent_training_returns, agent_returns = train_agent(environment, agent, training_timesteps,
+                                                                       evaluate_policy_window,
+                                                                       all_actions_valid,
+                                                                       agent_save_path=(agent_directory + '/' +
+                                                                                        agent_save_directory + '/' +
+                                                                                        'agent ' + str(i)),
+                                                                       total_eval_steps=total_eval_steps,
+                                                                       progress_bar=progress_bar)
+
+            all_agent_training_returns[i] = agent_training_returns
+            all_agent_returns[i] = agent_returns
+
+        # Saving Results
+        agent_training_results_file = 'preparedness - ' + str(num_hops) + ' hops training returns'
+        agent_results_file = 'preparedness - ' + str(num_hops) + ' hops returns'
+        with open(results_directory + '/' + agent_training_results_file, 'w') as f:
+            json.dump(all_agent_training_returns, f)
+        with open(results_directory + '/' + agent_results_file, 'w') as f:
+            json.dump(all_agent_returns, f)
+
+    return
+
+
+def train_preparedness_options(environment: Environment, file_name_prefix, training_timesteps,
+                               all_actions_valid=True, compressed_matrix=False,
+                               min_num_hops=1, max_num_hops=5,
+                               options_save_directory=None,
+                               alpha=0.9, epsilon=0.1, gamma=0.9, beta=None,
+                               progress_bar=False, progress_bar_prefix=None):
+    stg_values_filename = file_name_prefix + '_stg_values.json'
+    with open(stg_values_filename, 'r') as f:
+        preparedness_values = json.load(f)
+
+    adj_matrix = None
+    stg = None
+    state_indexer = None
+
+    if compressed_matrix:
+        adj_matrix_filename = file_name_prefix + '_adj_matrix.txt.npz'
+        adj_matrix = sparse.load_npz(adj_matrix_filename)
+
+        state_indexer = {preparedness_values[index]['state']: index
+                         for index in preparedness_values}
+    else:
+        stg_filename = file_name_prefix + '_stg.gexf'
+        stg = nx.read_gexf(stg_filename)
+
+    if (options_save_directory is not None) and (not os.path.isdir(options_save_directory)):
+        os.mkdir(options_save_directory)
+
+    subgoals_with_options = []
+    for num_hops in range(min_num_hops, max_num_hops + 1):
+        if progress_bar:
+            print("Training Options for " + str(num_hops) + " hops")
+        key = 'preparedness - ' + str(num_hops) + ' hops '
+        if beta is not None:
+            key += '- beta = ' + str(beta) + ' subgoal'
+        else:
+            key += 'subgoal'
+        subgoals = [node for node in preparedness_values
+                    if preparedness_values[node][key]]
+
+        for subgoal in subgoals:
+            if subgoal in subgoals_with_options:
+                continue
+            save_path = None
+            if options_save_directory is not None:
+                save_path = options_save_directory + "/subgoal - " + str(subgoal)
+            if progress_bar_prefix is not None:
+                print(progress_bar_prefix)
+            option = generate_option_to_goal(environment, subgoal,
+                                             training_timesteps,
+                                             stg, adj_matrix, state_indexer,
+                                             all_actions_valid,
+                                             alpha, epsilon, gamma,
+                                             progress_bar,
+                                             save_path=save_path)
+            subgoals_with_options.append(subgoal)
+
+    return
+
+
+def train_q_learning_agent(environment: Environment,
+                           agent_directory, results_directory,
+                           training_timesteps, num_agents, evaluate_policy_window=10,
+                           all_actions_valid=True,
+                           total_eval_steps=np.inf,
+                           alpha=0.9, epsilon=0.1, gamma=0.9,
+                           intrinsic_reward=None, intrinsic_reward_lambda=None,
+                           file_save_name='q_learning',
+                           progress_bar=False):
+    all_episode_returns = {}
+    all_training_returns = {}
+    directories_to_make = [agent_directory, results_directory]
+
+    for directory in directories_to_make:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+
+    for i in range(num_agents):
+        if progress_bar:
+            print("Training Q-Learning Agent " + str(i))
+
+        agent = QLearningAgent(env.possible_actions, alpha, epsilon, gamma,
+                               intrinsic_reward, intrinsic_reward_lambda)
+        agent, training_returns, episode_returns = train_agent(env, agent, training_timesteps,
+                                                               evaluate_policy_window,
+                                                               all_actions_valid,
+                                                               agent_directory + '/q_learning_agent ' + str(i),
+                                                               total_eval_steps,
+                                                               progress_bar)
+
+        all_episode_returns[i] = episode_returns
+        all_training_returns[i] = training_returns
+
+        with open(results_directory + '/' + file_save_name + '_episode_returns.json', 'w') as f:
+            json.dump(all_episode_returns, f)
+        with open(results_directory + '/' + file_save_name + '_training_returns.json', 'w') as f:
+            json.dump(all_training_returns, f)
+
+    return
+
+
+def train_sac_agent(environment: Environment, state_shape,
+                    results_directory,
+                    training_timesteps, num_agents, evaluate_policy_window=10,
+                    all_actions_valid=True,
+                    total_eval_steps=np.inf,
+                    file_save_name='sac',
+                    progress_bar=False):
+    all_episode_returns = {}
+    all_training_returns = {}
+    directories_to_make = [results_directory]
+
+    for directory in directories_to_make:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+
+    for i in range(num_agents):
+        if progress_bar:
+            print("Training SAC Agent " + str(i))
+
+        agent = SoftActorCritic(environment.possible_actions, state_shape,
+                                model_layers=[8, 8],
+                                update_steps=10)
+        agent, training_returns, episode_returns = train_agent(env, agent,
+                                                               training_timesteps, evaluate_policy_window,
+                                                               all_actions_valid=False,
+                                                               total_eval_steps=total_evaluation_steps,
+                                                               progress_bar=True)
+
+        all_episode_returns[i] = episode_returns
+        all_training_returns[i] = training_returns
+
+        with open(results_directory + '/' + file_save_name + '_episode_returns.json', 'w') as f:
+            json.dump(all_episode_returns, f)
+        with open(results_directory + '/' + file_save_name + '_training_returns.json', 'w') as f:
+            json.dump(all_training_returns, f)
+
+    return
+
+
+def train_subgoal_agent(environment: Environment, keys, file_name_prefix,
+                        options_directory, agent_directory, results_directory,
+                        training_timesteps, num_agents, evaluate_policy_window=10,
+                        all_actions_valid=True,
+                        total_eval_steps=np.inf,
+                        alpha=0.9, epsilon=0.1, gamma=0.9,
+                        progress_bar=False,
+                        compressed_matrix=False):
+    stg_values_filename = file_name_prefix + '_stg_values.json'
+    with open(stg_values_filename, 'r') as f:
+        stg_values = json.load(f)
+
+    adj_matrix = None
+    stg = None
+    state_indexer = None
+
+    if compressed_matrix:
+        adj_matrix_filename = file_name_prefix + '_adj_matrix.txt.npz'
+        adj_matrix = sparse.load_npz(adj_matrix_filename)
+
+        state_indexer = {stg_values[index]['state']: index
+                         for index in stg_values}
+    else:
+        stg_filename = file_name_prefix + '_stg.gexf'
+        stg = nx.read_gexf(stg_filename)
+
+    directories_to_make = [agent_directory, results_directory]
+    for directory in directories_to_make:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+
+    primitive_options = [Option(actions=[possible_action]) for possible_action in environment.possible_actions]
+
+    for key in keys:
+        # Creating Directory
+        dir = agent_directory + '/' + key
+        if not os.path.isdir(dir):
+            os.mkdir(dir)
+
+        # Collect Options
+        options = []
+        has_options = False
+        for node in stg_values:
+            if stg_values[node][key] == 'True':
+                policy = QLearningAgent(environment.possible_actions,
+                                        alpha, epsilon, gamma)
+                try:
+                    policy.load_policy(options_directory + "/subgoal - " + str(node))
+                except FileNotFoundError:
+                    stg_values[node][key] = 'False'
+                    continue
+
+                initiation_func = create_option_goal_initiation_func(node, stg, adj_matrix, state_indexer)
+                option = Option(policy=policy, initiation_func=initiation_func,
+                                terminating_func=lambda x: not initiation_func(x))
+                has_options = True
+                options.append(option)
+
+        if not has_options:
+            print("No options for " + key + ' agent')
+            continue
+        options += primitive_options
+
+        # Training Agents
+        all_agent_training_returns = {}
+        all_agent_returns = {}
+        agent_training_results_file = key + ' training returns'
+        agent_results_file = key + ' returns'
+        for i in range(num_agents):
+            print("Training " + key + " agent " + str(i))
+
+            agent = OptionsAgent(alpha, epsilon, gamma, options)
+            agent, agent_training_returns, agent_returns = train_agent(environment, agent, training_timesteps,
+                                                                       evaluate_policy_window,
+                                                                       all_actions_valid,
+                                                                       agent_save_path=(dir + '/agent ' + str(i)),
+                                                                       total_eval_steps=total_eval_steps,
+                                                                       progress_bar=progress_bar)
+
+            all_agent_training_returns[i] = agent_training_returns
+            all_agent_returns[i] = agent_returns
+
+            # Saving Results
+            with open(results_directory + '/' + agent_training_results_file, 'w') as f:
+                json.dump(all_agent_training_returns, f)
+            with open(results_directory + '/' + agent_results_file, 'w') as f:
+                json.dump(all_agent_returns, f)
+
+    return
+
+
+def train_subgoal_options(environment: Environment, file_name_prefix, training_timesteps,
+                          keys,
+                          all_actions_valid=True, compressed_matrix=False,
+                          options_save_directory=None,
+                          alpha=0.9, epsilon=0.1, gamma=0.9,
+                          progress_bar=False, progress_bar_prefix=None):
+    stg_values_filename = file_name_prefix + '_stg_values.json'
+    with open(stg_values_filename, 'r') as f:
+        stg_values = json.load(f)
+
+    adj_matrix = None
+    stg = None
+    state_indexer = None
+
+    if compressed_matrix:
+        adj_matrix_filename = file_name_prefix + '_adj_matrix.txt.npz'
+        adj_matrix = sparse.load_npz(adj_matrix_filename)
+
+        state_indexer = {stg_values[index]['state']: index
+                         for index in stg_values}
+    else:
+        stg_filename = file_name_prefix + '_stg.gexf'
+        stg = nx.read_gexf(stg_filename)
+
+    if (options_save_directory is not None) and (not os.path.isdir(options_save_directory)):
+        os.mkdir(options_save_directory)
+
+    subgoals_with_options = []
+    for key in keys:
+        if progress_bar:
+            print("Training Options for " + key)
+
+        subgoals = [node for node in stg_values
+                    if stg_values[node][key] == 'True']
+
+        for subgoal in subgoals:
+            if subgoal in subgoals_with_options:
+                continue
+            save_path = None
+            if options_save_directory is not None:
+                save_path = options_save_directory + "/subgoal - " + str(subgoal)
+            if progress_bar_prefix is not None:
+                print(progress_bar_prefix)
+                print(key)
+            option = generate_option_to_goal(environment, subgoal,
+                                             training_timesteps,
+                                             stg, adj_matrix, state_indexer,
+                                             all_actions_valid,
+                                             alpha, epsilon, gamma,
+                                             progress_bar,
+                                             save_path=save_path)
+            subgoals_with_options.append(subgoal)
+
+    return
+
+
+# Comparators: DIAYN, DADS, Hierarchical Empowerment, Betweenness, Eigenoptions, Louvain
+# Environments: Taxicab (modified), Lavaworld, tiny towns (2x2, 3x3), SimpleWindGridworld
+
+# Writing: Related Work, future work
+
+# TODO: get diayn running
+# TODO: fix run agent for DADS and DIAYN so not learning on evaluation steps
+
 if __name__ == "__main__":
+    board = np.array([[3, 2, 3],
+                      [0, 0, 0],
+                      [4, 0, 4],
+                      [0, 1, 0]])
+    board_name = 'room'
+    tiny_town_env = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
 
-    tiny_town_env = TinyTown(3, 3, pick_every=1)
-    adj_matrix, all_states = tiny_town_env.get_adjacency_matrix()
+    beta = 0.5
+    graphing_window = 15
+    evaluate_policy_window = 10
+    intrinsic_reward_lambda = 0.5
+    hops = 5
+    min_num_hops = 1
+    max_num_hops = 1
+    num_agents = 3
+    total_evaluation_steps = 500
+    options_training_timesteps = 100_000
+    training_timesteps = 50_000
 
-    print("Finding Goals")
-    print("    Adjacency Matrix Found")
-    inf_values = compute_graph_entropy_values(adj_matrix, weighted=True, beta=1.0)
-    print("    Influence Values Computed")
-    betweenness = compute_betweeness(adj_matrix)
-    print("    Betweenness Values Computed")
-    is_betweeness_local_maxima = find_local_maxima(adj_matrix,
-                                                   [betweenness[i]['betweenness'] for i in range(adj_matrix.shape[0])])
-    betweeness_local_maxima = [all_states[i] for i in range(adj_matrix.shape[0])
-                               if is_betweeness_local_maxima[i]]
+    stg_filename = tiny_town_env.environment_name + '_stg.gexf'
+    stg_values_filename = tiny_town_env.environment_name + '_stg_values.json'
+    agent_directory = tiny_town_env.environment_name + '_agents'
+    results_directory = tiny_town_env.environment_name + '_episode_results'
+    options_save_directory = tiny_town_env.environment_name + '_subgoal_options'
+    multi_level_agent_save_path = tiny_town_env.environment_name + '_multi_level_agent_pre_training'
 
-    for i in inf_values:
-        state = all_states[i]
-        name = ""
-        for x in range(tiny_town_env.width):
-            for y in range(tiny_town_env.height):
-                name += str(state[y, x])
-            name += '\n'
-        tile = str(state[tiny_town_env.height, tiny_town_env.width])
+    stg = nx.read_gexf(stg_filename)
 
-        inf_values[i]['name'] = name
-        inf_values[i]['tile'] = tile
-        inf_values[i]['betweenness'] = float(betweenness[i]['betweenness'])
-        inf_values[i]['betweenness local maxima'] = str(betweeness_local_maxima[i])
+    louvain_agent = LouvainAgent(tiny_town_env.possible_actions, stg, tiny_town_env.state_dtype, (5, 1),
+                                 min_hierarchy_level=0)
+    louvain_agent.apply_louvain(graph_save_path=stg_filename)
+    louvain_agent.create_options()
+    louvain_agent.print_options()
 
-    pick_key = {0: 'random', 1: 'choice'}
-    g = nx.from_numpy_matrix(adj_matrix, create_using=nx.MultiDiGraph())
-    nx.set_node_attributes(g, inf_values)
-    nx.write_gexf(g, 'tiny_towns_' + str(tiny_town_env.height) + 'x' + str(tiny_town_env.width) + '_' +
-                  pick_key[tiny_town_env.pick_every] + '.gexf')
+    # Training Louvain Subgoals
+    louvain_agent.train_options_value_iteration(0.1, 100,
+                                                tiny_town_env,
+                                                True, True)
 
-    '''
-
-    data = graphing.extract_data('results/railroadrandom')
-    graphing.graph_reward_per_timestep(data, window=500,
-                                       name='Railroad 3x3 Random',
-                                       labels=['Betweenness', 'Entropy', 'Q-Learner'],
-                                       x_label='Timestep', y_label='Reward per Timestep')
-    exit()
-
-    environments_to_train = [TinyTown(2, 2, pick_every=1), TinyTown(2, 2, pick_every=0),
-                             RailRoad(3, 3, tile_generation='choice'),
-                             RailRoad(3, 3, tile_generation='random')]
-    save_file_starts = ['learning_agents/tinytown/',
-                        'learning_agents/tinytownrandom2x2/',
-                        'learning_agents/railroadchoice/',
-                        'learning_agents/railroadrandom/']
-    results_file_starts = ['results/tinytown/',
-                           'results/tinytownrandom2x2/',
-                           'results/railroadchoice/',
-                           'results/railroadrandom/']
-    graph_names = ['Tiny Town Choice 2x2', 'Tiny Town Random 2x2',
-                   'Railroad Choice 3x3',
-                   'Railroad Random 3x3']
-    entropy_thresholds = [0.8, 0.7, 0.9, 1.0]
-
-    q_learning_alpha = 0.9
-    q_learning_epsilon = 0.1
-    q_learning_gamma = 0.9
-
-    training_episodes = [10000, 10000, 10000, 10000]
-    num_agents = 20
-
-    for i in range(3, 4):
-        print(graph_names[i])
-        get_results(environments_to_train[i],
-                    training_episodes[i], 50000, num_agents,
-                    entropy_cutoff=entropy_thresholds[i], all_actions_valid=False,
-                    agent_save_directory=save_file_starts[i], results_save_directory=results_file_starts[i],
-                    q_learning_alpha=q_learning_alpha, q_learning_gamma=q_learning_gamma,
-                    q_learning_epsilon=q_learning_epsilon, graph_name=graph_names[i])
-
-    def get_rolling_sum(a):
-        total = 0
-        rolling_sum = []
-        for elm in a:
-            total += elm
-            rolling_sum.append(total)
-        return rolling_sum
-
-
-    def get_total_reward_per_window(data, window):
-        reward_per_timestep = []
-        current_sum = 0
-        for i in range(len(data)):
-            if (i + 1) % window == 0:
-                reward_per_timestep.append(current_sum)
-                current_sum = 0
-            current_sum += data[i]
-        return reward_per_timestep
-
-
-    f = open('results/tinytownq_learner_returns.json')
-    q_learning_data = json.load(f)
-    f.close()
-
-    f = open('results/tinytownbetweenness_returns.json')
-    betweenness_data = json.load(f)
-    f.close()
-
-    f = open('results/tinytownentropy_returns.json')
-    entropy_data = json.load(f)
-    f.close()
-
-    k = 10
-    window = 100
-    q_learning_averaged = graphing.get_averages(list(q_learning_data.values()))
-    q_learning_rolling_sum = get_rolling_sum(q_learning_averaged)
-    q_learning_rolling_average = graphing.get_rolling_average(q_learning_averaged, k)
-    q_learning_total_reward_per_window = get_total_reward_per_window(q_learning_averaged, window)
-    q_learning_reward_per_timestep = get_reward_per_timstep(q_learning_averaged, window)
-    betweenness_averaged = graphing.get_averages(list(betweenness_data.values()))
-    betweenness_rolling_sum = get_rolling_sum(betweenness_averaged)
-    betweenness_rolling_average = graphing.get_rolling_average(betweenness_averaged, k)
-    betweenness_reward_per_timestep = get_reward_per_timstep(betweenness_averaged, window)
-    entropy_averaged = graphing.get_averages(list(entropy_data.values()))
-    entropy_rolling_sum = get_rolling_sum(entropy_averaged)
-    entropy_rolling_average = graphing.get_rolling_average(entropy_averaged, k)
-    entropy_reward_per_timestep = get_reward_per_timstep(entropy_averaged, window)
-
-    to_graph = list(map(lambda x: get_reward_per_timstep(x, window),
-                        [q_learning_averaged, betweenness_averaged, entropy_averaged]))
-
-    graphing.graph_multiple(to_graph,
-                            name='Tiny Town Choice 2x2',
-                            labels=['Q-learner', 'Betweenness', 'Entropy'],
-                            x_label='timestep', y_label='Reward per Timestep')
+    # Training Louvain Agent
+    train_louvain_agents(tiny_town_env, tiny_town_env.environment_name,
+                         agent_directory, results_directory,
+                         training_timesteps, num_agents, evaluate_policy_window,
+                         initial_agent=louvain_agent,
+                         all_actions_valid=True,
+                         total_eval_steps=total_evaluation_steps,
+                         progress_bar=True)
 
     exit()
-    
-    k = 5000
-    window = 100
-    q_learning_averaged = graphing.get_averages(list(q_learning_data.values()))
-    q_learning_rolling_sum = get_rolling_sum(q_learning_averaged)
-    q_learning_rolling_average = graphing.get_rolling_average(q_learning_averaged, k)
-    q_learning_reward_per_timestep = get_reward_per_timstep(q_learning_averaged, window)
-    betweenness_averaged = graphing.get_averages(list(betweeness_data.values()))
-    betweenness_rolling_sum = get_rolling_sum(betweenness_averaged)
-    betweenness_rolling_average = graphing.get_rolling_average(betweenness_averaged, k)
-    betweenness_reward_per_timestep = get_reward_per_timstep(betweenness_averaged, window)
-    entropy_averaged = graphing.get_averages(list(entropy_data.values()))
-    entropy_rolling_sum = get_rolling_sum(entropy_averaged)
-    entropy_rolling_average = graphing.get_rolling_average(entropy_averaged, k)
-    entropy_reward_per_timestep = get_reward_per_timstep(entropy_averaged, window)
 
-    n = 5001 - k
-    graphing.graph_multiple([betweenness_reward_per_timestep,
-                             entropy_reward_per_timestep],
-                            name='Tiny Town Random (2x2)',
-                            labels=['Betweenness', 'Entropy'],
-                            x_label='20 n timestep', y_label='Average Reward per Timestep')
-    
-    print("Finding Goals")
-    print("    Adjacency Matrix Found")
-    inf_values = compute_graph_entropy_values(adj_matrix, weighted=True, beta=1.0)
-    print("    Influence Values Computed")
-    betweenness = compute_betweeness(adj_matrix)
-    print("    Betweenness Values Computed")
-    is_betweeness_local_maxima = find_local_maxima(adj_matrix,
-                                                   [betweenness[i]['betweenness'] for i in range(adj_matrix.shape[0])])
-    betweeness_local_maxima = [all_states[i] for i in range(adj_matrix.shape[0])
-                               if is_betweeness_local_maxima[i]]
+    data = graphing.extract_data(results_directory)
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='Modified Taxicab',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='std',
+                                       labels=['Betweenness',
+                                               'Eigenoptions',
+                                               'Louvain',
+                                               'Preparedness n=1',
+                                               'Multi-level Preparedness',
+                                               'Primitives'
+                                               ])
+    exit()
+
+    find_save_stg_subgoals(tiny_town_env, tiny_town_env.environment_name,
+                           True, max_num_hops=1
+                           )
+    exit()
+
+    print("Training DIAYN")
+    train_diayn_agent(taxicab_env, results_directory, 2,
+                      training_timesteps, num_agents, evaluate_policy_window,
+                      skill_training_episodes=2, skill_length=3, model_layers=[4, 4],
+                      skill_training_max_steps_per_episode=50,
+                      progress_bar=True)
+    exit()
+
+    #stg = nx.read_gexf(stg_filename)
+    #aggregate_graphs, stg = generate_aggregate_graphs(stg, apply_louvain, {'return_aggregate_graphs': True})
+
+    train_multi_level_agent((TaxiCab, {'use_time': False, 'use_fuel': False, 'arrival_probabilities': [0.25, 0.01, 0.01, 0.01, 0.72],
+                                       'hashable_states': True}, taxicab_env.environment_name),
+                            0.1, 0.9, 0.9, 0,
+                            False, 3, training_timesteps, 1, options_training_timesteps, 250,
+                            1, False,
+                            results_directory, aggregate_graphs, stg, 0
+                            )
+    exit()
 
 
-    for i in inf_values:
-        state = all_states[i]
-        name = ""
-        for x in range(tiny_town_env.width):
-            for y in range(tiny_town_env.height):
-                name += str(state[y, x])
-            name += '\n'
-        tile = str(state[tiny_town_env.height, tiny_town_env.width])
+    print("Training Eigenoptions")
+    train_eigenoption_agents(taxicab_env,
+                             taxicab_env.environment_name, agent_directory, results_directory,
+                             options_training_timesteps, training_timesteps,
+                             num_agents, evaluate_policy_window,
+                             all_actions_valid=False,
+                             total_eval_steps=total_evaluation_steps,
+                             progress_bar=True)
+    exit()
 
-        inf_values[i]['name'] = name
-        inf_values[i]['tile'] = tile
-        inf_values[i]['betweenness'] = float(betweeness[i]['betweenness'])
-        inf_values[i]['influence group'] = inf_groups[i]
-        inf_values[i]['betweenness group'] = betweeness_groups[i]
-        inf_values[i]['influence local maxima'] = str(inf_local_maxima[i])
-        inf_values[i]['betweenness local maxima'] = str(betweeness_local_maxima[i])
+    print("Training DADS")
+    train_dads_agent(taxicab_env, results_directory, 2,
+                     training_timesteps, num_agents, evaluate_policy_window,
+                     skill_training_cycles=200, skill_length=3, model_layers=[16, 16],
+                     skill_training_steps=10,
+                     progress_bar=True)
+    exit()
 
-    pick_key = {0: 'random', 1: 'choice'}
-    g = nx.from_numpy_matrix(adj_matrix, create_using=nx.MultiDiGraph())
-    nx.set_node_attributes(g, inf_values)
-    nx.write_gexf(g, 'tiny_towns_' + str(tiny_town_env.height) + 'x' + str(tiny_town_env.width) + '_' +
-                  pick_key[tiny_town_env.pick_every] + '.gexf')
+    train_sac_agent(env, state_shape,
+                    results_directory,
+                    training_timesteps, num_agents, evaluate_policy_window,
+                    all_actions_valid=True,
+                    total_eval_steps=total_evaluation_steps,
+                    progress_bar=True)
+    exit()
 
-    
-    tile_generation = 'random'
-    railroad_env = RailRoad(width=3, height=3, stations=[(0, 0), (2, 2)], tile_generation=tile_generation)
+    print(env.environment_name + ' finding stg and subgoals')
+    find_save_stg_subgoals(env, env.environment_name, True,
+                           beta_values=[x / 10 for x in range(1, 10)],
+                           max_num_hops=max_num_hops,
+                           find_betweenness=True)
 
-    adj_matrix, all_states = railroad_env.get_adjacency_matrix()
-    print("Graph formed")
+    for hops in range(1, max_num_hops + 1):
+        add_local_maxima_to_file(env.environment_name,
+                                 'preparedness - ' + str(hops) + ' hops - beta = 0.5', hops,
+                                 progress_bar=True)
 
-    inf_values = compute_graph_entropy_values(adj_matrix, weighted=True, beta=1.0)
-    print("Influences Found")
+    exit()
 
-    betweeness = compute_betweeness(adj_matrix)
-    print("Betweenness computed")
+    if not os.path.isdir(agent_directory):
+        os.mkdir(agent_directory)
 
-    inf_local_maxima = find_local_maxima(adj_matrix,
-                                         [inf_values[i]['local influence'] for i in range(adj_matrix.shape[0])])
-    print("Influence groups found")
+    stg = nx.read_gexf(stg_filename)
 
-    betweeness_groups = group_graph_by_local_maxima(adj_matrix,
-                                                    [betweeness[i]['betweenness'] for i in range(adj_matrix.shape[0])])
-    betweeness_local_maxima = find_local_maxima(adj_matrix,
-                                                [betweeness[i]['betweenness'] for i in range(adj_matrix.shape[0])])
-    print("Betweenness groups found")
+    preparedness_subgoals = get_preparedness_subgoals(env, 0.5)
+    agent = MultiLevelGoalAgent(env.possible_actions, 0.9, 0.1, 0.9,
+                                preparedness_subgoals, stg, state_dtype=int)
+    agent.print_options()
+    agent.train_options(env, options_training_timesteps, all_actions_valid=False, progress_bar=True)
+    train_multi_level_preparedness_agents(env, env.environment_name,
+                                          agent_directory, results_directory,
+                                          training_timesteps, num_agents, evaluate_policy_window,
+                                          total_eval_steps=total_evaluation_steps,
+                                          initial_agent=agent, all_actions_valid=False,
+                                          progress_bar=True)
+    exit()
 
-    name_key = {0: '0', 1: ' | ', 2: '-', 3: '+'}
-    for i in inf_values:
-        state = all_states[i]
-        name = ""
-        for x in range(railroad_env.width):
-            for y in range(railroad_env.height):
-                name += name_key[state[y, x]]
-            name += '\n'
-        inf_values[i]['name'] = name
-        if tile_generation == 'random':
-            inf_values[i]['next tile'] = name_key[state[railroad_env.height, railroad_env.width]]
-        to_set = float(betweeness[i]['betweenness'])
-        inf_values[i]['betweenness'] = to_set
-        inf_values[i]['betweenness group'] = betweeness_groups[i]
-        inf_values[i]['influence local maxima'] = str(inf_local_maxima[i])
-        inf_values[i]['betweenness local maxima'] = str(betweeness_local_maxima[i])
+    print(env.environment_name + ' training subgoal options')
 
-    g = nx.from_numpy_matrix(adj_matrix, create_using=nx.MultiDiGraph7())
-    nx.set_node_attributes(g, inf_values)
+    train_subgoal_options(env, env.environment_name,
+                          options_training_timesteps,
+                          ['preparedness - ' + str(hops) + ' hops - beta = 0.5 - local maxima'
+                           for hops in range(min_num_hops, max_num_hops + 1)] +
+                          ['betweenness local maxima'],
+                          options_save_directory=options_save_directory,
+                          all_actions_valid=True,
+                          progress_bar=True)
+    exit()
 
-    nx.write_gexf(g, 'railroad_graph_3x3x2_' + tile_generation + '.gexf')
+    train_subgoal_agent(env,
+                        ['preparedness - ' + str(hops) + ' hops - beta = 0.5 - local maxima'
+                         for hops in range(min_num_hops, max_num_hops + 1)] +
+                        ['betweenness local maxima'],
+                        env.environment_name,
+                        options_save_directory, agent_directory, results_directory,
+                        training_timesteps, num_agents, evaluate_policy_window,
+                        total_eval_steps=100,
+                        all_actions_valid=True,
+                        progress_bar=True)
+    exit()
 
-    water_bucket_env = WaterBucket(buckets=[12, 8, 5, 3], start=np.array([[12, 12],
-                                                                          [8, 0],
-                                                                          [5, 0],
-                                                                          [3, 0]]))
+    train_q_learning_agent(env,
+                           agent_directory, results_directory,
+                           training_timesteps, num_agents, evaluate_policy_window,
+                           True,
+                           total_eval_steps=100,
+                           progress_bar=True)
+    exit()
 
-    adj_matrix, all_states = water_bucket_env.get_adjacency_matrix()
+    with open(env.environment_name + '_stg_values.json', 'r') as f:
+        data = json.load(f)
 
-    inf_values = compute_graph_entropy_values(adj_matrix, weighted=True, beta=0.5, accuracy=4, print_values=True)
-    betweenness = compute_betweeness(adj_matrix)
+    print_subgoals(data, 'preparedness - 4 hops - beta = 0.5 - local maxima')
+    exit()
 
-    name_key = {0: '0', 1: ' | ', 2: '-', 3: '+'}
-    for i in inf_values:
-        state = all_states[i]
-        inf_values[i]['name'] = np.array2string(state)
-        to_set = float(betweenness[i]['betweenness'])
-        inf_values[i]['betweenness'] = to_set
+    print(env.environment_name + ' training subgoal agents')
 
-    g = nx.from_numpy_matrix(adj_matrix, create_using=nx.MultiDiGraph())
-    nx.set_node_attributes(g, inf_values)
-    '''
+    env.visualise_subgoals('betweenness local maxima')
+    exit()
+
+    print(env.environment_name + " - Training Preparedness - 1 hops Agent")
+
+    train_subgoal_agent(env, ['preparedness - 5 hops - beta = 0.5 - local maxima'],
+                        env.environment_name,
+                        options_save_directory, agent_directory, results_directory,
+                        training_timesteps, num_agents, evaluate_policy_window,
+                        all_actions_valid=False,
+                        progress_bar=False)
+    exit()
+
+    print(env.environment_name + ' stg - subgoals')
+
+    for hops in range(1, max_num_hops + 1):
+        intrinsic_reward = create_preparedness_reward_function(env.environment_name, hops,
+                                                               beta=0.5)
+        train_q_learning_agent(env, agent_directory, results_directory,
+                               training_timesteps, num_agents, evaluate_policy_window,
+                               all_actions_valid=False,
+                               intrinsic_reward=intrinsic_reward,
+                               intrinsic_reward_lambda=intrinsic_reward_lambda,
+                               progress_bar=True,
+                               file_save_name='preparedness_' + str(hops) + '_hops_intrinsic_reward')
+    exit()
+
+    train_betweenness_agents(env, env.environment_name,
+                             options_save_directory, agent_directory, results_directory,
+                             training_timesteps, num_agents, evaluate_policy_window,
+                             all_actions_valid=False,
+                             progress_bar=False)
+    exit()

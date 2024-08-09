@@ -1,254 +1,162 @@
-from environments.environment import Environment
-
 import numpy as np
+from typing import Any
 
-
-class Room:
-
-    def __init__(self, width, height, anchor, doors, joining_rooms=[], directions=[], key_cards=None, master_key='Master'):
-        self.width = width
-        self.height = height
-        self.anchor = anchor
-        self.doors = doors
-        self.num_doors = len(doors)
-        self.joining_rooms = joining_rooms
-        self.directions = directions
-        self.key_cards = key_cards
-        self.master_key = master_key
-        return
-
-    def in_room(self, x, y):
-        return (0 <= x - self.anchor[0] < self.width) and (0 <= y - self.anchor[1] < self.height)
-
-    def move(self, x_start, y_start, key_cards, x_move, y_move, one_use_cards):
-        x_new = x_start
-        y_new = y_start
-
-        can_move = self.in_room(x_start + x_move, y_start + y_move)
-        new_room = self
-
-        if not can_move:
-            new_room = None
-            key_cards.append(None)
-            for i in range(self.num_doors):
-                door = self.doors[i]
-                key_card_needed = None
-                if self.key_cards is not None:
-                    key_card_needed = self.key_cards[i]
-                if ((x_start, y_start) == door) and\
-                        (self.master_key in key_cards or key_card_needed in key_cards) and \
-                        ((x_move, y_move) == self.directions[i]):
-                    can_move = True
-                    new_room = self.joining_rooms[i]
-                    if one_use_cards:
-                        try:
-                            key_cards.remove(key_card_needed)
-                        except ValueError:
-                            ()
-                    break
-            key_cards.remove(None)
-
-        if can_move:
-            x_new += x_move
-            y_new += y_move
-
-        return can_move, new_room, x_new, y_new, key_cards
-
-    def set_joining_rooms(self, to_set):
-        self.joining_rooms = to_set
-        return
+from environments.environment import Environment
 
 
 class KeyCard(Environment):
-    possible_actions = {0: (0, 1), 1: (0, -1), 2: (1, 0), 3: (-1, 0)}
 
-    center_room = Room(4, 4, (4, 0), [(4, 1), (5, 3), (7, 1)], key_cards=['B', 'R', 'G'],
-                       directions=[(-1, 0), (0, 1), (1, 0)])
-    blue_room = Room(4, 4, (0, 0), [(3, 1)], joining_rooms=[center_room], key_cards=['B'],
-                     directions=[(1, 0)])
-    red_room = Room(4, 4, (4, 4), [(5, 4)], joining_rooms=[center_room], key_cards=['R'],
-                    directions=[(0, -1)])
-    green_room = Room(4, 4, (8, 0), [(8, 1)], joining_rooms=[center_room], key_cards=['G'],
-                      directions=[(-1, 0)])
-    center_room.set_joining_rooms([blue_room, red_room, green_room])
+    default_width = 3
+    default_height = 3
+    default_key_cards = [(default_width - 1, 0), (0, default_height - 1)]
 
-    default_rooms = [center_room, blue_room, red_room, green_room]
+    goal_locations = [(0, 0)]
+    no_key_needed = -1
 
-    default_key_cards = {'B': [(4, 0)], 'R': [(4, 3)], 'G': [(7, 3)], 'Master': [(7, 0)]}
+    north_action = 0
+    south_action = 1
+    east_action = 2
+    west_action = 3
+    pickup_action = 4
+    possible_actions = [north_action, south_action, east_action, west_action,
+                        pickup_action]
+    num_possible_actions = len(possible_actions)
 
-    default_start = (5, 1)
-    default_goal = (6, 6)
-
-    '''
-
-    mid_room = Room(2, 3, (0, 3), [(0, 3), (1, 3), (0, 5), (1, 5)], directions=[(0, -1), (0, -1), (0, 1), (0, 1)],
-                    key_cards=['B', 'B', 'R', 'R'])
-    start_room = Room(2, 3, (0, 0), [(0, 2), (1, 2)], directions=[(0, 1), (0, 1)],
-                      key_cards=['B', 'B'], joining_rooms=[mid_room, mid_room])
-    end_room = Room(2, 3, (0, 6), [(0, 6), (1, 6)], directions=[(0, -1), (0, -1)],
-                    key_cards=['R', 'R'], joining_rooms=[mid_room, mid_room])
-    mid_room.set_joining_rooms([start_room, start_room, end_room, end_room])
-
-    default_rooms = [start_room, mid_room, end_room]
-    default_key_cards = {'B': [(0, 1)], 'R': [(0, 4)], 'Master': [(1, 1)]}
-
-    default_start = (0, 0)
-    default_goal = (1, 8)
-    '''
-
+    invalid_action_reward = -0.5
     step_reward = -0.1
-    goal_reward = 1.0
+    step_reward_no_key = -0.01
+    success_reward = 1.0
 
-    def __init__(self, rooms=default_rooms, key_cards=default_key_cards, start=default_start, goal=default_goal,
-                 one_use_cards=True, max_key_hold=1):
-        self.rooms = rooms
+    def __init__(self, width=None, height=None, key_cards=None, goal_reveal_prob=0.1):
+        self.width = width
+        if self.width is None:
+            self.width = self.default_width
+        self.height = height
+        if self.height is None:
+            self.height = self.default_height
         self.key_cards = key_cards
-        self.start = start
-        self.goal = goal
-        self.x = self.y = self.current_room = None
-        self.one_use_cards = one_use_cards
-        self.max_key_hold = 1
-        self.key_cards_held = []
+        if self.key_cards is None:
+            self.key_cards = self.default_key_cards
+        self.goal_reveal_prob = goal_reveal_prob
 
+        self.num_keys = len(self.key_cards)
+        self.current_state = None
+        self.environment_name = 'keycard_' + str(self.width) + '_' + str(self.height)
+        self.key_needed_index = self.num_keys + 2
+        self.state_len = self.num_keys + 3
         self.terminal = True
+        self.x_index = self.num_keys
+        self.y_index = self.num_keys + 1
         return
 
-    def get_adjacency_matrix(self, start=default_start, directed=True):
-        connected_states = {}
+    def get_start_states(self):
+        start_state = np.full(self.state_len, 0)
+        start_state[self.key_needed_index] = self.no_key_needed
+        return [start_state]
 
-        all_states = [{'x': start[0],
-                       'y': start[1],
-                       'key_cards': []}]
-        to_add = [{'x': start[0],
-                   'y': start[1],
-                   'key_cards': []}]
-
-        def dict_to_str(d):
-            str_state = str(d['x']) + '/' + str(d['y']) + '/'
-            d['key_cards'].sort()
-            for elm in d['key_cards']:
-                str_state += elm
-            return str_state
-
-        while len(to_add) > 0:
-            current_state = to_add.pop()
-            successor_states = self.get_successor_states(current_state['x'], current_state['y'],
-                                                         current_state['key_cards'].copy())
-
-            connected_states[dict_to_str(current_state)] = successor_states
-
-            for state in successor_states:
-                if state not in all_states:
-                    all_states.append(state)
-                    to_add.append(state)
-
-        num_states = len(all_states)
-        adj_matrix = np.zeros((num_states, num_states))
-        for i in range(num_states):
-            state = all_states[i]
-            connected = connected_states[dict_to_str(state)]
-            for connected_state in connected:
-                j = all_states.index(connected_state)
-                adj_matrix.itemset((i, j), 1.0)
-                if not directed:
-                    adj_matrix.itemset((j, i), 1.0)
-
-        return adj_matrix, all_states
-
-    def get_current_state(self, str_state=True):
-        if self.terminal:
-            raise AttributeError("Environment is terminal")
-
-        self.key_cards_held.sort()
-        current_state = {'x': self.x,
-                         'y': self.y,
-                         'key_cards': self.key_cards_held.copy()}
-
-        if not str_state:
-            return current_state
-
-        str_current_state = ""
-        for value in list(current_state.values()):
-            str_current_state += str(value) + '/'
-        return str_current_state
-
-    def get_keycards_at_cords(self, x, y):
-        key_cards_found = []
-        for key_card in self.key_cards:
-            if (x, y) in self.key_cards[key_card]:
-                key_cards_found.append(key_card)
-        return key_cards_found
-
-    def get_room_by_cords(self, x, y):
-        for room in self.rooms:
-            if room.in_room(x, y):
-                return room
-        return None
-
-    def get_successor_states(self, x, y, key_cards):
-        if x == 7 and y == 1 and key_cards == []:
-            print('here')
-        moves = list(KeyCard.possible_actions.values())
-        room = self.get_room_by_cords(x, y)
-
+    def get_successor_states(self, state, probability_weights=False):
         successor_states = []
-        for move in moves:
-            can_move, new_room, x_new, y_new, key_cards_remaining = room.move(x, y, key_cards.copy(), move[0], move[1],
-                                                                              one_use_cards=self.one_use_cards)
-            if can_move:
-                key_cards_found = self.get_keycards_at_cords(x_new, y_new)
-                if len(key_cards_remaining) < self.max_key_hold:
-                    for key_card in key_cards_remaining:
-                        if key_card not in key_cards_found and key_card is not None:
-                            key_cards_found.append(key_card)
-                else:
-                    key_cards_found = key_cards_remaining.copy()
-                key_cards_found.sort()
-                successor_states.append({'x': x_new,
-                                         'y': y_new,
-                                         'key_cards': key_cards_found})
+        weights = []
 
-        return successor_states
+        if self.is_terminal(state):
+            return successor_states, weights
 
-    def reset(self):
-        self.x = self.start[0]
-        self.y = self.start[1]
+        # Move successors
+        # Pickup successors
+        # For every state, if key is not locked in yet potential for key needed being decided
+        def add_successor_state(value, index, prob):
+            if not probability_weights:
+                prob = 1
+            successor = state.copy()
 
-        self.current_room = self.get_room_by_cords(self.x, self.y)
+            if not ((value is None) or (index is None)):
+                successor[index] = value
 
-        self.key_cards_held = []
-        self.terminal = False
-        return self.get_current_state()
+            successor_states.append(successor)
+            weights.append(prob)
+            return
 
-    def step(self, action):
-        if self.terminal:
-            raise AttributeError("Environment is terminal")
+        stationary_actions = 0
+        default_prob = 1/self.num_possible_actions
 
-        try:
-            move = KeyCard.possible_actions[action]
-        except KeyError:
-            raise KeyError("Invalid action")
+        # Move Successor States
+        x = state[self.x_index]
+        y = state[self.y_index]
+        if 0 <= x - 1:
+            add_successor_state(x - 1, self.x_index, default_prob)
+        else:
+            stationary_actions += 1
+        if x + 1 < self.width:
+            add_successor_state(x + 1, self.x_index, default_prob)
+        else:
+            stationary_actions += 1
+        if 0 <= y - 1:
+            add_successor_state(y - 1, self.y_index, default_prob)
+        else:
+            stationary_actions += 1
+        if y + 1 < self.height:
+            add_successor_state(y + 1, self.y_index, default_prob)
+        else:
+            stationary_actions += 1
 
-        reward = self.step_reward
+        # Pickup Successor States
+        can_pickup = False
+        for key in range(self.num_keys):
+            if state[key] == 1:
+                continue
+            key_location = self.key_cards[key]
+            if x == key_location[0] and y == key_location[1]:
+                can_pickup = True
+                add_successor_state(1, key, default_prob)
+                break
 
-        x_move = move[0]
-        y_move = move[1]
+        if not can_pickup:
+            stationary_actions += 1
 
-        move_done, self.current_room, self.x, self.y, remaining_cards = self.current_room.move(self.x, self.y,
-                                                                                               self.key_cards_held,
-                                                                                               x_move, y_move,
-                                                                                               self.one_use_cards)
-        self.key_cards_held = remaining_cards.copy()
+        # Stationary Successor
+        if stationary_actions > 0:
+            add_successor_state(None, None, stationary_actions/self.num_possible_actions)
 
-        if move_done:
-            pos = (self.x, self.y)
-            if len(self.key_cards_held) < self.max_key_hold:
-                for key_card in self.key_cards:
-                    if pos in self.key_cards[key_card] and pos not in self.key_cards_held:
-                        self.key_cards_held.append(key_card)
+        # Key Card Needed being decided
+        if state[self.key_needed_index] != self.no_key_needed:
+            return successor_states, weights
 
-            if self.goal == pos:
-                self.terminal = True
-                reward += self.goal_reward
+        num_successor_states = len(successor_states)
+        for i in range(num_successor_states):
+            for key in range(self.num_keys):
+                successor = successor_states[i].copy()
+                successor[self.key_needed_index] = key
+                successor_states.append(successor)
 
-        return self.get_current_state(), reward, self.terminal, None
+                successor_weight = 1
+                if probability_weights:
+                    successor_weight = weights[i] * self.goal_reveal_prob * (1/self.num_keys)
+                    weights[i] = weights[i] * (1 - self.goal_reveal_prob)
+                weights.append(successor_weight)
+
+        return successor_states, weights
+
+    def is_terminal(self, state=None):
+        if state is None:
+            state = self.current_state
+
+        key_needed = state[self.key_needed_index]
+        if key_needed == self.no_key_needed:
+            return False
+
+        agent_has_key = state[key_needed] == 1
+        if not agent_has_key:
+            return False
+
+        agent_at_goal = (state[self.x_index], state[self.y_index]) in self.goal_locations
+        if agent_at_goal:
+            return True
+
+        return False
+
+    def reset(self) -> Any:
+
+        return
+
+    def step(self, action) -> (Any, float, bool, Any):
+        return

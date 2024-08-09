@@ -31,7 +31,7 @@ class TinyTown(Environment):
     empty_tile = 0
     brick = 1
     glass = 2
-    plants = 3
+    # plant = 3
 
     cottage_index = 4
     cottage_plan = np.array([[any_tile, any_tile, any_tile],
@@ -42,10 +42,10 @@ class TinyTown(Environment):
     greenhouse_index = 5
     greenhouse_plan = np.array([[any_tile, any_tile, any_tile],
                                 [any_tile, brick, brick],
-                                [any_tile, plants, plants]])
+                                [any_tile, glass, glass]])
     greenhouse = Building(greenhouse_index, greenhouse_plan, 4, False, 4, 0)
 
-    default_resources = [brick, glass, plants]
+    default_resources = [brick, glass]
     default_buildings = [cottage, greenhouse]
 
     step_reward = 0.0
@@ -86,6 +86,13 @@ class TinyTown(Environment):
         self.possible_actions = list(range(self.total_num_actions))
         self.terminal = True
         self.turn_count = 0
+
+        name_key = ['random', 'choice']
+        self.environment_name = "tiny_town_" + name_key[self.pick_every] + "_" +\
+                                str(len(self.resources)) + "x" + str(self.width) + "x" + str(self.height)
+
+        self.state_dtype = int
+        self.available_actions = {}
         return
 
     def board_full(self):
@@ -131,7 +138,14 @@ class TinyTown(Environment):
                     state.itemset((j, i), self.empty_tile)
         return state
 
-    def get_possible_actions(self):
+    def get_possible_actions(self, state=None):
+        state_str = np.array2string(self.board)
+        try:
+            possible_actions = self.available_actions[state_str]
+            return possible_actions
+        except KeyError:
+            ()
+
         if self.terminal:
             return []
 
@@ -177,6 +191,7 @@ class TinyTown(Environment):
 
         possible_actions.append(end_building_action)
 
+        self.available_actions[state_str] = possible_actions
         return possible_actions
 
     def get_start_states(self):
@@ -192,49 +207,66 @@ class TinyTown(Environment):
             start_states.append(start_state)
         return start_states
 
-    def get_successor_states(self, state):
-        if self.is_terminal_state(state):
-            return []
+    def get_successor_states(self, state, probability_weights=False):
+        if self.is_state_terminal(state):
+            return [], []
 
         successor_states = []
+        possible_actions = 0
         resource_to_place = state[self.height, self.width]
 
-        if resource_to_place == self.empty_tile:  # Building phase
+        # Building Phase
+        if resource_to_place == self.empty_tile:
+
             for y in range(self.height):
                 for x in range(self.width):
                     for building in self.buildings:
-                        for k in range(1):
-                            plan = building.rotate_plan(k)
-                            if not self.can_build(state, plan, x, y):
-                                continue
-                            successor_template = state.copy()
-                            # Remove resource tiles used in construction
-                            building_indexes = []
+                        if not self.can_build(state, building.building_pattern, x, y):
+                            continue
+
+                        # Removing Building Materials
+                        successor_template = state.copy()
+                        build_locations = []
+                        for i in range(3):
                             for j in range(3):
-                                for i in range(3):
-                                    if plan[j, i] == self.any_tile:
-                                        continue
-                                    successor_template.itemset((y - 1 + j, x - 1 + i),
-                                                               self.empty_tile)
-                                    building_indexes.append((y - 1 + j, x - 1 + i))
-                            for building_index in building_indexes:
-                                successor = successor_template.copy()
-                                successor.itemset((building_index[0], building_index[1]), building.index)
-                                successor_states.append(successor)
-            # for end building phase action
-            #   depending on resource step, change next resource
-            resources_possible = self.resources
-            if self.pick_every == 1:
-                resources_possible = [self.any_tile]
-            if self.pick_every > 1:
-                resources_possible.append(self.any_tile)
+                                if building.building_pattern[j, i] == self.any_tile:
+                                    continue
 
-            for resource in resources_possible:
-                successor = state.copy()
-                successor.itemset((self.height, self.width), resource)
-                successor_states.append(successor)
-            return successor_states
+                                y_build = y - 1 + j
+                                x_build = x - 1 + i
+                                possible_actions += 1
+                                build_locations.append((y_build, x_build))
+                                successor_template.itemset((y_build, x_build),
+                                                           self.empty_tile)
 
+                        # Placing Building
+                        for build_location in build_locations:
+                            successor = successor_template.copy()
+                            successor.itemset(build_location, building.index)
+                            successor_states.append(successor)
+
+                # End Building Phase Action
+                possible_actions += 1
+                next_resources = self.resources
+                num_next_resources = self.num_resources
+                if self.pick_every == 1:
+                    next_resources = [self.any_tile]
+                    num_next_resources = 1
+                for resource in next_resources:
+                    successor = state.copy()
+                    successor.itemset((self.height, self.width), resource)
+                    successor_states.append(successor)
+
+                # Finding Probability Weights
+                if not probability_weights:
+                    probabilities = [1.0] * len(successor_states)
+                    return successor_states, probabilities
+
+                probabilities = [1.0 / possible_actions] * (possible_actions - 1)
+                probabilities += [1 / (num_next_resources * possible_actions)] * num_next_resources
+                return successor_states, probabilities
+
+        # In Resource Phase
         can_place = [resource_to_place]
         if resource_to_place == self.any_tile:
             can_place = self.resources
@@ -244,18 +276,33 @@ class TinyTown(Environment):
                 for x in range(self.width):
                     if not state[y, x] == self.empty_tile:
                         continue
+                    possible_actions += 1
                     successor = state.copy()
                     successor.itemset((y, x), resource)
                     successor.itemset((self.height, self.width), self.empty_tile)
                     successor_states.append(successor)
-        return successor_states
 
-    def is_terminal_state(self, state):
+        probability = 1.0
+        if probability_weights:
+            probability = 1.0 / possible_actions
+
+        probabilities = [probability] * possible_actions
+        return successor_states, probabilities
+
+    # TODO: MAKE MORE GENERAL
+    def get_transition_probability(self, state, action, next_state):
+        return 1.0
+
+    def is_state_terminal(self, state):
         # All squares are full
         for i in range(self.width):
             for j in range(self.height):
                 if state[j, i] == self.empty_tile:
                     return False
+
+        # State is full and environment is in resource phase
+        if not (state[(self.height, self.width)] == self.empty_tile):
+            return True
 
         # Can build
         for i in range(self.width):
@@ -286,7 +333,7 @@ class TinyTown(Environment):
 
         return (self.cottage.fed_score * fed_cottages) - empty_tiles
 
-    def step(self, action, true_state=False) -> (Any, float, bool, Any):
+    def step(self, action) -> (Any, float, bool, Any):
         # Place resource
         # If no more buildings can be built:
         #   End game and score
@@ -342,7 +389,7 @@ class TinyTown(Environment):
                 self.next_resource = self.any_tile
             self.board.itemset((self.height, self.width), self.next_resource)
 
-        if self.is_terminal_state(self.board) or (action == self.total_num_actions - 1 and self.board_full()):
+        if self.is_state_terminal(self.board) or (action == self.total_num_actions - 1 and self.board_full()):
             reward = self.score_state(self.board)
             self.building_phase = False
             self.terminal = True
@@ -353,7 +400,14 @@ class TinyTown(Environment):
 
         return self.board.copy(), self.step_reward, False, None
 
-    def reset(self, true_state=False) -> Any:
+    def reset(self, start_state=None) -> Any:
+        if start_state is not None:
+            self.board = start_state.copy()
+            self.next_resource = self.board[self.height, self.width]
+            self.building_phase = self.next_resource == self.empty_tile
+            self.terminal = False
+            return self.board.copy()
+
         self.board = np.full((self.width + 1, self.height + 1), self.empty_tile)
 
         if self.pick_every == 1:

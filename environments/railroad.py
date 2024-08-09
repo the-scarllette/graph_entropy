@@ -28,6 +28,14 @@ class RailRoad(Environment):
     possible_tiles = [vert_line_tile, hor_line_tile,
                       plus_tile]
 
+    tile_placement_rewards = {vert_line_tile: -0.001,
+                              hor_line_tile: -0.001,
+                              plus_tile: -0.005,
+                              right_turn_tile: -0.001,
+                              left_turn_tile: -0.001,
+                              inv_right_turn_tile: -0.001,
+                              inv_left_turn_tile: -0.001}
+
     tile_adjacency_key = {vert_line_tile: [[blank_tile, vert_line_tile, plus_tile, right_turn_tile, left_turn_tile],
                                            [blank_tile, vert_line_tile, plus_tile, inv_right_turn_tile,
                                             inv_left_turn_tile],
@@ -67,6 +75,14 @@ class RailRoad(Environment):
 
         self.num_possible_tiles = len(self.possible_tiles)
 
+        self.symmetry_functions = [lambda s: self.fliplr_state(s),
+                                   lambda s: self.rot90_state(s, 1),
+                                   lambda s: self.rot90_state(s, 2),
+                                   lambda s: self.rot90_state(s, 3),
+                                   lambda s: self.rot90_state(self.fliplr_state(s), 1),
+                                   lambda s: self.rot90_state(self.fliplr_state(s), 2),
+                                   lambda s: self.rot90_state(self.fliplr_state(s), 3)]
+
         self.terminal = True
         self.board = None
 
@@ -79,6 +95,7 @@ class RailRoad(Environment):
                     self.num_possible_actions += 1
         self.possible_actions = list(range(self.num_possible_actions))
 
+        self.environment_name = "railroad_" + self.tile_generation + "_" + str(self.width) + "x" + str(self.height)
         return
 
     def all_stations_connected(self):
@@ -94,7 +111,7 @@ class RailRoad(Environment):
         if state is None:
             state = self.board
 
-        if (not(0 <= x < self.width)) or (not (0 <= y < self.height)):
+        if (not (0 <= x < self.width)) or (not (0 <= y < self.height)):
             return False
 
         if not state[y, x] == self.blank_tile:
@@ -102,7 +119,6 @@ class RailRoad(Environment):
 
         adjacent_tiles = self.get_adjacent_tiles(x, y, state)
 
-        can_place = True
         for k in range(4):
             adj_tile = adjacent_tiles[k]
             needed_adj = self.tile_adjacency_key[tile][k]
@@ -112,7 +128,6 @@ class RailRoad(Environment):
         if (x, y) in self.stations:
             return True
 
-        tile_in = True
         has_directions = []
         for out_direction in self.tile_connection_key[tile]:
             in_direction = -1 * out_direction
@@ -140,61 +155,12 @@ class RailRoad(Environment):
             return False
         return True
 
-    def get_adjacency_matrix(self, directed=True):
-        all_states = self.get_start_states()
+    def fliplr_state(self, state):
+        if self.tile_generation == 'choice':
+            return np.fliplr(state)
 
-        connected_states = {}
-
-        to_add = [s.copy() for s in all_states]
-
-        def get_equivalent_states(to_get):
-            equiv = [to_get]
-            return equiv
-
-        while len(to_add) > 0:
-            current_state = to_add.pop()
-            successor_states = self.get_successor_states(current_state)
-
-            connected_states[np.array2string(current_state)] = successor_states
-
-            for state in successor_states:
-                in_all_states = False
-
-                to_check = get_equivalent_states(state)
-                for s in all_states:
-                    for check in to_check:
-                        if np.array_equal(check, s):
-                            in_all_states = True
-                            break
-                    if in_all_states:
-                        break
-                if not in_all_states:
-                    all_states.append(state.copy())
-                    to_add.append(state.copy())
-
-        # my name's Scarllette and i love commenting my code ;)
-        num_states = len(all_states)
-        adj_matrix = np.zeros((num_states, num_states))
-        for i in range(num_states):
-            state = all_states[i]
-            connected = connected_states[np.array2string(state)]
-            for connected_state in connected:
-                j = 0
-                to_check = get_equivalent_states(connected_state)
-                connection_found = False
-                while j < num_states and not connection_found:
-                    for s in to_check:
-                        if np.array_equal(s, all_states[j]):
-                            connection_found = True
-                            j -= 1
-                            break
-                    j += 1
-                if i == j:
-                    continue
-                adj_matrix.itemset((i, j), 1.0)
-                if not directed:
-                    adj_matrix.itemset((j, i), 1.0)
-        return adj_matrix, all_states
+        flipped_state = state.copy()
+        flipped_state[0:self.height, 0:self.width] = np.fliplr(flipped_state[0:self.height, 0:self.width])
 
     def get_adjacent_tiles(self, x, y, state=None):
         if state is None:
@@ -212,14 +178,12 @@ class RailRoad(Environment):
             adjacent_tiles.append(adj_tile)
         return adjacent_tiles
 
-    def get_current_state(self, true_state=False):
-        if true_state:
-            return self.board.copy()
-        return np.array2string(self.board)
+    def get_current_state(self):
+        return self.board.copy()
 
     def get_start_states(self):
         if self.tile_generation == 'choice':
-            start_state = np.full((self.width, self.height), self.blank_tile)
+            start_state = np.full((self.height, self.width), self.blank_tile)
             return [start_state]
 
         start_states = []
@@ -247,68 +211,71 @@ class RailRoad(Environment):
 
         return possible_actions
 
-    def get_successor_states(self, state):
+    def get_successor_states(self, state, probability_weights=False):
+        if self.is_terminal(state):
+            return [], []
+
         successor_states = []
+        num_successor_states = 0
+        weights = []
 
-        if (self.tile_generation == 'random' and state[self.height, self.width] == self.blank_tile) or\
-                self.is_terminal(state):
-            return successor_states
+        tiles_to_place = self.possible_tiles
+        if self.tile_generation == 'random':
+            tiles_to_place = [state[self.height, self.width]]
 
-        for i in range(self.width):
+        for tile in tiles_to_place:
             for j in range(self.height):
-                current_tile = state[j, i]
-                if not current_tile == self.blank_tile:
-                    continue
-
-                adjacent_tiles = self.get_adjacent_tiles(i, j, state)
-                is_station = (i, j) in self.stations
-                if all([self.blank_tile == t for t in adjacent_tiles]) and not is_station:
-                    continue
-
-                to_place = []
-                if self.tile_generation == 'choice':
-                    poss_tiles = self.possible_tiles
-                elif self.tile_generation == 'random':
-                    poss_tiles = [state[self.height, self.width]]
-
-                to_place = [tile for tile in poss_tiles
-                            if self.can_place_tile(i, j, tile, state)]
-
-                if self.tile_generation == 'choice':
-                    for tile in to_place:
-                        successor = state.copy()
-                        successor.itemset((j, i), tile)
-                        successor_states.append(successor)
-                elif self.tile_generation == 'random':
-                    for tile in to_place:
-                        for next_tile in self.possible_tiles:
-                            successor = state.copy()
-                            successor.itemset((j, i), tile)
-                            successor.itemset((self.height, self.width), next_tile)
-                            if self.is_terminal(successor):
-                                successor.itemset((self.height, self.width), self.blank_tile)
-                            successor_states.append(successor)
-
-                '''
-                connecting_moves = self.tile_connection_key[tile]
-                for move in connecting_moves:
-                    new_i = i + move[0]
-                    new_j = j + move[1]
-                    if not (0 <= new_i < self.width and 0 <= new_j < self.height):
-                        continue
-                    if not (state[new_i, new_j] == self.blank_tile):
+                for i in range(self.width):
+                    if not self.can_place_tile(i, j, tile, state):
                         continue
 
-                    reverse_move = move * -1
-                    possible_tiles = []
-                    for key in self.possible_tiles:
-                        for m in self.tile_connection_key[key]:
-                            if np.array_equal(m, reverse_move):
-                                possible_tiles.append(key)
-                                break
-                    '''
+                    successor = state.copy()
+                    successor.itemset((j, i), tile)
+                    successor_states.append(successor)
+                    num_successor_states += 1
 
-        return successor_states
+        weight = 1.0
+        if probability_weights:
+            weight = 1.0 / num_successor_states
+
+        if self.tile_generation == 'choice':
+            weights = [weight] * num_successor_states
+            return successor_states, weights
+
+        random_successor_states = []
+        num_templates = num_successor_states
+        for template in successor_states:
+            tiles_to_terminal = 0
+            num_successors_of_template = 0
+            for tile in self.possible_tiles:
+                successor = template.copy()
+                successor.itemset((self.height, self.width),
+                                  tile)
+                if self.is_terminal(successor):
+                    tiles_to_terminal += 1
+                    continue
+                random_successor_states.append(successor)
+                num_successors_of_template += 1
+            if tiles_to_terminal > 0:
+                successor = template.copy()
+                successor.itemset((self.height, self.width),
+                                  self.blank_tile)
+                random_successor_states.append(successor)
+                num_successors_of_template += 1
+
+            if not probability_weights:
+                weights += ([1.0] * num_successors_of_template)
+                continue
+
+            non_terminal_weight = 1.0 / (num_templates * self.num_possible_tiles)
+            if tiles_to_terminal <= 0:
+                weights += ([non_terminal_weight] * num_successors_of_template)
+                continue
+            terminal_weight = tiles_to_terminal / (num_templates * self.num_possible_tiles)
+            weights += (([non_terminal_weight] * (num_successors_of_template - 1)) +
+                        [terminal_weight])
+
+        return random_successor_states, weights
 
     def is_path(self, state, start, end):
         current_x = start[0]
@@ -389,6 +356,10 @@ class RailRoad(Environment):
         if self.is_successful(state):
             return True
 
+        # If random and no available next tile
+        if self.tile_generation == 'random' and state[self.height, self.width] == self.blank_tile:
+            return True
+
         # Check if board is full of tiles
         if not self.is_space_to_place(state):
             return True
@@ -400,7 +371,7 @@ class RailRoad(Environment):
             return False
         return False
 
-    def reset(self, true_state=False) -> Any:
+    def reset(self) -> Any:
         if self.tile_generation == 'choice':
             self.board = np.full((self.width, self.height), self.blank_tile)
         elif self.tile_generation == 'random':
@@ -411,11 +382,18 @@ class RailRoad(Environment):
 
         self.terminal = False
 
-        if true_state:
-            return self.board.copy()
-        return np.array2string(self.board)
+        return self.board.copy()
 
-    def step(self, action, true_state=True) -> (Any, float, bool, Any):
+    def rot90_state(self, state, num_rotations):
+        if self.tile_generation == 'choice':
+            return np.rot90(state, num_rotations)
+
+        rotated_state = state.copy()
+        rotated_state[0:self.height, 0:self.width] = np.rot90(rotated_state[0:self.height, 0:self.width],
+                                                              num_rotations)
+        return rotated_state
+
+    def step(self, action) -> (Any, float, bool, Any):
         if action not in self.get_possible_actions():
             raise AttributeError("Invalid action for current state")
 
@@ -425,7 +403,7 @@ class RailRoad(Environment):
 
         tile = action_dict['tile']
         self.board.itemset((y, x), tile)
-        reward = self.step_reward
+        reward = self.tile_placement_rewards[tile]
 
         # set next tile to be blank
         if self.tile_generation == 'random':
@@ -446,6 +424,4 @@ class RailRoad(Environment):
                 self.board.itemset((self.height, self.width), self.blank_tile)
 
         next_state = self.board.copy()
-        if not true_state:
-            next_state = np.array2string(next_state)
         return next_state, reward, self.terminal, None

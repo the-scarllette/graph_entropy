@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" serverName="re412@garlick.cs.bath.ac.uk" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" serverName="parkin" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
+      <paths name="parkin">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
       <paths name="re412@garlick.cs.bath.ac.uk">
         <serverdata>
           <mappings>
