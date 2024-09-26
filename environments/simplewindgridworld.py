@@ -46,7 +46,7 @@ class SimpleWindGridWorld(Environment):
         self.terminal = True
 
         self.agent_camera_radius = agent_camera_radius
-        self.environment_name = 'simple_wind_gridworld_' + str(self.size[0]) + 'x' + str(self.size[1])
+        self.environment_name = 'simple_wind_gridworld_' + str(self.agent_camera_radius) + 'x' + str(self.size[0]) + 'x' + str(self.size[1])
 
         self.state_len = 3 + (size[0] * size[1])
 

@@ -242,6 +242,7 @@ class EigenOptionAgent(OptionsAgent):
             goal_state_index = option_data['goal_index']
             option = EigenOption(self.actions, eigenvector, goal_state_index, self.terminate_action,
                                  self.create_initiation_func(goal_state_index))
+            option.policy.q_values = option_data['policy'].copy()
             self.options.append(option)
         for action in self.actions:
             option = Option([action])

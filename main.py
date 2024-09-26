@@ -77,7 +77,6 @@ def add_local_maxima_to_file(env_name, key, num_hops=1, compressed_matrix=False,
     nx.write_gexf(stg, stg_filename)
     return
 
-
 def add_preparedness_subgoals_to_file(env_name, min_num_subgoals, min_num_hops=1, max_num_hops=5,
                                       use_stg=False, beta=None):
     stg_values_filename = env_name + '_stg_values.json'
@@ -1703,7 +1702,7 @@ if __name__ == "__main__":
                       [4, 0, 4],
                       [0, 1, 0]])
     board_name = 'room'
-    tiny_town_env = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
+    tiny_town_env = SimpleWindGridWorld((7, 7), 4, False)
 
     beta = 0.5
     graphing_window = 15
@@ -1723,6 +1722,17 @@ if __name__ == "__main__":
     results_directory = tiny_town_env.environment_name + '_episode_results'
     options_save_directory = tiny_town_env.environment_name + '_subgoal_options'
     multi_level_agent_save_path = tiny_town_env.environment_name + '_multi_level_agent_pre_training'
+
+    data = graphing.extract_data(results_directory)
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='Modified Taxicab',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='std',
+                                       labels=['Eigenoptions',
+                                               'Primitives'
+                                               ])
+    exit()
 
     stg = nx.read_gexf(stg_filename)
 
@@ -1746,21 +1756,6 @@ if __name__ == "__main__":
                          total_eval_steps=total_evaluation_steps,
                          progress_bar=True)
 
-    exit()
-
-    data = graphing.extract_data(results_directory)
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='Modified Taxicab',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='std',
-                                       labels=['Betweenness',
-                                               'Eigenoptions',
-                                               'Louvain',
-                                               'Preparedness n=1',
-                                               'Multi-level Preparedness',
-                                               'Primitives'
-                                               ])
     exit()
 
     find_save_stg_subgoals(tiny_town_env, tiny_town_env.environment_name,

@@ -293,7 +293,7 @@ class OptionsAgent:
         return available_options
 
     def get_intra_state_option_values(self, state, available_options=None):
-        state_str = state_str = np.array2string(np.ndarray.astype(state, dtype=self.state_dtype))
+        state_str = np.array2string(np.ndarray.astype(state, dtype=self.state_dtype))
 
         try:
             option_values = self.intra_state_option_values[state_str]
@@ -386,6 +386,20 @@ class OptionsAgent:
         with open(save_path, 'w') as f:
             json.dump(data, f)
         return
+
+    def state_str_to_state(self, state_str):
+        if '\n' not in state_str:
+            state = np.fromstring(state_str[1: len(state_str) - 1],
+                                  sep=' ', dtype=self.state_dtype)
+            return state
+
+        state_str = state_str.replace('[', '')
+        state_str = state_str.replace(']', '')
+        state_str = state_str.replace('\n', '')
+        state = np.fromstring(state_str,
+                              sep=' ', dtype=self.state_dtype)
+        state = state.reshape(self.state_shape)
+        return state
 
     def terminated(self, state):
         if self.terminating_func is None:

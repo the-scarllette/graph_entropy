@@ -304,20 +304,6 @@ class LouvainAgent(MultiLevelGoalAgent):
         state = self.state_str_to_state(state)
         return state
 
-    def state_str_to_state(self, state_str):
-        if '\n' not in state_str:
-            state = np.fromstring(state_str[1: len(state_str) - 1],
-                                  sep=' ', dtype=self.state_dtype)
-            return state
-
-        state_str = state_str.replace('[', '')
-        state_str = state_str.replace(']', '')
-        state_str = state_str.replace('\n', '')
-        state = np.fromstring(state_str,
-                              sep=' ', dtype=self.state_dtype)
-        state = state.reshape(self.state_shape)
-        return state
-
     def save(self, save_path):
         data = {"options": []}
 
@@ -496,7 +482,7 @@ class LouvainAgent(MultiLevelGoalAgent):
 
         return
 
-    def train_options_value_iteration(self, theta: float, max_iterations: float,
+    def train_options_value_iteration(self, theta: float, max_iterations: int,
                                       environment: Environment,
                                       all_actions_valid: bool = False,
                                       progress_bar: bool = True):
@@ -577,6 +563,6 @@ class LouvainAgent(MultiLevelGoalAgent):
                     option.policy.q_values[state_str][action] = state_action_value
 
                 delta = max(delta, abs(v_value - v(state)))
-                current_iterations += 1
+            current_iterations += 1
 
         return
