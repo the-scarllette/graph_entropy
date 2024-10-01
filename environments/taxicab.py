@@ -357,7 +357,7 @@ class TaxiCab(Environment):
         if self.is_state_terminal(state):
             return 0.0
 
-        after_state = next_state.copy()
+        after_state = state.copy()
         if action <= 3:
             taxi_cord = (state[0], state[1])
             next_x = state[0]
