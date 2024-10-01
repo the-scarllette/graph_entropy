@@ -32,7 +32,7 @@ class BetweennessAgent(OptionsAgent):
     option_training_step_reward = -0.001
     option_training_success_reward = 1.0
 
-    def __init__(self, actions, alpha, epsilon, gamma, state_transition_graph: nx.DiGaph,
+    def __init__(self, actions, alpha, epsilon, gamma, state_transition_graph,
                  state_shape, state_dtype=int):
         self.actions = actions
         self.num_actions = len(self.actions)
@@ -50,10 +50,11 @@ class BetweennessAgent(OptionsAgent):
         self.option_start_state = None
         self.total_option_reward = 0
         self.current_option_step = 0
+        self.state_option_values = {}
 
         self.state_index_lookup = {state: node
                                    for node, state in nx.get_node_attributes(self.state_transition_graph,
-                                                                             'state')}
+                                                                             'state').items()}
 
         self.num_options = 0
         self.options = []
@@ -79,7 +80,7 @@ class BetweennessAgent(OptionsAgent):
         for node in existing_stg_values:
             local_maxima_str = 'True'
             local_maxima = True
-            for neighbour in self.state_transition_graph.neighbors[node]:
+            for neighbour in self.state_transition_graph.neighbors(node):
                 if neighbour == node:
                     continue
                 betweenness_value = existing_stg_values[node]['betweenness']
@@ -105,9 +106,9 @@ class BetweennessAgent(OptionsAgent):
             self.options.append(Option([action]))
 
         if stg_save_path is None:
-            return
+            return self.state_transition_graph, existing_stg_values
         nx.write_gexf(self.state_transition_graph, stg_save_path)
-        return
+        return self.state_transition_graph, existing_stg_values
 
     def get_available_options(self, state, possible_actions=None):
         available_options = []
@@ -142,7 +143,7 @@ class BetweennessAgent(OptionsAgent):
 
         self.option_initiation_lookup = data['option initiation lookup']
 
-        for index in data['options']
+        for index in data['options']:
             option_data = data['options'][index]
             node = option_data['goal_index']
             option = BetweennessOption(self.actions, node,

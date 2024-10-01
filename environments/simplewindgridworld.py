@@ -49,6 +49,7 @@ class SimpleWindGridWorld(Environment):
         self.environment_name = 'simple_wind_gridworld_' + str(self.agent_camera_radius) + 'x' + str(self.size[0]) + 'x' + str(self.size[1])
 
         self.state_len = 3 + (size[0] * size[1])
+        self.state_shape = (self.state_len,)
 
         self.start_states = [np.array([x, y, 0] + ([0] * (self.state_len - 3)))
                              for x in range(self.size[0]) for y in range(self.size[1])]

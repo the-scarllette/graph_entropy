@@ -24,6 +24,7 @@ from environments.taxicab import TaxiCab
 from environments.tinytown import TinyTown
 from environments.waterbucket import WaterBucket
 import graphing
+from learning_agents.betweennessagent import BetweennessAgent
 from learning_agents.dadsagent import DADSAgent
 from learning_agents.diaynagent import DIAYNAgent
 from learning_agents.eigenoptionagent import EigenOptionAgent
@@ -1702,7 +1703,7 @@ if __name__ == "__main__":
                       [4, 0, 4],
                       [0, 1, 0]])
     board_name = 'room'
-    tiny_town_env = SimpleWindGridWorld((7, 7), 4, False)
+    simple_wind_gridworld_env = SimpleWindGridWorld((7, 7), 4, False)
 
     beta = 0.5
     graphing_window = 15
@@ -1716,12 +1717,36 @@ if __name__ == "__main__":
     options_training_timesteps = 100_000
     training_timesteps = 50_000
 
-    stg_filename = tiny_town_env.environment_name + '_stg.gexf'
-    stg_values_filename = tiny_town_env.environment_name + '_stg_values.json'
-    agent_directory = tiny_town_env.environment_name + '_agents'
-    results_directory = tiny_town_env.environment_name + '_episode_results'
-    options_save_directory = tiny_town_env.environment_name + '_subgoal_options'
-    multi_level_agent_save_path = tiny_town_env.environment_name + '_multi_level_agent_pre_training'
+    stg_filename = simple_wind_gridworld_env.environment_name + '_stg.gexf'
+    stg_values_filename = simple_wind_gridworld_env.environment_name + '_stg_values.json'
+    agent_directory = simple_wind_gridworld_env.environment_name + '_agents'
+    results_directory = simple_wind_gridworld_env.environment_name + '_episode_results'
+    options_save_directory = simple_wind_gridworld_env.environment_name + '_subgoal_options'
+    multi_level_agent_save_path = simple_wind_gridworld_env.environment_name + '_multi_level_agent_pre_training'
+
+    if not os.path.isdir(agent_directory + '/betweenness_agents'):
+        os.mkdir(agent_directory + '/betweenness_agents')
+
+    print()
+    print("Betweenness Simple Wind Gridworld 7x7x4")
+    print("Loading State Transition Graph")
+    stg = nx.read_gexf(stg_filename)
+    with open(stg_values_filename, 'r') as f:
+        stg_values = json.load(f)
+
+    print("Loading Agent")
+    betweenness_agent = BetweennessAgent(simple_wind_gridworld_env.possible_actions,
+                                         0.9, 0.1, 0.9,
+                                         stg, simple_wind_gridworld_env.state_shape)
+    print("Finding Betweenness values and options")
+    stg, stg_values = betweenness_agent.find_options(stg_values, stg_filename)
+
+    print("Saving Agent")
+    betweenness_agent.save(agent_directory + '/betweenness_agents/base_agent.json')
+    print("Saving stg_values")
+    with open(stg_values_filename, 'w') as f:
+        json.dump(stg_values, f)
+    exit()
 
     data = graphing.extract_data(results_directory)
     graphing.graph_reward_per_timestep(data, graphing_window,
@@ -1736,7 +1761,7 @@ if __name__ == "__main__":
 
     stg = nx.read_gexf(stg_filename)
 
-    louvain_agent = LouvainAgent(tiny_town_env.possible_actions, stg, tiny_town_env.state_dtype, (5, 1),
+    louvain_agent = LouvainAgent(simple_wind_gridworld_env.possible_actions, stg, simple_wind_gridworld_env.state_dtype, (5, 1),
                                  min_hierarchy_level=0)
     louvain_agent.apply_louvain(graph_save_path=stg_filename)
     louvain_agent.create_options()
@@ -1744,11 +1769,11 @@ if __name__ == "__main__":
 
     # Training Louvain Subgoals
     louvain_agent.train_options_value_iteration(0.1, 100,
-                                                tiny_town_env,
+                                                simple_wind_gridworld_env,
                                                 True, True)
 
     # Training Louvain Agent
-    train_louvain_agents(tiny_town_env, tiny_town_env.environment_name,
+    train_louvain_agents(simple_wind_gridworld_env, simple_wind_gridworld_env.environment_name,
                          agent_directory, results_directory,
                          training_timesteps, num_agents, evaluate_policy_window,
                          initial_agent=louvain_agent,
@@ -1758,7 +1783,7 @@ if __name__ == "__main__":
 
     exit()
 
-    find_save_stg_subgoals(tiny_town_env, tiny_town_env.environment_name,
+    find_save_stg_subgoals(simple_wind_gridworld_env, simple_wind_gridworld_env.environment_name,
                            True, max_num_hops=1
                            )
     exit()
