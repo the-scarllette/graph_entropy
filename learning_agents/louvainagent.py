@@ -28,6 +28,14 @@ class LouvainOption(Option):
         self.can_initiate = {}
         return
 
+    def get_action(self, state):
+        if self.hierarchy_level <= 1:
+            return self.policy.choose_action(state, True)
+
+        option_values = self.policy.get_state_option_values(state)
+        option_chosen = max(option_values, option_values.get)
+        return option_chosen.get_action(state)
+
 
 class LouvainAgent(MultiLevelGoalAgent):
     option_training_failure_reward = -1.0
@@ -117,10 +125,9 @@ class LouvainAgent(MultiLevelGoalAgent):
                                                for i in range(self.hierarchy_level)}
         self.nodes_in_cluster = {level: {} for level in range(self.hierarchy_level)}
 
-
-
         if graph_save_path is not None:
-            nx.write_gexf(self.stg.to_networkx(), graph_save_path)
+            nx_graph = self.stg.to_networkx()
+            nx.write_gexf(nx_graph, graph_save_path)
 
         return
 
@@ -334,43 +341,62 @@ class LouvainAgent(MultiLevelGoalAgent):
                                                   max_iterations: int, theta: float,
                                                   all_actions_valid: bool = False,
                                                   progress_bar: bool = False):
-        def p(s_dash, o, s):
-            o_action = o.choose_action(s)
-            try:
-                reset_inner_option_policy = option.policy.current_option is None
-            except AttributeError:
-                reset_inner_option_policy = False
-            if reset_inner_option_policy:
-                option.policy = None
+        # Getting States to act in
+        states = self.get_nodes_in_cluster(option.hierarchy_level, option.source_cluster)
 
+        # Getting States to act towards
+        adjacent_clusters = self.aggregate_graphs[option.hierarchy_level + 1].neighbors(option.source_cluster, 'out')
+        target_states = states
+        for adjacent_cluster in adjacent_clusters:
+            target_states += self.get_nodes_in_cluster(option.hierarchy_level, adjacent_cluster)
+
+        # Setting transition probabilities
+        transition_probabilities = {state: {target_state: {}
+                                            for target_state in target_states}
+                                    for state in states}
+
+        def p(s_dash, o: LouvainOption, s):
             s_dash_index = self.get_state_index(s_dash)
             s_index = self.get_state_index(s)
-            neighbourhood = self.stg.neighbors(s_index, 'out')
-            if (s_dash_index == s_index) or (s_dash_index in neighbourhood):
-                return environment.get_transition_probability(s, o_action, s_dash)
+            if s_dash_index == s_index:
+                if o.terminated(s_dash):
+                    return 1.0
+                else:
+                    return 0.0
+            if o.terminated(s):
+                return 0.0
 
+            try:
+                prob = transition_probabilities[s_index][s_dash_index][o]
+                return prob
+            except KeyError:
+                ()
+
+            if not nx.has_path(self.stg_nx, str(s_index), str(s_dash_index)):
+                transition_probabilities[s_index][s_dash_index][o] = 0
+                return 0
+
+            neighbourhood = self.stg.neighbors(s_index, 'out')
+            option_action = o.get_action(s)
             prob = 0
-            for s_tilda in neighbourhood:
-                s_tilda_state = self.state_index_to_state(s_tilda)
-                t_prob = environment.get_transition_probability(s, o_action, s_tilda_state)
+            for neighbour_state_node in neighbourhood:
+                neighbour_state = self.state_index_to_state(neighbour_state_node)
+                t_prob = environment.get_transition_probability(s, option_action, neighbour_state)
                 if t_prob <= 0:
                     continue
-                prob += (t_prob * p(s_dash, o, s_tilda_state))
+                prob += t_prob * p(s_dash, o, neighbour_state)
 
+            transition_probabilities[s_index][s_dash_index][o] = prob
             return prob
 
         def v(s):
             option_values = option.policy.get_state_option_values(s)
             return max(option_values.values())
 
-        # Getting States to act in
-        states = self.get_nodes_in_cluster(option.hierarchy_level, option.source_cluster)
-
         delta = np.inf
         possible_actions = environment.possible_actions
         possible_options = option.policy.options
         current_iterations = 0
-
         while (theta <= delta) and (current_iterations < max_iterations):
             if progress_bar:
                 print_progress_bar(current_iterations, max_iterations,
@@ -390,7 +416,7 @@ class LouvainAgent(MultiLevelGoalAgent):
 
                 for option_taken in possible_options:
                     state_option_value = 0
-                    for next_state_node in states:
+                    for next_state_node in target_states:
                         next_state = self.state_index_to_state(next_state_node)
                         transition_prob = p(next_state, option_taken, state)
                         if transition_prob <= 0:
@@ -399,12 +425,13 @@ class LouvainAgent(MultiLevelGoalAgent):
                         reward = self.option_training_step_reward
                         next_state_cluster = \
                             self.stg.vs[f"cluster-{option.hierarchy_level}"][next_state_node]
+                        next_state_value = 0
                         if next_state_cluster == option.target_cluster:
                             reward = self.option_training_success_reward
                         elif next_state_cluster != option.source_cluster:
                             reward = self.option_training_failure_reward
-
-                        next_state_value = v(next_state)
+                        else:
+                            next_state_value = v(next_state)
 
                         state_option_value += transition_prob * (reward + next_state_value)
 
