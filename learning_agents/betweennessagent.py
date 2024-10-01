@@ -6,6 +6,7 @@ from progressbar import print_progress_bar
 import json
 import networkx as nx
 import numpy as np
+import random as rand
 
 
 class BetweennessOption(Option):
@@ -17,7 +18,7 @@ class BetweennessOption(Option):
         self.goal_index = goal_index
 
         self.initiation_func = initiation_func
-        self.termination_func = termination_func
+        self.terminating_func = termination_func
 
         self.alpha = alpha
         self.epsilon = epsilon
@@ -94,7 +95,7 @@ class BetweennessAgent(OptionsAgent):
             if local_maxima:
                 option = BetweennessOption(self.actions, node,
                                            lambda s: self.option_initiation_function(s, node),
-                                           lambda s: self.termination_func(s, node),
+                                           lambda s: self.option_termination_function(s, node),
                                            self.alpha, self.epsilon, self.gamma)
                 self.num_options += 1
                 self.options.append(option)
@@ -148,7 +149,7 @@ class BetweennessAgent(OptionsAgent):
             node = option_data['goal_index']
             option = BetweennessOption(self.actions, node,
                                        lambda s: self.option_initiation_function(s, node),
-                                       lambda s: self.termination_func(s, node),
+                                       lambda s: self.option_termination_function(s, node),
                                        self.alpha, self.epsilon, self.gamma)
             option.policy.q_values = option_data['policy']
             self.options.append(option)
@@ -188,7 +189,7 @@ class BetweennessAgent(OptionsAgent):
         if state_index == goal_index:
             return True
 
-        return self.option_termination_function(state, goal_index)
+        return not self.option_initiation_function(state, goal_index)
 
     def save(self, save_path):
         try:
@@ -210,15 +211,62 @@ class BetweennessAgent(OptionsAgent):
         return
 
     def train_option(self, option: BetweennessOption,
-                     theta: float, max_iterations: int,
+                     training_timesteps: int,
                      environment: Environment,
                      all_actions_valid: bool=False,
                      progress_bar: bool=False):
+        start_states = [state for state in self.option_initiation_lookup
+                        if option.initiated(self.state_str_to_state(state))]
+        done = True
+        current_iterations = 0
+        possible_actions = environment.possible_actions
+        next_possible_actions = environment.possible_actions
+
+        while current_iterations < training_timesteps:
+            if progress_bar:
+                print_progress_bar(current_iterations, training_timesteps,
+                                   'Training Option to Subgoal ' + str(option.goal_index),
+                                   'Complete')
+
+            if done:
+                state = rand.choice(start_states)
+                state = environment.reset(self.state_str_to_state(state))
+                if not all_actions_valid:
+                    possible_actions = environment.get_possible_actions(state)
+
+            action = option.choose_action(state, possible_actions)
+            next_state, _, done, _ = environment.step(action)
+
+            reward = self.option_training_step_reward
+            next_state_index = self.state_index_lookup[np.array2string(next_state)]
+            if next_state_index == option.goal_index:
+                reward = self.option_training_success_reward
+                done = True
+            elif option.terminated(state):
+                reward = self.option_training_failure_reward
+                done = True
+
+            if not all_actions_valid:
+                next_possible_actions = environment.get_possible_actions(next_state)
+
+            option.policy.learn(state, action, reward, next_state, done, next_possible_actions)
+
+            state = next_state
+            possible_actions = next_possible_actions
+            current_iterations += 1
+
+        return
+
+    def train_option_value_iteration(self, option: BetweennessOption,
+                                     theta: float, max_iterations: int,
+                                     environment: Environment,
+                                     all_actions_valid: bool=False,
+                                     progress_bar: bool=False):
         def v(s):
             state_values = option.policy.get_action_values(s)
             return max(state_values.values())
 
-        states = [state for state in self.state_initation_lookup
+        states = [state for state in self.option_initiation_lookup
                   if option.initiated(self.state_str_to_state(state))]
         node_state_lookup = nx.get_node_attributes(self.state_transition_graph, 'state')
 
@@ -251,7 +299,7 @@ class BetweennessAgent(OptionsAgent):
                         if transition_prob <= 0:
                             continue
 
-                        reward = self.option_training_reward
+                        reward = self.option_training_step_reward
                         if successor_node == option.goal_index:
                             reward = self.option_training_success_reward
                         elif option.terminated(successor_state):
@@ -270,6 +318,7 @@ class BetweennessAgent(OptionsAgent):
 
     def train_options(self, environment: Environment,
                       theta: float, maximum_iterations: int,
+                      value_iteration: bool,
                       all_actions_valid: bool=False,
                       progress_bar: bool=False):
         if progress_bar:
@@ -280,5 +329,8 @@ class BetweennessAgent(OptionsAgent):
                 print()
                 print("Option " + str(i + 1) + "/" + str(self.num_options))
             option = self.options[i]
-            self.tain_option(option, environment, theta, maximum_iterations, all_actions_valid, progress_bar)
+            if value_iteration:
+                self.train_option_value_iteration(option, theta, maximum_iterations, environment, all_actions_valid, progress_bar)
+            else:
+                self.train_option(option, maximum_iterations, environment, all_actions_valid, progress_bar)
         return

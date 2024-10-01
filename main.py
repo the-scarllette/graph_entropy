@@ -25,6 +25,7 @@ from environments.taxicab import TaxiCab
 from environments.tinytown import TinyTown
 from environments.waterbucket import WaterBucket
 import graphing
+from learning_agents.betweennessagent import BetweennessAgent
 from learning_agents.dadsagent import DADSAgent
 from learning_agents.diaynagent import DIAYNAgent
 from learning_agents.eigenoptionagent import EigenOptionAgent
@@ -2023,10 +2024,7 @@ if __name__ == "__main__":
                       [4, 0, 4],
                       [0, 1, 0]])
     board_name = 'room'
-    simple_wind_gridworld = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
-
-    print_preparedness_subgoals(simple_wind_gridworld, 2, 0.5)
-    exit()
+    simple_wind_gridworld = SimpleWindGridWorld((7, 7), 4)
 
     beta = 0.5
     graphing_window = 5
@@ -2038,14 +2036,30 @@ if __name__ == "__main__":
     num_agents = 3
     total_evaluation_steps = 25 #Simple_wind_gridworld_4x7x7 = 25
     options_training_timesteps = 100_000
-    training_timesteps = 1000 #100_000
+    training_timesteps = 100 #100_000
 
+    print("Loading State Transition Graph")
     filenames = get_filenames(simple_wind_gridworld)
-    adj_matrix = sparse.load_npz(filenames[0])
+    #adj_matrix = sparse.load_npz(filenames[0])
     #all_states = np.load(filenames[1])
-    #state_transition_graph = nx.read_gexf(filenames[2])
+    state_transition_graph = nx.read_gexf(filenames[2])
     with open(filenames[3], 'r') as f:
        stg_values = json.load(f)
+
+    print("Loading Betweenness Agent")
+    betweenness_agent = BetweennessAgent(simple_wind_gridworld.possible_actions,
+                                         0.9, 0.1, 0.9, state_transition_graph,
+                                         simple_wind_gridworld.state_shape)
+    betweenness_agent.load(filenames[4] + '/betweenness_agents/base_agent.json')
+
+    print("Training Options")
+    betweenness_agent.train_options(simple_wind_gridworld,
+                                    0.01, options_training_timesteps,
+                                    False, True,
+                                    True)
+    print("Saving Agent")
+    betweenness_agent.save(filenames[4] + '/betweenness_agents/betweenness_agent_options_trained.json')
+    exit()
 
     preparedness_values, hierarchy = preparedness_efficient(adj_matrix, 0.5, max_num_hops=3,
                                                             compressed_matrix=True, existing_stg_values=stg_values)
