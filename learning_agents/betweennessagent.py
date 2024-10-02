@@ -216,7 +216,7 @@ class BetweennessAgent(OptionsAgent):
                      all_actions_valid: bool=False,
                      progress_bar: bool=False):
         start_states = []
-        for state_str in self.option_initiation_lookup:
+        for state_str in self.state_index_lookup:
             state = self.state_str_to_state(state_str)
             if self.option_initiation_function(state, option.goal_index) and (not environment.is_terminal(state)):
                 start_states.append(state)
@@ -238,15 +238,16 @@ class BetweennessAgent(OptionsAgent):
                 if not all_actions_valid:
                     possible_actions = environment.get_possible_actions(state)
 
-            action = option.choose_action(state, possible_actions)
+            action = option.policy.choose_action(state, possible_actions)
             next_state, _, done, _ = environment.step(action)
 
             reward = self.option_training_step_reward
-            next_state_index = self.state_index_lookup[np.array2string(next_state)]
+            next_state_index = self.state_index_lookup[np.array2string(np.ndarray.astype(next_state,
+                                                                                         dtype=self.state_dtype))]
             if next_state_index == option.goal_index:
                 reward = self.option_training_success_reward
                 done = True
-            elif option.terminated(state):
+            elif option.terminated(next_state) or done:
                 reward = self.option_training_failure_reward
                 done = True
 
