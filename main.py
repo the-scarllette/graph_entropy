@@ -2025,6 +2025,15 @@ if __name__ == "__main__":
                       [0, 1, 0]])
     board_name = 'room'
     simple_wind_gridworld = SimpleWindGridWorld((7, 7), 4)
+    test_state = np.zeros(simple_wind_gridworld.state_shape)
+    test_state[0] = 6
+    test_state[1] = 5
+    test_state[2] = 2
+    test_state = np.ndarray.astype(test_state, dtype=simple_wind_gridworld.state_dtype)
+    simple_wind_gridworld.get_successor_states(test_state)
+
+    _ = simple_wind_gridworld.reset(test_state)
+    simple_wind_gridworld.step(0)
 
     beta = 0.5
     graphing_window = 5
@@ -2041,9 +2050,9 @@ if __name__ == "__main__":
     filenames = get_filenames(simple_wind_gridworld)
     adj_matrix = sparse.load_npz(filenames[0])
     all_states = np.load(filenames[1])
-    state_transition_graph = nx.read_gexf(filenames[2])
+    state_transition_graph = nx.read_gexf(filenames[2]) # nx.from_scipy_sparse_array(adj_matrix, create_using=nx.DiGraph)
     with open(filenames[3], 'r') as f:
-       stg_values = json.load(f)
+        stg_values_str = json.load(f)
 
     print("Simple Wind Gridworld")
 

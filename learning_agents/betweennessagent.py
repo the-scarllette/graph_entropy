@@ -216,10 +216,16 @@ class BetweennessAgent(OptionsAgent):
                      all_actions_valid: bool=False,
                      progress_bar: bool=False):
         start_states = []
+        valid_option = False
         for state_str in self.state_index_lookup:
             state = self.state_str_to_state(state_str)
             if self.option_initiation_function(state, option.goal_index) and (not environment.is_terminal(state)):
                 start_states.append(state)
+                valid_option = True
+
+        if not valid_option:
+            raise AttributeError("Not a Valid Option")
+            return
 
         done = True
         current_iterations = 0
@@ -329,13 +335,23 @@ class BetweennessAgent(OptionsAgent):
         if progress_bar:
             print("Training Betweenness Options")
 
-        for i in range(self.num_options):
+        i = 0
+        while i < self.num_options:
             if progress_bar:
                 print()
                 print("Option " + str(i + 1) + "/" + str(self.num_options))
             option = self.options[i]
-            if value_iteration:
-                self.train_option_value_iteration(option, theta, maximum_iterations, environment, all_actions_valid, progress_bar)
-            else:
-                self.train_option(option, maximum_iterations, environment, all_actions_valid, progress_bar)
+            try:
+                if value_iteration:
+                    self.train_option_value_iteration(option, theta, maximum_iterations, environment,
+                                                      all_actions_valid, progress_bar)
+                else:
+                    self.train_option(option, maximum_iterations, environment, all_actions_valid, progress_bar)
+            except AttributeError:
+                del self.options[i]
+                self.num_options -= 1
+                print("Invalid Option Found")
+                continue
+            i += 1
+
         return
