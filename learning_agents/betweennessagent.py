@@ -215,8 +215,13 @@ class BetweennessAgent(OptionsAgent):
                      environment: Environment,
                      all_actions_valid: bool=False,
                      progress_bar: bool=False):
-        start_states = [state for state in self.option_initiation_lookup
-                        if option.initiated(self.state_str_to_state(state))]
+        start_states = []
+        for state_str in self.option_initiation_lookup:
+            state = self.state_str_to_state(state_str)
+            if self.option_initiation_function(state, option.goal_index) and (not environment.is_terminal(state)):
+                start_states.append(state)
+
+
         done = True
         current_iterations = 0
         possible_actions = environment.possible_actions
@@ -317,8 +322,8 @@ class BetweennessAgent(OptionsAgent):
         return
 
     def train_options(self, environment: Environment,
-                      theta: float, maximum_iterations: int,
-                      value_iteration: bool,
+                      maximum_iterations: int,
+                      value_iteration: bool, theta: float=np.inf,
                       all_actions_valid: bool=False,
                       progress_bar: bool=False):
         if progress_bar:

@@ -174,6 +174,9 @@ class Environment:
     def get_successor_states(self, state, probability_weights=False):
         return [], []
 
+    def is_terminal(self, state=None):
+        return True
+
     def print_state(self, state=None):
         if state is None:
             if self.terminal:
