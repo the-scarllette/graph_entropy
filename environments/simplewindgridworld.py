@@ -211,14 +211,14 @@ class SimpleWindGridWorld(Environment):
         self.terminal = False
 
         if start_state is not None:
-            self.current_state = start_state.copy()
-            return self.current_state.copy()
+            self.current_state = start_state
+            return self.current_state
 
         self.current_state = np.array([0] * self.state_len)
         self.current_state[0] = rand.randint(0, self.size[1] - 1)
         self.current_state[1] = rand.randint(0, self.size[0] - 1)
 
-        return self.current_state.copy()
+        return self.current_state
 
     def visualise_subgoals(self, subgoal_key, title=""):
 

@@ -221,7 +221,6 @@ class BetweennessAgent(OptionsAgent):
             if self.option_initiation_function(state, option.goal_index) and (not environment.is_terminal(state)):
                 start_states.append(state)
 
-
         done = True
         current_iterations = 0
         possible_actions = environment.possible_actions
@@ -235,7 +234,7 @@ class BetweennessAgent(OptionsAgent):
 
             if done:
                 state = rand.choice(start_states)
-                state = environment.reset(self.state_str_to_state(state))
+                state = environment.reset(state)
                 if not all_actions_valid:
                     possible_actions = environment.get_possible_actions(state)
 
