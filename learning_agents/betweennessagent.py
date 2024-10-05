@@ -216,16 +216,12 @@ class BetweennessAgent(OptionsAgent):
                      all_actions_valid: bool=False,
                      progress_bar: bool=False):
         start_states = []
-        valid_option = False
-        for state_str in self.state_index_lookup:
-            state = self.state_str_to_state(state_str)
-            if self.option_initiation_function(state, option.goal_index) and (not environment.is_terminal(state)):
+        for state in environment.get_start_states():
+            if self.option_initiation_function(state, option.goal_index):
                 start_states.append(state)
-                valid_option = True
 
-        if not valid_option:
-            raise AttributeError("Not a Valid Option")
-            return
+        if start_states is None:
+            raise AttributeError("Not a Valid Option, no state can reach option subgoal.")
 
         done = True
         current_iterations = 0
@@ -243,12 +239,6 @@ class BetweennessAgent(OptionsAgent):
                 state = environment.reset(state)
                 if not all_actions_valid:
                     possible_actions = environment.get_possible_actions(state)
-            test_state = np.zeros(environment.state_shape)
-            test_state[0] = 6
-            test_state[1] = 5
-            test_state[2] = 2
-            if np.arrays_equal(test_state, state):
-                ()
 
             action = option.policy.choose_action(state, possible_actions)
             next_state, _, done, _ = environment.step(action)
@@ -262,6 +252,8 @@ class BetweennessAgent(OptionsAgent):
             elif option.terminated(next_state) or done:
                 reward = self.option_training_failure_reward
                 done = True
+            else:
+                start_states.append(next_state)
 
             if not all_actions_valid:
                 next_possible_actions = environment.get_possible_actions(next_state)

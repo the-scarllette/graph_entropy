@@ -2036,8 +2036,8 @@ if __name__ == "__main__":
     max_num_hops = 1
     num_agents = 3
     total_evaluation_steps = 25 #Simple_wind_gridworld_4x7x7 = 25
-    options_training_timesteps = 100 #1_000_000
-    training_timesteps = 1000 #100_000
+    options_training_timesteps = 10 #1_000_000
+    training_timesteps = 1_000 #100_000
 
     filenames = get_filenames(simple_wind_gridworld)
     adj_matrix = sparse.load_npz(filenames[0])
@@ -2046,6 +2046,14 @@ if __name__ == "__main__":
     with open(filenames[3], 'r') as f:
         stg_values = json.load(f)
 
+    data = graphing.extract_data(filenames[5])
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='Wind Gridworld (7 x 7)',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='std')
+    exit()
+
     print("Simple Wind Gridworld")
 
     betweenness_agent = BetweennessAgent(simple_wind_gridworld.possible_actions,
@@ -2053,8 +2061,13 @@ if __name__ == "__main__":
                                          state_transition_graph,
                                          simple_wind_gridworld.state_shape,
                                          simple_wind_gridworld.state_dtype)
-    state_transition_graph, stg_values  = betweenness_agent.find_options(stg_values, filenames[2])
-    betweenness_agent.save(filenames[4] + '/betweenness_agents/base_agent.json')
+    betweenness_agent.load(filenames[4] + '/betweenness_agents/base_agent.json')
+    betweenness_agent.train_options(simple_wind_gridworld,
+                                    options_training_timesteps,
+                                    False,
+                                    all_actions_valid=True,
+                                    progress_bar=True)
+    betweenness_agent.save(filenames[4] + '/betweenness_agents/options_trained.json')
     with open(filenames[3], 'w') as f:
         json.dump(stg_values, f)
     exit()
@@ -2077,14 +2090,6 @@ if __name__ == "__main__":
 
     with open(filenames[3], 'w') as f:
         json.dump(preparedness_values, f)
-    exit()
-
-    data = graphing.extract_data(filenames[5])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='Wind Gridworld (7 x 7)',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='std')
     exit()
 
     train_eigenoption_agents('eigenoptions_options_trained_agent.json', simple_wind_gridworld,
