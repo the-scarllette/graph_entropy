@@ -2026,14 +2026,6 @@ if __name__ == "__main__":
     board_name = 'room'
     simple_wind_gridworld = SimpleWindGridWorld((7, 7), 4)
     test_state = np.zeros(simple_wind_gridworld.state_shape)
-    test_state[0] = 6
-    test_state[1] = 5
-    test_state[2] = 2
-    test_state = np.ndarray.astype(test_state, dtype=simple_wind_gridworld.state_dtype)
-    simple_wind_gridworld.get_successor_states(test_state)
-
-    _ = simple_wind_gridworld.reset(test_state)
-    simple_wind_gridworld.step(0)
 
     beta = 0.5
     graphing_window = 5
@@ -2049,10 +2041,10 @@ if __name__ == "__main__":
 
     filenames = get_filenames(simple_wind_gridworld)
     adj_matrix = sparse.load_npz(filenames[0])
-    all_states = np.load(filenames[1])
+    #all_states = np.load(filenames[1])
     state_transition_graph = nx.read_gexf(filenames[2]) # nx.from_scipy_sparse_array(adj_matrix, create_using=nx.DiGraph)
     with open(filenames[3], 'r') as f:
-        stg_values_str = json.load(f)
+        stg_values = json.load(f)
 
     print("Simple Wind Gridworld")
 
@@ -2061,12 +2053,10 @@ if __name__ == "__main__":
                                          state_transition_graph,
                                          simple_wind_gridworld.state_shape,
                                          simple_wind_gridworld.state_dtype)
-    betweenness_agent.load(filenames[4] + '/betweenness_agents/base_agent.json')
-    betweenness_agent.train_options(simple_wind_gridworld,
-                                    options_training_timesteps,
-                                    False,
-                                    all_actions_valid=True, progress_bar=True)
+    state_transition_graph, stg_values  = betweenness_agent.find_options(stg_values, filenames[2])
     betweenness_agent.save(filenames[4] + '/betweenness_agents/base_agent.json')
+    with open(filenames[3], 'w') as f:
+        json.dump(stg_values, f)
     exit()
 
 
@@ -2079,9 +2069,9 @@ if __name__ == "__main__":
     eigenoptions_agent.save(filenames[4] + '/eigenoptions_options_trained_agent.json')
     exit()
 
-    preparedness_values, hierarchy = preparedness_efficient(adj_matrix, 0.5, min_num_hops=1, max_num_hops=6,
+    preparedness_values, hierarchy = preparedness_efficient(adj_matrix, 0.5, min_num_hops=1, max_num_hops=8,
                                                             compressed_matrix=True, existing_stg_values=stg_values,
-                                                            computed_hops_range=[1, 5])
+                                                            computed_hops_range=[1, 7])
 
     print("Hierarchy height: " + str(hierarchy))
 

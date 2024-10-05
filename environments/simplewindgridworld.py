@@ -104,10 +104,6 @@ class SimpleWindGridWorld(Environment):
             successor_states.append(get_successor_state(available_altitude))
 
         num_successors = 3
-
-        states_removed = True
-        while states_removed:
-            states_removed = False
         trimmed_successors = []
 
         for i in range(num_successors):

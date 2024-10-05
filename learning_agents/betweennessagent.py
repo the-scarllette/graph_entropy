@@ -81,11 +81,11 @@ class BetweennessAgent(OptionsAgent):
         for node in existing_stg_values:
             local_maxima_str = 'True'
             local_maxima = True
+            betweenness_value = existing_stg_values[node]['betweenness']
             for neighbour in self.state_transition_graph.neighbors(node):
                 if neighbour == node:
                     continue
-                betweenness_value = existing_stg_values[node]['betweenness']
-                if existing_stg_values[node]['betweenness'] > betweenness_value:
+                if existing_stg_values[neighbour]['betweenness'] >= betweenness_value:
                     local_maxima_str = 'False'
                     local_maxima = False
                     break
@@ -243,6 +243,12 @@ class BetweennessAgent(OptionsAgent):
                 state = environment.reset(state)
                 if not all_actions_valid:
                     possible_actions = environment.get_possible_actions(state)
+            test_state = np.zeros(environment.state_shape)
+            test_state[0] = 6
+            test_state[1] = 5
+            test_state[2] = 2
+            if np.arrays_equal(test_state, state):
+                ()
 
             action = option.policy.choose_action(state, possible_actions)
             next_state, _, done, _ = environment.step(action)
