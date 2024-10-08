@@ -49,9 +49,12 @@ class BetweennessAgent(OptionsAgent):
 
         self.current_option = None
         self.option_start_state = None
+        self.current_option_index = None
         self.total_option_reward = 0
         self.current_option_step = 0
+        self.current_step = 0
         self.state_option_values = {}
+        self.intra_option = False
 
         self.state_index_lookup = {state: node
                                    for node, state in nx.get_node_attributes(self.state_transition_graph,
@@ -116,10 +119,10 @@ class BetweennessAgent(OptionsAgent):
         for i in range(self.num_options):
             option = self.options[i]
             if option.initiated(state):
-                available_options.append(option)
+                available_options.append(i)
 
         if possible_actions is None:
-            available_options += self.options[self.num_options:]
+            available_options += [self.num_options + action for action in self.actions]
             return available_options
 
         i = 0
@@ -129,7 +132,7 @@ class BetweennessAgent(OptionsAgent):
         while i < self.num_actions:
             option = self.options[self.num_options + i]
             if option.actions[0] == action:
-                available_options.append(option)
+                available_options.append(self.num_options + i)
                 action_index += 1
                 if action_index >= num_possible_actions:
                     break

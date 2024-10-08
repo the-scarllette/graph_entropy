@@ -1178,79 +1178,65 @@ def run_epoch(env: Environment,
     return epoch_return
 
 
-def train_betweenness_agents(environment: Environment, file_name_prefix,
-                             options_directory, agent_directory, results_directory,
+def train_betweenness_agents(environment: Environment,
                              training_timesteps, num_agents, evaluate_policy_window=10,
                              all_actions_valid=True,
+                             base_agent_save_path: str=None,
                              total_eval_steps=np.inf,
+                             continue_training=False,
                              alpha=0.9, epsilon=0.1, gamma=0.9,
-                             progress_bar=False,
-                             compressed_matrix=False):
-    stg_values_filename = file_name_prefix + '_stg_values.json'
-    with open(stg_values_filename, 'r') as f:
+                             progress_bar=False):
+    all_agent_training_returns = {}
+    all_agent_returns = {}
+    filenames = get_filenames(environment)
+    state_transition_graph = nx.read_gexf(filenames[2]) # nx.from_scipy_sparse_array(adj_matrix, create_using=nx.DiGraph)
+    with open(filenames[3], 'r') as f:
         stg_values = json.load(f)
-
-    adj_matrix = None
-    stg = None
-    state_indexer = None
-
-    if compressed_matrix:
-        adj_matrix_filename = file_name_prefix + '_adj_matrix.txt.npz'
-        adj_matrix = sparse.load_npz(adj_matrix_filename)
-
-        state_indexer = {stg_values[index]['state']: index
-                         for index in stg_values}
-    else:
-        stg_filename = file_name_prefix + '_stg.gexf'
-        stg = nx.read_gexf(stg_filename)
+    agent_directory = filenames[4] + '/betweenness_agents'
+    results_directory = filenames[5]
+    agent_training_results_file = 'betweenness_training_returns.json'
+    agent_results_file = 'betweenness_epoch_returns.json'
 
     directories_to_make = [agent_directory, results_directory]
     for directory in directories_to_make:
         if not os.path.isdir(directory):
             os.mkdir(directory)
 
-    primitive_options = [Option(actions=[possible_action]) for possible_action in environment.possible_actions]
+    if continue_training:
+        with open(results_directory + '/' + agent_results_file, 'r') as f:
+            all_agent_returns = json.load(f)
+        with open(results_directory + '/' + agent_training_results_file, 'r') as f:
+            all_agent_training_returns = json.load(f)
 
-    # Creating Directory
-    agent_save_directory = "betweenness agents"
-    if not os.path.isdir(agent_directory + '/' + agent_save_directory):
-        os.mkdir(agent_directory + '/' + agent_save_directory)
-
-    # Collect Options
-    options = []
-    key = 'betweenness local maxima'
-    for node in stg_values:
-        if stg_values[node][key] == 'True':
-            policy = QLearningAgent(environment.possible_actions,
-                                    alpha, epsilon, gamma)
-            policy.load_policy(options_directory + "/subgoal - " + str(node))
-            initiation_func = create_option_goal_initiation_func(node, stg, adj_matrix, state_indexer)
-            option = Option(policy=policy, initiation_func=initiation_func,
-                            terminating_func=lambda x: not initiation_func(x))
-            options.append(option)
-    options += primitive_options
-
-    # Training Agents
-    all_agent_training_returns = {}
-    all_agent_returns = {}
-    agent_training_results_file = 'betweenness training returns'
-    agent_results_file = 'betweenness returns'
+    # Training Agent
     for i in range(num_agents):
         if progress_bar:
-            print("Training Betweenness agent " + str(i))
+            print("Training betweenness agent " + str(i))
+        agent_filename = '/betweenness_agent_' + str(i) + '.json'
+        agent = BetweennessAgent(environment.possible_actions,
+                                 alpha, epsilon, gamma,
+                                 state_transition_graph, environment.state_shape,
+                                 environment.state_dtype)
+        if continue_training:
+            agent.load(agent_directory + agent_filename)
+        else:
+            agent.load(agent_directory + '/' + base_agent_save_path)
 
-        agent = OptionsAgent(alpha, epsilon, gamma, options)
+        # Train Agent
         agent, agent_training_returns, agent_returns = train_agent(environment, agent, training_timesteps,
                                                                    evaluate_policy_window,
                                                                    all_actions_valid,
-                                                                   agent_save_path=(agent_directory + '/' +
-                                                                                    agent_save_directory + '/' +
-                                                                                    'agent ' + str(i)),
+                                                                   agent_save_path=(agent_directory +
+                                                                                    agent_filename),
                                                                    total_eval_steps=total_eval_steps,
                                                                    progress_bar=progress_bar)
 
-        all_agent_training_returns[i] = agent_training_returns
-        all_agent_returns[i] = agent_returns
+        if continue_training:
+            all_agent_training_returns[str(i)] += agent_training_returns
+            all_agent_returns[str(i)] += agent_returns
+        else:
+            all_agent_training_returns[str(i)] = agent_training_returns
+            all_agent_returns[str(i)] = agent_returns
 
         # Saving Results
         with open(results_directory + '/' + agent_training_results_file, 'w') as f:
@@ -2025,7 +2011,6 @@ if __name__ == "__main__":
                       [0, 1, 0]])
     board_name = 'room'
     simple_wind_gridworld = SimpleWindGridWorld((7, 7), 4)
-    test_state = np.zeros(simple_wind_gridworld.state_shape)
 
     beta = 0.5
     graphing_window = 5
@@ -2035,61 +2020,50 @@ if __name__ == "__main__":
     min_num_hops = 1
     max_num_hops = 1
     num_agents = 3
-    total_evaluation_steps = 25 #Simple_wind_gridworld_4x7x7 = 25
-    options_training_timesteps = 10 #1_000_000
-    training_timesteps = 1_000 #100_000
+    total_evaluation_steps = 25 #Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100
+    options_training_timesteps = 10_000
+    training_timesteps = 100 #1_000_000
 
-    filenames = get_filenames(simple_wind_gridworld)
-    adj_matrix = sparse.load_npz(filenames[0])
+    #filenames = get_filenames(tinytown)
+    #adj_matrix = sparse.load_npz(filenames[0])
     #all_states = np.load(filenames[1])
-    state_transition_graph = nx.read_gexf(filenames[2]) # nx.from_scipy_sparse_array(adj_matrix, create_using=nx.DiGraph)
-    with open(filenames[3], 'r') as f:
-        stg_values = json.load(f)
-
-    data = graphing.extract_data(filenames[5])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='Wind Gridworld (7 x 7)',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='std')
-    exit()
+    #state_transition_graph = nx.read_gexf(filenames[2]) # nx.from_scipy_sparse_array(adj_matrix, create_using=nx.DiGraph)
+    #with open(filenames[3], 'r') as f:
+    #    stg_values = json.load(f)
 
     print("Simple Wind Gridworld")
-
-    betweenness_agent = BetweennessAgent(simple_wind_gridworld.possible_actions,
-                                         0.9, 0.1, 0.9,
-                                         state_transition_graph,
-                                         simple_wind_gridworld.state_shape,
-                                         simple_wind_gridworld.state_dtype)
-    betweenness_agent.load(filenames[4] + '/betweenness_agents/base_agent.json')
-    betweenness_agent.train_options(simple_wind_gridworld,
-                                    options_training_timesteps,
-                                    False,
-                                    all_actions_valid=True,
-                                    progress_bar=True)
-    betweenness_agent.save(filenames[4] + '/betweenness_agents/options_trained.json')
-    with open(filenames[3], 'w') as f:
-        json.dump(stg_values, f)
+    train_betweenness_agents(simple_wind_gridworld,
+                             training_timesteps, num_agents, evaluate_policy_window,
+                             True, 'options_trained.json',
+                             total_evaluation_steps, False)
     exit()
 
-
-    print("Tiny Town 3x3: Eigenoptions Training Options")
+    print("Tiny Town 3x3: Eigenoptions Training Agent")
     eigenoptions_agent = EigenOptionAgent(adj_matrix, all_states, 0.9, 0.1, 0.9,
-                                          tiny_town_env.possible_actions)
-    eigenoptions_agent.load(filenames[4] + '/base_agent')
-    eigenoptions_agent.train_options(tiny_town_env, options_training_timesteps,
-                                     False, True)
+                                          tinytown.possible_actions)
+    train_eigenoption_agents('eigenoptions_options_trained_agent.json', tinytown,
+                             training_timesteps, num_agents, evaluate_policy_window,
+                             False, total_evaluation_steps,
+                             progress_bar=True)
     eigenoptions_agent.save(filenames[4] + '/eigenoptions_options_trained_agent.json')
     exit()
 
-    preparedness_values, hierarchy = preparedness_efficient(adj_matrix, 0.5, min_num_hops=1, max_num_hops=8,
+    preparedness_values, hierarchy = preparedness_efficient(adj_matrix, 0.5, min_num_hops=1, max_num_hops=10,
                                                             compressed_matrix=True, existing_stg_values=stg_values,
-                                                            computed_hops_range=[1, 7])
+                                                            computed_hops_range=[1, 8])
 
     print("Hierarchy height: " + str(hierarchy))
 
     with open(filenames[3], 'w') as f:
         json.dump(preparedness_values, f)
+    exit()
+
+    data = graphing.extract_data(filenames[5])
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='Tiny Town (3x3)',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='std')
     exit()
 
     train_eigenoption_agents('eigenoptions_options_trained_agent.json', simple_wind_gridworld,
