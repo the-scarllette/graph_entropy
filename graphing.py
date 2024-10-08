@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def extract_data(folderpath):
+def extract_data(folderpath, index=None):
     data = []
 
     filenames = os.listdir(folderpath)
@@ -13,7 +13,11 @@ def extract_data(folderpath):
         file_data = json.load(f)
         f.close()
         data.append(list(file_data.values()))
-    return data
+
+    if index is None:
+        return data
+
+    return [[data[0][index]]]
 
 
 def get_averages(data):

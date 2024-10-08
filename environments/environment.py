@@ -17,6 +17,7 @@ class Environment:
         self.start = None
         self.environment_name = ""
         self.options = []
+        self.state_dtype = int
         return
 
     def generate_random_state(self):
@@ -24,7 +25,8 @@ class Environment:
 
     def get_adjacency_matrix(self, directed=True, probability_weights=False,
                              compressed_matrix=False,
-                             symmetry_functions=[]):
+                             symmetry_functions=[],
+                             progress_bar=False):
         connected_states = {}
         state_indexes = {}
         all_states = []
@@ -35,8 +37,13 @@ class Environment:
 
         states_to_check = self.get_start_states()
         num_states_to_check = len(states_to_check)
+        iteration = 0
+        total_states = num_states_to_check
 
         while num_states_to_check > 0:
+            iteration += 1
+            print_progress_bar(iteration, total_states, "Finding STG for " + self.environment_name + ":")
+
             state = states_to_check.pop().copy()
             num_states_to_check -= 1
             state_bytes = state.tobytes()
@@ -100,6 +107,7 @@ class Environment:
                 if not symmetry_found:
                     states_to_check.append(state)
                     num_states_to_check += 1
+                    total_states += 1
 
             connected_states[state_bytes] = {'states': successor_states_after_symmetry,
                                              'weights': weights}
@@ -133,7 +141,7 @@ class Environment:
             state_num += 1
 
         if compressed_matrix:
-            return sparse.csr_matrix(adj_matrix), all_states
+            adj_matrix = adj_matrix.tocsr()
 
         return adj_matrix, all_states
 
@@ -165,6 +173,18 @@ class Environment:
 
     def get_successor_states(self, state, probability_weights=False):
         return [], []
+
+    def is_terminal(self, state=None):
+        return True
+
+    def print_state(self, state=None):
+        if state is None:
+            if self.terminal:
+                raise AttributeError("Either provide a state or print state while environment is not terminal.")
+            state = self.current_state
+
+        print(np.array2string(state))
+        return
 
     def set_options(self, new_options, append=False):
         """

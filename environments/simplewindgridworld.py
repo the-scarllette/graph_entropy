@@ -39,21 +39,28 @@ class SimpleWindGridWorld(Environment):
     success_reward = 1.0
 
     def __init__(self, size: Tuple[int, int], agent_camera_radius: float = 1,
-                 land: bool = False):
+                 land: bool = False,
+                 random_wind: bool = False):
+        self.state_dtype = int
         self.current_state = None
         self.size = (size[0], size[1], self.height)
         self.goal = np.array([self.size[1] // 2, self.size[0] // 2, 0])
         self.terminal = True
 
         self.agent_camera_radius = agent_camera_radius
-        self.environment_name = 'simple_wind_gridworld_' + str(self.size[0]) + 'x' + str(self.size[1])
+        self.environment_name = ('simple_wind_gridworld_' + str(self.agent_camera_radius) +
+                                 'x' + str(self.size[0]) + 'x' + str(self.size[1]))
 
         self.state_len = 3 + (size[0] * size[1])
+        self.state_shape = (self.state_len,)
 
         self.start_states = [np.array([x, y, 0] + ([0] * (self.state_len - 3)))
                              for x in range(self.size[0]) for y in range(self.size[1])]
 
         self.land = land
+        if self.land:
+            self.environment_name += '_land'
+        self.random_wind = random_wind
 
         if self.land:
             self.environment_name += '_land'
@@ -97,10 +104,6 @@ class SimpleWindGridWorld(Environment):
             successor_states.append(get_successor_state(available_altitude))
 
         num_successors = 3
-
-        states_removed = True
-        while states_removed:
-            states_removed = False
         trimmed_successors = []
 
         for i in range(num_successors):
@@ -125,7 +128,7 @@ class SimpleWindGridWorld(Environment):
 
         return trimmed_successors, probability_weights
 
-    def is_terminal(self, state=None):
+    def is_scanning_complete(self, state=None):
         if state is None:
             state = self.current_state
         if state is None:
@@ -134,8 +137,44 @@ class SimpleWindGridWorld(Environment):
         for i in range(3, self.state_len):
             if state[i] == 0:
                 return False
+        return True
 
+    def is_terminal(self, state=None):
+        if state is None:
+            state = self.current_state
+        if state is None:
+            raise ValueError("Either provide a state or ensure environment is not terminal.")
+
+        # If areas still left to scan: not terminal
+        if not self.is_scanning_complete(state):
+            return False
+
+        # No areas left to scan and do not need to land: terminal
+        if not self.land:
+            return True
+        # No areas left to scan and need to land: terminal if on the ground
         return state[2] == 0
+
+    def print_state(self, state=None):
+        if state is None:
+            if self.terminal:
+                raise AttributeError("Either provide a state or print state while environment is not terminal.")
+            state = self.current_state
+
+        state_to_print = ["" for _ in range(self.size[1])]
+        print("Ground seen: ")
+        for y in range(self.size[1]):
+            for x in range(self.size[0]):
+                to_place = "#"
+                if state[(x * self.size[0]) + y + 3] == 1:
+                    to_place = "-"
+                state_to_print[y] += to_place
+            print(state_to_print[y])
+
+        print("Height: " + str(state[2]))
+        print("x: " + str(state[0]))
+        print("y: " + str(state[1]))
+        return
 
     def step(self, action) -> (Any, float, bool, Any):
         # Finding action

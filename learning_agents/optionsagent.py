@@ -208,6 +208,7 @@ class OptionsAgent:
         self.current_step = 0
 
         self.current_option = None
+        self.current_option_index = None
         self.option_start_state = None
         self.total_option_reward = 0
         self.current_option_step = 0
@@ -226,7 +227,7 @@ class OptionsAgent:
     def choose_action(self, state, optimal_choice=False, possible_actions=None):
         self.last_possible_actions = possible_actions
 
-        if self.current_option is None or (self.step_size is not None and self.current_step % self.step_size == 0):
+        if self.current_option is None:
             self.current_option = self.choose_option(state, optimal_choice, possible_actions)
             if self.current_option is None:
                 return None
@@ -244,6 +245,7 @@ class OptionsAgent:
 
         if chosen_action == -1:
             self.current_option = None
+            self.current_option_index = None
             return self.choose_action(state, optimal_choice)
 
         self.current_option_step += 1
@@ -259,7 +261,8 @@ class OptionsAgent:
             return None
 
         if not no_random and rand.uniform(0, 1) < self.epsilon:
-            return rand.choice(available_options)
+            self.current_option_index =  rand.choice(available_options)
+            return self.options[self.current_option_index]
 
         option_values = self.get_state_option_values(state, available_options)
 
@@ -273,27 +276,32 @@ class OptionsAgent:
                 ops = [op]
             elif value == max_value:
                 ops.append(op)
-        return rand.choice(ops)
+
+        self.current_option_index = rand.choice(ops)
+        return self.options[self.current_option_index]
 
     def copy_agent(self, copy_from):
         self.state_option_values = copy_from.state_option_values.copy()
         self.current_option = None
+        self.current_option_index = None
         return
 
     def get_available_options(self, state, possible_actions=None):
         available_options = []
+        option_index = 0
         for option in self.options:
-            if possible_actions is not None:
-                if not option.has_policy():
-                    if option.actions[0] in possible_actions:
-                        available_options.append(option)
+            if (possible_actions is not None) and (not option.has_policy()):
+                if option.actions[0] in possible_actions:
+                    available_options.append(option_index)
+                    option_index += 1
                     continue
-            if option.initiated(state):
-                available_options.append(option)
+            elif option.initiated(state):
+                available_options.append(option_index)
+            option_index += 1
         return available_options
 
     def get_intra_state_option_values(self, state, available_options=None):
-        state_str = state_str = np.array2string(np.ndarray.astype(state, dtype=self.state_dtype))
+        state_str = np.array2string(np.ndarray.astype(state, dtype=self.state_dtype))
 
         try:
             option_values = self.intra_state_option_values[state_str]
@@ -336,7 +344,7 @@ class OptionsAgent:
         except AttributeError:
             ()
 
-        option_value = self.get_state_option_values(self.option_start_state)[self.current_option]
+        option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
         all_next_options = []
         if not terminal:
             all_next_options = self.get_state_option_values(next_state)
@@ -353,12 +361,13 @@ class OptionsAgent:
 
         state_str = np.array2string(np.ndarray.astype(self.option_start_state, dtype=self.state_dtype))
 
-        self.state_option_values[state_str][self.current_option] += self.alpha * \
-                                                                    (self.total_option_reward +
-                                                                     (self.gamma ** self.current_option_step) *
-                                                                     max_next_option
-                                                                     - option_value)
+        self.state_option_values[state_str][self.current_option_index] += self.alpha * \
+                                                                          (self.total_option_reward +
+                                                                          (self.gamma ** self.current_option_step) *
+                                                                           max_next_option
+                                                                           - option_value)
         self.current_option = None
+        self.current_option_index = None
         self.option_start_state = None
         self.total_option_reward = 0
         return
@@ -386,6 +395,20 @@ class OptionsAgent:
         with open(save_path, 'w') as f:
             json.dump(data, f)
         return
+
+    def state_str_to_state(self, state_str):
+        if '\n' not in state_str:
+            state = np.fromstring(state_str[1: len(state_str) - 1],
+                                  sep=' ', dtype=self.state_dtype)
+            return state
+
+        state_str = state_str.replace('[', '')
+        state_str = state_str.replace(']', '')
+        state_str = state_str.replace('\n', '')
+        state = np.fromstring(state_str,
+                              sep=' ', dtype=self.state_dtype)
+        state = state.reshape(self.state_shape)
+        return state
 
     def terminated(self, state):
         if self.terminating_func is None:

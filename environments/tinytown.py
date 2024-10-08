@@ -139,7 +139,11 @@ class TinyTown(Environment):
         return state
 
     def get_possible_actions(self, state=None):
-        state_str = np.array2string(self.board)
+        if state is None:
+            state_str = np.array2string(self.board)
+        else:
+            state_str = np.array2string(state)
+
         try:
             possible_actions = self.available_actions[state_str]
             return possible_actions
@@ -245,26 +249,27 @@ class TinyTown(Environment):
                             successor.itemset(build_location, building.index)
                             successor_states.append(successor)
 
-                # End Building Phase Action
-                possible_actions += 1
-                next_resources = self.resources
-                num_next_resources = self.num_resources
-                if self.pick_every == 1:
-                    next_resources = [self.any_tile]
-                    num_next_resources = 1
-                for resource in next_resources:
-                    successor = state.copy()
-                    successor.itemset((self.height, self.width), resource)
-                    successor_states.append(successor)
+            # End Building Phase Action
+            possible_actions += 1
+            next_resources = self.resources
+            num_next_resources = self.num_resources
+            if self.pick_every == 1:
+                next_resources = [self.any_tile]
+                num_next_resources = 1
+            for resource in next_resources:
+                successor = state.copy()
+                successor.itemset((self.height, self.width), resource)
+                successor_states.append(successor)
 
-                # Finding Probability Weights
-                if not probability_weights:
-                    probabilities = [1.0] * len(successor_states)
-                    return successor_states, probabilities
-
-                probabilities = [1.0 / possible_actions] * (possible_actions - 1)
-                probabilities += [1 / (num_next_resources * possible_actions)] * num_next_resources
+            # Finding Probability Weights
+            if not probability_weights:
+                probabilities = [1.0] * len(successor_states)
                 return successor_states, probabilities
+
+            # TODO: Fix probabilities for random tile choice
+            probabilities = [1.0 / possible_actions] * (possible_actions - 1)
+            probabilities += [1 / (num_next_resources * possible_actions)] * num_next_resources
+            return successor_states, probabilities
 
         # In Resource Phase
         can_place = [resource_to_place]
@@ -291,6 +296,7 @@ class TinyTown(Environment):
 
     # TODO: MAKE MORE GENERAL
     def get_transition_probability(self, state, action, next_state):
+
         return 1.0
 
     def is_state_terminal(self, state):

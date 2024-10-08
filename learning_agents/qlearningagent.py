@@ -48,11 +48,12 @@ class QLearningAgent:
     def get_action_values(self, state):
         state = np.array2string(state)
         try:
-            action_values = self.q_values[state]
+            action_values_str = self.q_values[state]
         except KeyError:
             self.initialise_action_values(state)
-            action_values = self.q_values[state]
-        return action_values
+            action_values_str = self.q_values[state]
+        action_values_int = {int(key): action_values_str[key] for key in action_values_str}
+        return action_values_int
 
     def initialise_action_values(self, state):
         self.q_values[state] = {action: 0.0 for action in self.actions}
