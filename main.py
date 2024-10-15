@@ -816,9 +816,13 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
 
             neighbours = np.where((0 < distances) & (distances <= num_hops))[0]
 
-            preparedness_values[str(node)]['frequency entropy ' + name_suffix] = \
-                node_frequency_entropy(adjacency_matrix, node, min_num_hops, log_base,
-                                       accuracy, compressed_matrix, neighbours)
+            if num_hops > min_num_hops and (neighbours.size == 1):
+                preparedness_values[str(node)]['frequency entropy ' + name_suffix] = (
+                    preparedness_values)[str(neighbours[0])]['frequency entropy ' + get_name_suffix(num_hops - 1)]
+            else:
+                preparedness_values[str(node)]['frequency entropy ' + name_suffix] = \
+                    node_frequency_entropy(adjacency_matrix, node, min_num_hops, log_base,
+                                           accuracy, compressed_matrix, neighbours)
             preparedness_values[str(node)]['structural entropy ' + name_suffix] = \
                 node_structural_entropy(adjacency_matrix, node, min_num_hops, log_base,
                                         accuracy, compressed_matrix, neighbours)
@@ -2010,7 +2014,7 @@ if __name__ == "__main__":
                       [4, 0, 4],
                       [0, 1, 0]])
     board_name = 'room'
-    simple_wind_gridworld = SimpleWindGridWorld((7, 7), 4)
+    tinytown = TinyTown(3, 3)
 
     beta = 0.5
     graphing_window = 20
@@ -2024,12 +2028,23 @@ if __name__ == "__main__":
     options_training_timesteps = 10_000
     training_timesteps = 1_000_000 #tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
-    filenames = get_filenames(simple_wind_gridworld)
+    filenames = get_filenames(tinytown)
     #adj_matrix = sparse.load_npz(filenames[0])
     #all_states = np.load(filenames[1])
-    state_transition_graph = nx.read_gexf(filenames[2]) # nx.from_scipy_sparse_array(adj_matrix, create_using=nx.DiGraph)
+    #state_transition_graph = nx.read_gexf(filenames[2]) # nx.from_scipy_sparse_array(adj_matrix, create_using=nx.DiGraph)
     #with open(filenames[3], 'r') as f:
     #    stg_values = json.load(f)
+
+    data = graphing.extract_data(filenames[5])
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='TinyTown 3x3',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='std',
+                                       labels=[
+                                           'Eigenoptions',
+                                           'Primitives'])
+    exit()
 
     agent = BetweennessAgent(simple_wind_gridworld.possible_actions,
                              0.9, 0.1, 0.9,
@@ -2049,17 +2064,6 @@ if __name__ == "__main__":
                            progress_bar=True,
                            all_actions_valid=False,
                            total_eval_steps=total_evaluation_steps)
-    exit()
-
-    data = graphing.extract_data(filenames[5])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='TinyTown 3x3',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='std',
-                                       labels=[
-                                               'Eigenoptions',
-                                               'Primitives'])
     exit()
 
     preparedness_values, hierarchy = preparedness_efficient(adj_matrix, 0.5, min_num_hops=1, max_num_hops=12,
