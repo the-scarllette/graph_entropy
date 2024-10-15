@@ -75,8 +75,9 @@ class QLearningAgent:
             reward = reward + (self.intrinsic_reward_lambda * intrinsic_reward)
 
         action_value = action_values[action]
-        action_values[action] = action_value + (self.alpha *
-                                                (reward + (self.gamma * max(next_action_values) - action_value)))
+        self.q_values[np.array2string(state)][action] = action_value + (self.alpha *
+                                                        (reward + (self.gamma * max(next_action_values)
+                                                                   - action_value)))
         return
 
     def load_policy(self, load_path):
