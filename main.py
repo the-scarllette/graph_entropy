@@ -603,6 +603,63 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
     return connected_nodes
 
 
+def label_preparedness_subgoals(stg, stg_values, beta=0.5, max_hop=None):
+    def get_local_maxima_key(x):
+        return 'preparedness - ' + str(x) + ' hops beta = ' + str(beta) + ' - local maxima'
+
+    def has_in_nodes(n):
+        for edge in stg.edges(n):
+            if edge[1] == n:
+                return True
+        return False
+
+    if max_hop is None:
+        max_hop = 0
+        max_hop_found = False
+        while not max_hop_found:
+            try:
+                _ = stg_values['0'][get_local_maxima_key(max_hop)]
+                max_hop += 1
+            except KeyError:
+                max_hop_found = True
+
+    hops = max_hop
+    subgoals = {hop: [] for hop in range(1, max_hop + 1)}
+    while hops >= 1:
+        local_maxima_key = get_local_maxima_key(hops)
+        for node in stg_values :
+            try:
+                _ = stg_values[node]['preparedness subgoal level']
+            except KeyError:
+                if not has_in_nodes(node):
+                    stg_values[node]['preparedness subgoal level'] = 'None'
+                    continue
+                is_subgoal_str = stg_values[node][local_maxima_key]
+                if is_subgoal_str == 'True':
+                    subgoals[hops] += node
+                    stg_values[node]['preparedness subgoal level'] = str(hops)
+                elif hops == 1:
+                    stg_values[node]['preparedness subgoal level'] = 'None'
+        hops -= 1
+
+    hops = 2
+    hierarchy_height = max_hop
+    while hops <= max_hop:
+        if subgoals[hops - 1] == subgoals[hops]:
+            hierarchy_height = hops - 1
+            break
+        hops += 1
+
+    for hops in range(1, hierarchy_height + 1):
+        for node in stg_values:
+            subgoal_level = stg_values[node]['preparedness subgoal level']
+            if (subgoal_level != 'None') and (int(subgoal_level) > hierarchy_height):
+                stg_values[node]['preparedness subgoal level'] = 'None'
+
+    nx.set_node_attributes(stg, stg_values)
+    return stg, stg_values
+
+
 def make_entropy_intrinsic_reward(graph_entropies):
     def intrinsic_reward_func(state):
         return graph_entropies[np.array2string(np.ndarray.astype(state, dtype=int))]
@@ -816,7 +873,7 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
 
             neighbours = np.where((0 < distances) & (distances <= num_hops))[0]
 
-            if num_hops > min_num_hops and (neighbours.size == 1):
+            if (num_hops > min_num_hops) and (neighbours.size == 1):
                 preparedness_values[str(node)]['frequency entropy ' + name_suffix] = (
                     preparedness_values)[str(neighbours[0])]['frequency entropy ' + get_name_suffix(num_hops - 1)]
             else:
@@ -2014,7 +2071,7 @@ if __name__ == "__main__":
                       [4, 0, 4],
                       [0, 1, 0]])
     board_name = 'room'
-    tinytown = TinyTown(3, 3)
+    tinytown = TinyTown(2, 2)
 
     beta = 0.5
     graphing_window = 20
@@ -2031,9 +2088,17 @@ if __name__ == "__main__":
     filenames = get_filenames(tinytown)
     #adj_matrix = sparse.load_npz(filenames[0])
     #all_states = np.load(filenames[1])
-    #state_transition_graph = nx.read_gexf(filenames[2]) # nx.from_scipy_sparse_array(adj_matrix, create_using=nx.DiGraph)
-    #with open(filenames[3], 'r') as f:
-    #    stg_values = json.load(f)
+    state_transition_graph = nx.read_gexf(filenames[2]) # nx.from_scipy_sparse_array(adj_matrix, create_using=nx.DiGraph)
+    with open(filenames[3], 'r') as f:
+        stg_values = json.load(f)
+
+    state_transition_graph, stg_values = label_preparedness_subgoals(state_transition_graph,
+                                                                     stg_values,
+                                                                     max_hop=8)
+    with open(filenames[3], 'w') as f:
+        json.dump(stg_values, f)
+    nx.write_gexf(state_transition_graph, filenames[2])
+    exit()
 
     data = graphing.extract_data(filenames[5])
     graphing.graph_reward_per_timestep(data, graphing_window,
