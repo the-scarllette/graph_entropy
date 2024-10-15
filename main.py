@@ -605,13 +605,7 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
 
 def label_preparedness_subgoals(stg, stg_values, beta=0.5, max_hop=None):
     def get_local_maxima_key(x):
-        return 'preparedness - ' + str(x) + ' hops beta = ' + str(beta) + ' - local maxima'
-
-    def has_in_nodes(n):
-        for edge in stg.edges(n):
-            if edge[1] == n:
-                return True
-        return False
+        return 'preparedness - ' + str(x) + ' hops - beta = ' + str(beta) + ' - local maxima'
 
     if max_hop is None:
         max_hop = 0
@@ -623,23 +617,23 @@ def label_preparedness_subgoals(stg, stg_values, beta=0.5, max_hop=None):
             except KeyError:
                 max_hop_found = True
 
+    for node in stg_values:
+        stg_values[node]['preparedness subgoal level'] = 'Unassigned'
+
     hops = max_hop
     subgoals = {hop: [] for hop in range(1, max_hop + 1)}
     while hops >= 1:
         local_maxima_key = get_local_maxima_key(hops)
         for node in stg_values :
-            try:
-                _ = stg_values[node]['preparedness subgoal level']
-            except KeyError:
-                if not has_in_nodes(node):
-                    stg_values[node]['preparedness subgoal level'] = 'None'
-                    continue
-                is_subgoal_str = stg_values[node][local_maxima_key]
-                if is_subgoal_str == 'True':
-                    subgoals[hops] += node
-                    stg_values[node]['preparedness subgoal level'] = str(hops)
-                elif hops == 1:
-                    stg_values[node]['preparedness subgoal level'] = 'None'
+            if stg_values[node]['preparedness subgoal level'] != 'Unassigned':
+                continue
+
+            is_subgoal_str = stg_values[node][local_maxima_key]
+            if is_subgoal_str == 'True':
+                subgoals[hops] += node
+                stg_values[node]['preparedness subgoal level'] = str(hops)
+            elif hops == 1:
+                stg_values[node]['preparedness subgoal level'] = 'None'
         hops -= 1
 
     hops = 2
