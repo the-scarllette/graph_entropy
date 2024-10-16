@@ -603,7 +603,8 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
     return connected_nodes
 
 
-def label_preparedness_subgoals(stg, stg_values, beta=0.5, max_hop=None):
+def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5, max_hop=None):
+    subgoal_level_key = 'preparedness subgoal level'
     def get_local_maxima_key(x):
         return 'preparedness - ' + str(x) + ' hops - beta = ' + str(beta) + ' - local maxima'
 
@@ -617,38 +618,65 @@ def label_preparedness_subgoals(stg, stg_values, beta=0.5, max_hop=None):
             except KeyError:
                 max_hop_found = True
 
-    for node in stg_values:
-        stg_values[node]['preparedness subgoal level'] = 'Unassigned'
-
-    hops = max_hop
     subgoals = {hop: [] for hop in range(1, max_hop + 1)}
-    while hops >= 1:
-        local_maxima_key = get_local_maxima_key(hops)
-        for node in stg_values :
-            if stg_values[node]['preparedness subgoal level'] != 'Unassigned':
-                continue
-
-            is_subgoal_str = stg_values[node][local_maxima_key]
-            if is_subgoal_str == 'True':
-                subgoals[hops] += node
-                stg_values[node]['preparedness subgoal level'] = str(hops)
-            elif hops == 1:
-                stg_values[node]['preparedness subgoal level'] = 'None'
-        hops -= 1
-
-    hops = 2
-    hierarchy_height = max_hop
+    all_subgoals_found = False
+    hops = 1
     while hops <= max_hop:
-        if subgoals[hops - 1] == subgoals[hops]:
-            hierarchy_height = hops - 1
+        local_maxima_key = get_local_maxima_key(hops)
+        for node in stg_values:
+            try:
+                is_subgoal_str = stg_values[node][local_maxima_key]
+            except KeyError:
+                is_subgoal_str = 'False'
+                stg_values[node][local_maxima_key] = is_subgoal_str
+
+            if is_subgoal_str == 'True':
+                subgoals[hops].append(node)
+                stg_values[node][subgoal_level_key] = str(hops)
+            elif hops == 1:
+                stg_values[node][subgoal_level_key] = 'None'
+
+        if hops > 1 and subgoals[hops - 1] == subgoals[hops]:
             break
         hops += 1
 
-    for hops in range(1, hierarchy_height + 1):
-        for node in stg_values:
-            subgoal_level = stg_values[node]['preparedness subgoal level']
-            if (subgoal_level != 'None') and (int(subgoal_level) > hierarchy_height):
-                stg_values[node]['preparedness subgoal level'] = 'None'
+    subgoals[hops - 1] = subgoals[hops].copy()
+    subgoals[hops] = []
+    hops -= 1
+    for node in subgoals[hops]:
+        stg_values[node][subgoal_level_key] = str(hops)
+    for hops_to_prune in range(hops, 1, -1):
+        for lower_hops in range(1, hops_to_prune):
+            for node in subgoals[hops_to_prune]:
+                if node in subgoals[lower_hops]:
+                    subgoals[lower_hops].remove(node)
+    subgoals_no_empty = {}
+    level = 0
+    for i in range(1, hops + 1):
+        if subgoals[i]:
+            level += 1
+            subgoals_no_empty[level] = subgoals[i]
+
+    final_subgoals = {l: [] for l in range(1, level + 1)}
+    final_subgoals[1] = subgoals_no_empty[1]
+    l = 2
+    for l in range(2, level + 1):
+        for node in subgoals_no_empty[l]:
+            valid_subgoal = False
+            for prior_level in range(l - 1, 0, -1):
+                for start_node in final_subgoals[prior_level]:
+                    paths = sparse.csgraph.dijkstra(adj_matrix, directed=True, indices=int(start_node),
+                                                    unweighted=True)
+                    if paths[int(node)] < np.inf:
+                        valid_subgoal = True
+                        break
+                if valid_subgoal:
+                    break
+
+            if valid_subgoal:
+                final_subgoals[l].append(node)
+            else:
+                stg_values[node][subgoal_level_key] = 'None'
 
     nx.set_node_attributes(stg, stg_values)
     return stg, stg_values
@@ -2080,13 +2108,13 @@ if __name__ == "__main__":
     training_timesteps = 1_000_000 #tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
     filenames = get_filenames(tinytown)
-    #adj_matrix = sparse.load_npz(filenames[0])
+    adj_matrix = sparse.load_npz(filenames[0])
     #all_states = np.load(filenames[1])
     state_transition_graph = nx.read_gexf(filenames[2]) # nx.from_scipy_sparse_array(adj_matrix, create_using=nx.DiGraph)
     with open(filenames[3], 'r') as f:
         stg_values = json.load(f)
 
-    state_transition_graph, stg_values = label_preparedness_subgoals(state_transition_graph,
+    state_transition_graph, stg_values = label_preparedness_subgoals(adj_matrix, state_transition_graph,
                                                                      stg_values,
                                                                      max_hop=8)
     with open(filenames[3], 'w') as f:
