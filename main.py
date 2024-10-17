@@ -605,8 +605,13 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
 
 def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5, max_hop=None):
     subgoal_level_key = 'preparedness subgoal level'
+    def get_preparedness_key(x):
+        return 'preparedness - ' + str(x) + ' hops - beta = ' + str(beta)
     def get_local_maxima_key(x):
-        return 'preparedness - ' + str(x) + ' hops - beta = ' + str(beta) + ' - local maxima'
+        return get_preparedness_key(x) + ' - local maxima'
+
+    distance_matrix = sparse.csgraph.dijkstra(adj_matrix, True,
+                                              unweighted=True, limit=max_hop)
 
     if max_hop is None:
         max_hop = 0
@@ -623,12 +628,23 @@ def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5, max_hop=N
     hops = 1
     while hops <= max_hop:
         local_maxima_key = get_local_maxima_key(hops)
+        preparedness_key = get_preparedness_key(hops)
         for node in stg_values:
-            try:
-                is_subgoal_str = stg_values[node][local_maxima_key]
-            except KeyError:
-                is_subgoal_str = 'False'
-                stg_values[node][local_maxima_key] = is_subgoal_str
+            is_subgoal_str = 'True'
+            out_neighbours = np.where(distance_matrix[int(node)] <= hops)[0]
+            in_neighbours = np.where(distance_matrix[:, int(node)] <= hops)[0]
+
+            preparedness_value = float(stg_values[node][preparedness_key])
+            for neighbour in np.append(out_neighbours, in_neighbours):
+                neighbour_str = str(neighbour)
+                if neighbour_str == node:
+                    continue
+                neighbour_preparedness = float(stg_values[neighbour_str][preparedness_key])
+                if neighbour_preparedness > preparedness_value:
+                    is_subgoal_str = 'False'
+                    break
+
+            stg_values[node][local_maxima_key] = is_subgoal_str
 
             if is_subgoal_str == 'True':
                 subgoals[hops].append(node)
@@ -665,9 +681,7 @@ def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5, max_hop=N
             valid_subgoal = False
             for prior_level in range(l - 1, 0, -1):
                 for start_node in final_subgoals[prior_level]:
-                    paths = sparse.csgraph.dijkstra(adj_matrix, directed=True, indices=int(start_node),
-                                                    unweighted=True)
-                    if paths[int(node)] < np.inf:
+                    if distance_matrix[int(start_node), int(node)] < np.inf:
                         valid_subgoal = True
                         break
                 if valid_subgoal:
@@ -834,7 +848,7 @@ def preparedness(adjacency_matrix, beta=None, beta_values=None,
             if distance_matrix is None:
                 neighbours = get_neighbours(adjacency_matrix, i, num_hops, True, compressed_matrix)
             else:
-                neighbours = np.where(distance_matrix[i, :] >= num_hops)
+                neighbours = np.where(distance_matrix[i, :] <= num_hops)
 
             preparedness_values[i]['frequency entropy ' + name_suffix] = \
                 node_frequency_entropy(adjacency_matrix, i, num_hops, log_base, accuracy, compressed_matrix,
