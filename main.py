@@ -467,9 +467,10 @@ def get_filenames(env: Environment):
     stg_values_filename = env.environment_name + '_stg_values.json'
     agent_directory = env.environment_name + '_agents'
     results_directory = env.environment_name + '_episode_results'
+    preparedness_aggregate_graph = env.environment_name + '_preparedness_aggregate_graph'
     return [adj_matrix_filename, all_states_filename,
             stg_filename, stg_values_filename,
-            agent_directory, results_directory]
+            agent_directory, results_directory, preparedness_aggregate_graph]
 
 
 def get_neighbours(adjacency_matrix: np.matrix, node, num_hops=1, directed=True, compressed_matrix=True):
@@ -2213,12 +2214,6 @@ if __name__ == "__main__":
     with open(filenames[3], 'r') as f:
         stg_values = json.load(f)
 
-    stg_values = preparedness_efficient(adj_matrix, 0.5, max_num_hops=5,
-                                        compressed_matrix=True, existing_stg_values=stg_values)
-    with open(filenames[3], 'w') as f:
-        json.dump(stg_values, f)
-    exit()
-
     state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adj_matrix, state_transition_graph,
                                                                      stg_values,
                                                                      min_hops=2, max_hop=8)
@@ -2227,7 +2222,7 @@ if __name__ == "__main__":
     with open(filenames[3], 'w') as f:
         json.dump(stg_values, f)
     nx.write_gexf(state_transition_graph, filenames[2])
-    nx.write_gexf(aggregate_graph, taxicab.environment_name + '_preparedness_aggregate_graph.gexf')
+    nx.write_gexf(aggregate_graph, railroad.environment_name + '_preparedness_aggregate_graph.gexf')
     exit()
 
     data = graphing.extract_data(filenames[5])
