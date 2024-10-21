@@ -9,6 +9,7 @@ import numpy as np
 import scipy.sparse
 from scipy import sparse
 import time
+from typing import Dict, List
 
 import environments.environment
 from environments.environment import Environment
@@ -603,7 +604,8 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
     return connected_nodes
 
 
-def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5, max_hop=None):
+def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5,
+                                min_hops=1, max_hop=None):
     subgoal_level_key = 'preparedness subgoal level'
     def get_preparedness_key(x):
         return 'preparedness - ' + str(x) + ' hops - beta = ' + str(beta)
@@ -625,34 +627,39 @@ def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5, max_hop=N
 
     subgoals = {hop: [] for hop in range(1, max_hop + 1)}
     all_subgoals_found = False
-    hops = 1
+    hops = min_hops
     while hops <= max_hop:
         local_maxima_key = get_local_maxima_key(hops)
         preparedness_key = get_preparedness_key(hops)
         for node in stg_values:
             is_subgoal_str = 'True'
-            out_neighbours = np.where(distance_matrix[int(node)] <= hops)[0]
-            in_neighbours = np.where(distance_matrix[:, int(node)] <= hops)[0]
 
-            preparedness_value = float(stg_values[node][preparedness_key])
-            for neighbour in np.append(out_neighbours, in_neighbours):
-                neighbour_str = str(neighbour)
-                if neighbour_str == node:
-                    continue
-                neighbour_preparedness = float(stg_values[neighbour_str][preparedness_key])
-                if neighbour_preparedness > preparedness_value:
-                    is_subgoal_str = 'False'
-                    break
+            in_neighbours = np.where((distance_matrix[:, int(node)] <= hops) &
+                                     (0 < distance_matrix[:, int(node)]))[0]
+
+            if in_neighbours.size <= 0:
+                is_subgoal_str = 'False'
+            else:
+                out_neighbours = np.where(distance_matrix[int(node)] <= hops)[0]
+                preparedness_value = float(stg_values[node][preparedness_key])
+                for neighbour in np.append(out_neighbours, in_neighbours):
+                    neighbour_str = str(neighbour)
+                    if neighbour_str == node:
+                        continue
+                    neighbour_preparedness = float(stg_values[neighbour_str][preparedness_key])
+                    if neighbour_preparedness > preparedness_value:
+                        is_subgoal_str = 'False'
+                        break
 
             stg_values[node][local_maxima_key] = is_subgoal_str
 
             if is_subgoal_str == 'True':
                 subgoals[hops].append(node)
                 stg_values[node][subgoal_level_key] = str(hops)
-            elif hops == 1:
+            elif hops == min_hops:
                 stg_values[node][subgoal_level_key] = 'None'
 
-        if hops > 1 and subgoals[hops - 1] == subgoals[hops]:
+        if hops > min_hops and subgoals[hops - 1] == subgoals[hops]:
             break
         hops += 1
 
@@ -661,18 +668,19 @@ def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5, max_hop=N
     hops -= 1
     for node in subgoals[hops]:
         stg_values[node][subgoal_level_key] = str(hops)
-    for hops_to_prune in range(hops, 1, -1):
-        for lower_hops in range(1, hops_to_prune):
+    for hops_to_prune in range(hops, min_hops, -1):
+        for lower_hops in range(min_hops, hops_to_prune):
             for node in subgoals[hops_to_prune]:
                 if node in subgoals[lower_hops]:
                     subgoals[lower_hops].remove(node)
     subgoals_no_empty = {}
     level = 0
-    for i in range(1, hops + 1):
+    for i in range(min_hops, hops + 1):
         if subgoals[i]:
             level += 1
             subgoals_no_empty[level] = subgoals[i]
 
+    '''
     final_subgoals = {l: [] for l in range(1, level + 1)}
     final_subgoals[1] = subgoals_no_empty[1]
     l = 2
@@ -691,9 +699,10 @@ def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5, max_hop=N
                 final_subgoals[l].append(node)
             else:
                 stg_values[node][subgoal_level_key] = 'None'
+    '''
 
     nx.set_node_attributes(stg, stg_values)
-    return stg, stg_values
+    return stg, stg_values, subgoals_no_empty
 
 
 def make_entropy_intrinsic_reward(graph_entropies):
@@ -873,6 +882,76 @@ def preparedness(adjacency_matrix, beta=None, beta_values=None,
     return preparedness_values
 
 
+def preparedness_aggregate_graph(environment: Environment,
+                                 adjacency_matrix: sparse.csr_matrix,
+                                 state_transition_graph: nx.MultiDiGraph,
+                                 stg_values: Dict[str, Dict[str, str | float | int]],
+                                 preparedness_subgoals: Dict[str, List[str]] | None=None,
+                                 max_hop: int=np.inf,
+                                 beta: float=0.5):
+    if preparedness_subgoals is None:
+        state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adjacency_matrix,
+                                                                                                state_transition_graph,
+                                                                                                stg_values,
+                                                                                                beta,
+                                                                                                max_hop)
+
+    # Getting Start Nodes
+    start_states = environment.get_start_states()
+    start_nodes = []
+    for start_state in start_states:
+        start_state_str = np.array2string(start_state)
+        for node in stg_values:
+            if stg_values[node]['state'] == start_state_str:
+                start_nodes.append(node)
+                break
+
+    # Building Aggregate Graph
+    aggregate_graph = nx.MultiDiGraph()
+    subgoal_heights = [int(height) for height in preparedness_subgoals.keys()]
+    min_height = subgoal_heights[0]
+    max_height = subgoal_heights[-1]
+    for subgoal_height in preparedness_subgoals:
+        for node in preparedness_subgoals[subgoal_height]:
+            aggregate_graph.add_node(node)
+
+    # Path Between Subgoals
+    for subgoal_height in range(min_height, max_height + 1):
+        for subgoal in preparedness_subgoals[subgoal_height]:
+            # Path of Decreasing Preparedness
+            increasing_path_found = False
+            start_height = subgoal_height + 1
+            while (start_height <= max_height) and (not increasing_path_found):
+                for start_node in preparedness_subgoals[start_height]:
+                    if nx.has_path(state_transition_graph, start_node, subgoal):
+                        aggregate_graph.add_edge(start_node, subgoal, weight=1.0)
+                        increasing_path_found = True
+                start_height += 1
+
+            # Paths of Increasing Preparedness
+            decreasing_path_found = False
+            start_height = subgoal_height - 1
+            while (min_height <= start_height) and (not decreasing_path_found):
+                for start_node in preparedness_subgoals[start_height]:
+                    if nx.has_path(state_transition_graph, start_node, subgoal):
+                        aggregate_graph.add_edge(start_node, subgoal, weight=1.0)
+                        decreasing_path_found = True
+                start_height -= 1
+
+            # Paths from Start States to Subgoals (with no in-paths)
+            '''
+            if not (increasing_path_found or decreasing_path_found):
+                for initial_node in start_nodes:
+                    if nx.has_path(state_transition_graph, initial_node, subgoal):
+                        aggregate_graph.add_node(initial_node)
+                        aggregate_graph.add_edge(initial_node, subgoal, weight=1.0)
+            '''
+
+    nx.set_node_attributes(aggregate_graph, stg_values)
+
+    return aggregate_graph
+
+
 def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
                            min_num_hops=1, max_num_hops=1, log_base=10, accuracy=4,
                            compressed_matrix=False,
@@ -909,13 +988,18 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
 
             neighbours = np.where((0 < distances) & (distances <= num_hops))[0]
 
+            frequency_entropy = None
             if (num_hops > min_num_hops) and (neighbours.size == 1):
-                preparedness_values[str(node)]['frequency entropy ' + name_suffix] = (
-                    preparedness_values)[str(neighbours[0])]['frequency entropy ' + get_name_suffix(num_hops - 1)]
-            else:
-                preparedness_values[str(node)]['frequency entropy ' + name_suffix] = \
+                try:
+                    frequency_entropy = (
+                        preparedness_values)[str(neighbours[0])]['frequency entropy ' + get_name_suffix(num_hops - 1)]
+                except KeyError:
+                    frequency_entropy = None
+            if frequency_entropy is None:
+                frequency_entropy = \
                     node_frequency_entropy(adjacency_matrix, node, min_num_hops, log_base,
                                            accuracy, compressed_matrix, neighbours)
+            preparedness_values[str(node)]['frequency entropy ' + name_suffix] = frequency_entropy
             preparedness_values[str(node)]['structural entropy ' + name_suffix] = \
                 node_structural_entropy(adjacency_matrix, node, min_num_hops, log_base,
                                         accuracy, compressed_matrix, neighbours)
@@ -927,6 +1011,7 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
                     ((1 - beta) * preparedness_values[str(node)]['structural entropy ' + name_suffix])
 
     # Finding Subgoals
+    '''
     subgoals = [[] for _ in range(min_computed_hops, max_computed_hops + 1)] +\
             [[] for _ in range(min_num_hops, max_num_hops + 1)]
     num_subgoals = [0 for _ in range(min_computed_hops, max_computed_hops + 1)] +\
@@ -992,8 +1077,9 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
     if not hierarchy_level_found:
         level -= 1
         print("Hierarchy level maxed-out")
+    '''
 
-    return preparedness_values, level
+    return preparedness_values
 
 
 def print_eigenoptions_subgoals(state_transition_graph_values):
@@ -2107,7 +2193,7 @@ if __name__ == "__main__":
                       [4, 0, 4],
                       [0, 1, 0]])
     board_name = 'room'
-    tinytown = TinyTown(2, 2)
+    railroad = RailRoad(2, 2, [(0, 0), (1, 1)], 'random')
 
     beta = 0.5
     graphing_window = 20
@@ -2121,19 +2207,27 @@ if __name__ == "__main__":
     options_training_timesteps = 10_000
     training_timesteps = 1_000_000 #tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
-    filenames = get_filenames(tinytown)
+    filenames = get_filenames(railroad)
     adj_matrix = sparse.load_npz(filenames[0])
-    #all_states = np.load(filenames[1])
-    state_transition_graph = nx.read_gexf(filenames[2]) # nx.from_scipy_sparse_array(adj_matrix, create_using=nx.DiGraph)
+    state_transition_graph = nx.read_gexf(filenames[2])
     with open(filenames[3], 'r') as f:
         stg_values = json.load(f)
 
-    state_transition_graph, stg_values = label_preparedness_subgoals(adj_matrix, state_transition_graph,
+    stg_values = preparedness_efficient(adj_matrix, 0.5, max_num_hops=5,
+                                        compressed_matrix=True, existing_stg_values=stg_values)
+    with open(filenames[3], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adj_matrix, state_transition_graph,
                                                                      stg_values,
-                                                                     max_hop=8)
+                                                                     min_hops=2, max_hop=8)
+    aggregate_graph = preparedness_aggregate_graph(taxicab, adj_matrix, state_transition_graph, stg_values,
+                                                   preparedness_subgoals, beta=0.5)
     with open(filenames[3], 'w') as f:
         json.dump(stg_values, f)
     nx.write_gexf(state_transition_graph, filenames[2])
+    nx.write_gexf(aggregate_graph, taxicab.environment_name + '_preparedness_aggregate_graph.gexf')
     exit()
 
     data = graphing.extract_data(filenames[5])
