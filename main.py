@@ -468,9 +468,13 @@ def get_filenames(env: Environment):
     agent_directory = env.environment_name + '_agents'
     results_directory = env.environment_name + '_episode_results'
     preparedness_aggregate_graph = env.environment_name + '_preparedness_aggregate_graph'
-    return [adj_matrix_filename, all_states_filename,
-            stg_filename, stg_values_filename,
-            agent_directory, results_directory, preparedness_aggregate_graph]
+    return {'adjacency matrix': adj_matrix_filename,
+            'all states': all_states_filename,
+            'state transition graph': stg_filename,
+            'state transition graph values': stg_values_filename,
+            'agents': agent_directory,
+            'results': results_directory,
+            'preparedness aggregate graph': preparedness_aggregate_graph}
 
 
 def get_neighbours(adjacency_matrix: np.matrix, node, num_hops=1, directed=True, compressed_matrix=True):
@@ -571,22 +575,16 @@ def get_preparedness_subgoals(environment: Environment, beta=None, compressed_ma
     return filtered_subgoals
 
 
-def get_stg(env_name, no_self_loops=False):
-    adj_matrix_filename = env_name + '_adj_matrix.txt'
-    stg_values_filename = env_name + '_stg_values.json'
-    stg_filename = env_name + '_stg.gexf'
+def get_state_transition_graph(environment: Environment, directed: bool=True, probability_weights: bool=True,
+                               compressed_matrix: bool=True, progress_bar: bool=True):
+    filenames = get_filenames(environment)
+    adjacency_matrix, state_transition_graph, state_transition_graph_values = environment.get_adjacency_matrix(
+        directed, probability_weights, compressed_matrix, progress_bar=progress_bar)
 
-    adj_matrix = np.loadtxt(adj_matrix_filename)
-    if no_self_loops:
-        id = np.identity(adj_matrix.shape[0])
-        adj_matrix = adj_matrix - id
-
-    with open(stg_values_filename, 'r') as f:
-        data = json.load(f)
-    reformatted_data = {int(i): data[i] for i in data}
-    g = nx.from_numpy_array(adj_matrix, create_using=nx.MultiDiGraph)
-    nx.set_node_attributes(g, reformatted_data)
-    nx.write_gexf(g, stg_filename)
+    sparse.save_npz(filenames['adjacency matrix'], adjacency_matrix)
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(state_transition_graph_values, f)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     return
 
 
@@ -956,7 +954,8 @@ def preparedness_aggregate_graph(environment: Environment,
 def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
                            min_num_hops=1, max_num_hops=1, log_base=10, accuracy=4,
                            compressed_matrix=False,
-                           existing_stg_values=None, computed_hops_range=None):
+                           existing_stg_values=None, computed_hops_range=None,
+                           progress_bar=False):
     if (beta is None) and (beta_values is None):
         raise ValueError("One of beta or beta values must not be None")
 
@@ -978,6 +977,8 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
         max_computed_hops = computed_hops_range[1]
 
     for node in range(num_nodes):
+        if progress_bar:
+            print_progress_bar(node, num_nodes, 'Computing Preparedness: ', 'Complete')
         distances = sparse.csgraph.dijkstra(adjacency_matrix, indices=node, unweighted=True,
                                             limit=max_num_hops + 1)
         print_progress_bar(node, num_nodes, prefix="Preparedness :",
@@ -2194,7 +2195,8 @@ if __name__ == "__main__":
                       [4, 0, 4],
                       [0, 1, 0]])
     board_name = 'room'
-    railroad = RailRoad(2, 2, [(0, 0), (1, 1)], 'random')
+
+    railroad = RailRoad(3, 3, [(0, 0), (2, 2)], 'choice')
 
     beta = 0.5
     graphing_window = 20
@@ -2208,16 +2210,29 @@ if __name__ == "__main__":
     options_training_timesteps = 10_000
     training_timesteps = 1_000_000 #tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
-    filenames = get_filenames(railroad)
-    adj_matrix = sparse.load_npz(filenames[0])
-    state_transition_graph = nx.read_gexf(filenames[2])
-    with open(filenames[3], 'r') as f:
-        stg_values = json.load(f)
+    #filenames = get_filenames(railroad)
+    #adj_matrix = sparse.load_npz(filenames[0])
+    #state_transition_graph = nx.read_gexf(filenames[2])
+    #with open(filenames[3], 'r') as f:
+    #    stg_values = json.load(f)
+
+    get_state_transition_graph(railroad)
+    exit()
+
+    stg_values = preparedness_efficient(adj_matrix, 0.5,
+                                        min_num_hops=1, max_num_hops=3,
+                                        compressed_matrix=True, existing_stg_values=stg_values,
+                                        progress_bar=True)
+    with open(filenames[3], 'w') as f:
+        json.dump(stg_values, f)
+    nx.set_node_attributes(state_transition_graph, stg_values)
+    nx.write_gexf(state_transition_graph, filenames[2])
+    exit()
 
     state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adj_matrix, state_transition_graph,
                                                                      stg_values,
-                                                                     min_hops=2, max_hop=8)
-    aggregate_graph = preparedness_aggregate_graph(taxicab, adj_matrix, state_transition_graph, stg_values,
+                                                                     min_hops=1, max_hop=8)
+    aggregate_graph = preparedness_aggregate_graph(railroad, adj_matrix, state_transition_graph, stg_values,
                                                    preparedness_subgoals, beta=0.5)
     with open(filenames[3], 'w') as f:
         json.dump(stg_values, f)

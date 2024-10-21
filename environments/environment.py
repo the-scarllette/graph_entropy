@@ -1,4 +1,5 @@
 import copy
+import networkx as nx
 import numpy as np
 
 from progressbar import print_progress_bar
@@ -142,8 +143,15 @@ class Environment:
 
         if compressed_matrix:
             adj_matrix = adj_matrix.tocsr()
+            state_transition_graph = nx.from_scipy_sparse_array(adj_matrix, create_using=nx.MultiDiGraph)
+        else:
+            state_transition_graph = nx.from_numpy_array(adj_matrix, create_using=nx.MultiDiGraph)
 
-        return adj_matrix, all_states
+        stg_values = {str(node) : {'state': np.array2string(all_states[node])}
+                      for node in range(adj_matrix.shape[0])}
+        nx.set_node_attributes(state_transition_graph, stg_values)
+
+        return adj_matrix, state_transition_graph, stg_values
 
     def get_current_state(self):
         return None
