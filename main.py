@@ -467,7 +467,7 @@ def get_filenames(env: Environment):
     stg_values_filename = env.environment_name + '_stg_values.json'
     agent_directory = env.environment_name + '_agents'
     results_directory = env.environment_name + '_episode_results'
-    preparedness_aggregate_graph = env.environment_name + '_preparedness_aggregate_graph'
+    preparedness_aggregate_graph = env.environment_name + '_preparedness_aggregate_graph.gexf'
     return {'adjacency matrix': adj_matrix_filename,
             'all states': all_states_filename,
             'state transition graph': stg_filename,
@@ -658,10 +658,11 @@ def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5,
             elif hops == min_hops:
                 stg_values[node][subgoal_level_key] = 'None'
 
-        if hops > min_hops and subgoals[hops - 1] == subgoals[hops]:
+        if hops > min_hops and (subgoals[hops - 1] == subgoals[hops] or subgoals[hops] == []):
             break
         hops += 1
 
+    pass
     subgoals[hops - 1] = subgoals[hops].copy()
     subgoals[hops] = []
     hops -= 1
@@ -2215,6 +2216,18 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adj_matrix,
+                                                                                            state_transition_graph,
+                                                                                            stg_values,
+                                                                                            min_hops=1, max_hop=6)
+    aggregate_graph = preparedness_aggregate_graph(railroad, adj_matrix, state_transition_graph, stg_values,
+                                                   preparedness_subgoals, beta=0.5)
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    nx.write_gexf(aggregate_graph, filenames['preparedness aggregate graph'])
+    exit()
+
     stg_values = preparedness_efficient(adj_matrix, 0.5,
                                         min_num_hops=4, max_num_hops=4, compressed_matrix=True,
                                         existing_stg_values=stg_values,
@@ -2223,17 +2236,6 @@ if __name__ == "__main__":
         json.dump(stg_values, f)
     nx.set_node_attributes(state_transition_graph, stg_values)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    exit()
-
-    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adj_matrix, state_transition_graph,
-                                                                     stg_values,
-                                                                     min_hops=1, max_hop=3)
-    aggregate_graph = preparedness_aggregate_graph(railroad, adj_matrix, state_transition_graph, stg_values,
-                                                   preparedness_subgoals, beta=0.5)
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    nx.write_gexf(aggregate_graph, railroad.environment_name + '_preparedness_aggregate_graph.gexf')
     exit()
 
     data = graphing.extract_data(filenames[5])
