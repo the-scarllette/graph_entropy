@@ -1,5 +1,6 @@
 import networkx as nx
 import numpy as np
+import random as rand
 from scipy import sparse
 from typing import Callable, Dict, List, Type
 
@@ -14,7 +15,7 @@ class PreparednessOption(Option):
     def __init__(self, actions: List[Option] | List[int], start_node: None | str, end_node: None | str,
                  start_state_str: str, end_state_str: str,
                  hierarchy_level: int,
-                 initiation_func: Callable[[np.ndarry], bool],
+                 initiation_func: Callable[[np.ndarray], bool],
                  primitive_actions: bool,
                  alpha: float, epsilon: float, gamma: float):
         self.actions = actions
@@ -83,6 +84,7 @@ class PreparednessAgent(LearningAgent):
 
         self.specific_onboarding_possible = None
         self.options = []
+        self.primitive_options = [Option([action]) for action in self.actions]
         self.options_between_subgoals = {}
         self.generic_onboarding_option = None
         self.specific_onboarding_options = {}
@@ -90,12 +92,39 @@ class PreparednessAgent(LearningAgent):
         self.specific_onboarding_subgoal_options = []
         self.state_node_lookup = {}
         self.path_lookup = {node: {} for node in self.state_transition_graph.nodes()}
+
+        self.current_step = 0
+        self.current_option = None
+        self.current_option_index = None
+        self.option_start_state = None
+        self.total_option_reward = 0
+        self.current_option_step = 0
+        self.state_option_values = {'none': {}, 'generic': {}, 'specific': {}}
+        self.state_option_values_no_onboarding = {}
+        self.state_option_values_generic_onboarding = {}
+        self.state_option_values_specific_onboarding = {}
         return
 
+    # TODO: Finish choose action function
     def choose_action(self, state, optimal_choice=False, possible_actions=None):
-        return
+        if self.current_option is None:
+            self.current_option = self.choose_option(state, optimal_choice, possible_actions)
+            if self.current_option is None:
+                return None
 
-    def choose_option(self):
+        try:
+            if self.current_option.policy.current_option.terminated(state):
+                self.current_option.policy.current_option = None
+        except AttributeError:
+            ()
+
+        if self.current_option.has_policy():
+            chosen_action = self.current_option.choose_action(state, possible_actions)
+        else:
+            chosen_action = self.current_option.actions[self.current_option_step]
+
+        self.current_option_step += 1
+        return chosen_action
 
     def copy_agent(self, copy_from):
         return
@@ -198,6 +227,18 @@ class PreparednessAgent(LearningAgent):
               terminal=None, next_state_possible_actions=None):
         return
 
+    def get_state_option_values(self, state: np.ndarray, available_options: None | List[Option]) -> Dict[int, float]:
+        state_str = np.array2string(state.astype(self.state_dtype))
+
+        try:
+            option_values = self.state_option_values[self.option_onboarding][state_str]
+        except KeyError:
+            if available_options is None:
+                available_options = self.get_available_options(state)
+            option_values = {option: 0.0 for option in available_options}
+            self.state_option_values[self.option_onboarding][state_str] = option_values
+        return option_values
+
     def has_path_to_node(self, state: np.ndarray, goal_node: str):
         state_str = np.array2string(state)
 
@@ -227,7 +268,6 @@ class PreparednessAgent(LearningAgent):
         if not self.specific_onboarding_possible:
             raise AttributeError("Specific Onboarding not possible in this domain, use generic or no onboarding")
         self.options += list(self.specific_onboarding_options.values()) + self.specific_onboarding_subgoal_options
-
         return
 
     def train_options(self, ):
