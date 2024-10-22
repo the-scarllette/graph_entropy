@@ -50,8 +50,10 @@ class PreparednessAgent(LearningAgent):
 
     def __init__(self, actions: List[int], alpha: float, epsilon: float, gamma: float, state_dtype: Type,
                  state_transition_graph: nx.MultiDiGraph,
-                 aggregate_graph: nx.MultiDiGraph):
+                 aggregate_graph: nx.MultiDiGraph,
+                 option_onboarding: str):
         assert actions is not None
+        assert option_onboarding == 'none' or option_onboarding == 'specific' or option_onboarding == 'generic'
 
         self.actions = actions
         self.alpha = alpha
@@ -60,6 +62,7 @@ class PreparednessAgent(LearningAgent):
         self.state_dtype = state_dtype
         self.state_transition_graph = state_transition_graph
         self.aggregate_graph = aggregate_graph
+        self.option_onboarding = option_onboarding
 
         self.min_subgoal_level = np.inf
         self.max_subgoal_level = -np.inf
@@ -79,7 +82,8 @@ class PreparednessAgent(LearningAgent):
                 self.max_subgoal_level = subgoal_level_int
 
         self.specific_onboarding_possible = None
-        self.options = {}
+        self.options = []
+        self.options_between_subgoals = {}
         self.generic_onboarding_option = None
         self.specific_onboarding_options = {}
         self.generic_onboarding_subgoal_options = []
@@ -91,11 +95,13 @@ class PreparednessAgent(LearningAgent):
     def choose_action(self, state, optimal_choice=False, possible_actions=None):
         return
 
+    def choose_option(self):
+
     def copy_agent(self, copy_from):
         return
 
     def create_option(self, start_node: None | str, end_node: str, start_state_str: None | str, end_state_str: str,
-                      hierarchy_level: int, options: None | List[PreparednessOption]=None):
+                      hierarchy_level: int, options: None | List[PreparednessOption]=None) -> PreparednessOption:
         primitive_actions = hierarchy_level <= 1
         if primitive_actions:
             options = self.actions#
@@ -107,13 +113,13 @@ class PreparednessAgent(LearningAgent):
                                     self.alpha, self.epsilon, self.gamma)
         return option
 
-    def create_options(self, environment: Environment):
+    def create_options(self, environment: Environment) -> None:
         # An option from subgoals i -> j is in level k where k is the length of shortest path from i -> j in the
         # aggregate graph. If there is no such path, then there is no such option.
 
         aggregate_graph_distances = nx.floyd_warshall_numpy(self.aggregate_graph)
         max_option_level = np.max(aggregate_graph_distances)
-        self.options = {str(i): [] for i in range(1, max_option_level + 1)}
+        self.options_between_subgoals = {str(i): [] for i in range(1, max_option_level + 1)}
         options_for_option = []
 
         # Options Between Subgoals
@@ -126,8 +132,8 @@ class PreparednessAgent(LearningAgent):
                     end_node_str = self.aggregate_graph[end_node]['state']
                     option = self.create_option(start_node, end_node, start_node_str, end_node_str, k,
                                                 options_for_option)
-                    self.options[str(k)].append(option)
-            options_for_option += self.options[str(k)]
+                    self.options_between_subgoals[str(k)].append(option)
+            options_for_option += self.options_between_subgoals[str(k)]
 
         # Onboarding Options
         # can vary how options are constructed:
@@ -206,3 +212,22 @@ class PreparednessAgent(LearningAgent):
         return has_path
 
     def save(self, save_path):
+        pass
+
+    def set_onboarding(self, option_onboarding: str) -> None:
+        assert option_onboarding == 'none' or option_onboarding == 'specific' or option_onboarding == 'generic'
+        self.option_onboarding = option_onboarding
+
+        self.options = self.options_between_subgoals
+        if self.option_onboarding == 'none':
+            return
+        if self.option_onboarding == 'generic':
+            self.options += [self.generic_onboarding_option] + self.generic_onboarding_subgoal_options
+            return
+        if not self.specific_onboarding_possible:
+            raise AttributeError("Specific Onboarding not possible in this domain, use generic or no onboarding")
+        self.options += list(self.specific_onboarding_options.values()) + self.specific_onboarding_subgoal_options
+
+        return
+
+    def train_options(self, ):
