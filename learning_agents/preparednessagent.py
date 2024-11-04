@@ -45,7 +45,7 @@ class PreparednessOption(Option):
         return not self.initiation_func(state)
 
 
-class PreparednessAgent(LearningAgent):
+class PreparednessAgent(OptionsAgent):
 
     preparedness_subgoal_key = 'preparedness subgoal level'
 
@@ -226,6 +226,48 @@ class PreparednessAgent(LearningAgent):
               terminal=None, next_state_possible_actions=None):
         return
 
+    def get_available_options(self, state: np.ndarry, possible_actions: None | List[int]=None) -> List[int]:
+        state_str = np.array2string(state.astype(self.state_dtype))
+        available_options = []
+        option_index = 0
+
+        # Primitive Options
+        for primitive_option in self.primitive_options:
+            if (possible_actions is None) or (primitive_option.actions[0] in possible_actions):
+                available_options.append(option_index)
+            option_index += 1
+
+        # Options Between Subgoals
+        for option_level in self.options_between_subgoals:
+            for option in self.options_between_subgoals[option_level]:
+                if option.start_state == state_str:
+                    available_options.append(option_index)
+                option_index += 1
+
+        # Onboarding Options
+        if self.option_onboarding == 'none':
+            return available_options
+        if self.option_onboarding == 'generic':
+            if self.generic_onboarding_option.initiated(state):
+                available_options.append(option_index)
+            option_index += 1
+            subgoal_options = self.generic_onboarding_subgoal_options
+        elif self.option_onboarding == 'specific':
+            for option in self.specific_onboarding_options:
+                if option.initiated(state):
+                    available_options.append(option_index)
+                option_index += 1
+            subgoal_options = self.specific_onboarding_subgoal_options
+
+        # Subgoal Options
+        for option in subgoal_options:
+            if option.initiated(state):
+                available_options.append(option_index)
+            option_index += 1
+
+
+        return available_options
+
     def get_state_option_values(self, state: np.ndarray, available_options: None | List[Option]) -> Dict[int, float]:
         state_str = np.array2string(state.astype(self.state_dtype))
 
@@ -252,6 +294,12 @@ class PreparednessAgent(LearningAgent):
         return has_path
 
     def save(self, save_path):
+        return
+
+    def train_option(self):
+        return
+
+    def train_options(self):
         pass
 
     def set_onboarding(self, option_onboarding: str) -> None:
