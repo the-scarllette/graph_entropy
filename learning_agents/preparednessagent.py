@@ -126,7 +126,6 @@ class PreparednessAgent(OptionsAgent):
         self.current_option_step += 1
         return chosen_action
 
-    # TODO: Finish Choose Option
     def choose_option(self, state, no_random, possible_actions=None):
         self.current_option_step = 0
         self.option_start_state = state
@@ -137,8 +136,21 @@ class PreparednessAgent(OptionsAgent):
             self.current_option_index = rand.choice(available_options)
             return self.option_index_lookup(self.current_option_index)
 
+        option_values = self.get_state_option_values(state, available_options)
 
-        return
+        ops = [available_options[0]]
+        max_value = option_values[available_options[0]]
+        for i in range(1, len(available_options)):
+            op = available_options[i]
+            value = option_values[op]
+            if value > max_value:
+                max_value = value
+                ops = [op]
+            elif value == max_value:
+                ops.append(op)
+
+        self.current_option_index = rand.choice(ops)
+        return self.option_index_lookup(self.current_option_index)
 
     def copy_agent(self, copy_from):
         return
