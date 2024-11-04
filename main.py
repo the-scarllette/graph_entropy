@@ -2196,7 +2196,7 @@ if __name__ == "__main__":
                       [0, 1, 0]])
     board_name = 'room'
 
-    railroad = RailRoad(3, 3, [(0, 0), (2, 2)], 'choice')
+    tinytown = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
 
     beta = 0.5
     graphing_window = 20
@@ -2210,11 +2210,21 @@ if __name__ == "__main__":
     options_training_timesteps = 10_000
     training_timesteps = 1_000_000 #tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
-    filenames = get_filenames(railroad)
-    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
+    filenames = get_filenames(tinytown)
+    #adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    #state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    #with open(filenames['state transition graph values'], 'r') as f:
+    #    stg_values = json.load(f)
+
+    data = graphing.extract_data(filenames['results'])
+    ordered_data = [data[2], data[0], data[1]]
+    graphing.graph_reward_per_timestep(ordered_data, graphing_window,
+                                       name='Taxicab',
+                                       xlim=[-50, 2500],
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='std')
+    exit()
 
     state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adj_matrix,
                                                                                             state_transition_graph,
@@ -2236,17 +2246,6 @@ if __name__ == "__main__":
         json.dump(stg_values, f)
     nx.set_node_attributes(state_transition_graph, stg_values)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    exit()
-
-    data = graphing.extract_data(filenames[5])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='TinyTown 3x3',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='std',
-                                       labels=[
-                                           'Eigenoptions',
-                                           'Primitives'])
     exit()
 
     agent = BetweennessAgent(simple_wind_gridworld.possible_actions,

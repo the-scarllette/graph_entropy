@@ -105,7 +105,6 @@ class PreparednessAgent(LearningAgent):
         self.state_option_values_specific_onboarding = {}
         return
 
-    # TODO: Finish choose action function
     def choose_action(self, state, optimal_choice=False, possible_actions=None):
         if self.current_option is None:
             self.current_option = self.choose_option(state, optimal_choice, possible_actions)
