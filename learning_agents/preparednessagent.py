@@ -87,6 +87,7 @@ class PreparednessAgent(OptionsAgent):
         self.primitive_options = [Option([action]) for action in self.actions]
         self.options_between_subgoals = {}
         self.generic_onboarding_option = None
+        self.generic_onboarding_index = None
         self.specific_onboarding_options = {}
         self.generic_onboarding_subgoal_options = []
         self.specific_onboarding_subgoal_options = []
@@ -124,6 +125,20 @@ class PreparednessAgent(OptionsAgent):
 
         self.current_option_step += 1
         return chosen_action
+
+    # TODO: Finish Choose Option
+    def choose_option(self, state, no_random, possible_actions=None):
+        self.current_option_step = 0
+        self.option_start_state = state
+
+        available_options = self.get_available_options(state, possible_actions)
+
+        if (not no_random) and (rand.uniform(0, 1) < self.epsilon):
+            self.current_option_index = rand.choice(available_options)
+            return self.option_index_lookup(self.current_option_index)
+
+
+        return
 
     def copy_agent(self, copy_from):
         return
@@ -222,10 +237,6 @@ class PreparednessAgent(OptionsAgent):
             self.state_node_lookup[state_str] = node
         return node
 
-    def learn(self, state, action, reward, next_state,
-              terminal=None, next_state_possible_actions=None):
-        return
-
     def get_available_options(self, state: np.ndarry, possible_actions: None | List[int]=None) -> List[int]:
         state_str = np.array2string(state.astype(self.state_dtype))
         available_options = []
@@ -250,6 +261,7 @@ class PreparednessAgent(OptionsAgent):
         if self.option_onboarding == 'generic':
             if self.generic_onboarding_option.initiated(state):
                 available_options.append(option_index)
+            self.generic_onboarding_index = option_index
             option_index += 1
             subgoal_options = self.generic_onboarding_subgoal_options
         elif self.option_onboarding == 'specific':
@@ -292,6 +304,48 @@ class PreparednessAgent(OptionsAgent):
             self.path_lookup[goal_node][state_str] = str(has_path)
 
         return has_path
+
+    def learn(self, state, action, reward, next_state,
+              terminal=None, next_state_possible_actions=None):
+        return
+
+    def option_index_lookup(self, option_index: int) -> Option:
+        # Generic Onboarding Option
+        if (self.option_onboarding == 'generic') and (option_index == self.generic_onboarding_index):
+            return self.generic_onboarding_option
+
+        # Primitive Options
+        try:
+            option = self.primitive_options[option_index]
+            return option
+        except IndexError:
+            option_index -= len(self.primitive_options)
+
+        # Options Between Subgoals
+        for option_level in self.options_between_subgoals:
+            try:
+                option = self.options_between_subgoals[option_level][option_index]
+                return option
+            except IndexError:
+                option_index -= len(self.options_between_subgoals[option_level])
+
+        if self.option_onboarding == 'none':
+            raise AttributeError("Invalid option in for option onboarding " + self.option_onboarding)
+
+        # Subgoal Options
+        if self.option_onboarding == 'generic':
+            option_index -= 1
+            subgoal_options = self.generic_onboarding_subgoal_options
+        elif self.option_onboarding == 'specific':
+            try:
+                option = self.specific_onboarding_options[option_index]
+                return option
+            except IndexError:
+                option_index -= len(self.specific_onboarding_options)
+                subgoal_options = self.specific_onboarding_subgoal_options
+
+        option = subgoal_options[option_index]
+        return option
 
     def save(self, save_path):
         return
