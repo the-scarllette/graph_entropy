@@ -46,6 +46,13 @@ class PreparednessOption(Option):
             return self.start_state_str == np.array2string(state)
         return self.initiation_func(state)
 
+    def set_state_values(self, state_values: Dict[str, Dict[str, float]]) -> None:
+        if self.hierarchy_level <= 1:
+            self.policy.state_action_values = state_values
+            return
+        self.policy.state_option_values = state_values
+        return
+
     def terminated(self, state: np.ndarray) -> bool:
         if self.end_state_str == np.array2string(state):
             return True
@@ -393,6 +400,22 @@ class PreparednessAgent(OptionsAgent):
 
     # TODO: Make Load method
     def load(self, save_path: str) -> None:
+        with open(save_path, 'r') as f:
+            agent_save_file = json.load(f)
+
+        self.options_between_subgoals = {}
+        options_for_option = []
+        for level, option_list in agent_save_file['options between subgoals']:
+            self.options_between_subgoals[level] = []
+            for option_dict in option_list:
+                option = self.create_option(option_dict['start node'], option_dict['end node'],
+                                            option_dict['start state str'], option_dict['end state str'],
+                                            int(option_dict['hierarchy level']), options_for_option)
+                o
+                self.options_between_subgoals[level].append(option)
+            options_for_option += self.options_between_subgoals[level]
+
+        self.generic_onboarding_option = Option
         return
 
     def option_index_lookup(self, option_index: int) -> Option:
@@ -434,13 +457,14 @@ class PreparednessAgent(OptionsAgent):
         return option
 
     def save(self, save_path: str) -> None:
-        agent_save_file = {'options between subgoals': [{'start node': option.start_node,
+        agent_save_file = {'options between subgoals': {level: [{'start node': option.start_node,
                                                          'end node': option.end_node,
                                                          'start state str': option.start_state_str,
                                                          'end state str': option.end_state_str,
                                                          'hierarchy level': option.hierarchy_level,
                                                          'policy': option.get_state_values()
-                                                         } for option in self.options_between_subgoals],
+                                                         } for option in self.options_between_subgoals[level]]
+                                                        for level in self.options_between_subgoals},
                            'generic onboarding option': {'policy':
                                                              self.generic_onboarding_option.policy.state_action_values},
                            'specific onboarding options': [{'end node': option.end_node,
