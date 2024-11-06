@@ -325,9 +325,67 @@ class PreparednessAgent(OptionsAgent):
 
         return has_path
 
-    # TODO: Make Learn method
     def learn(self, state, action, reward, next_state,
               terminal=None, next_state_possible_actions=None):
+        # Q(s, o) = Q(s, o) + \alpha(r - Q(s, o) + \gamma((1 - \beta)Q(s_prime, o) + \beta(MAXQ(s_prime, o_prime)))))
+        # if terminal in next_state:
+        # Q(s, o) = Q(s, o) + \alpha(r - Q(s, o) + \gamma*Max(Q(next_state, o_prime)))
+        # if not terminal in next_state:
+        # Q(s, o) = Q(s, o) + \alpha*(r - Q(s, o) + \gamma*Q(s_prime, o)
+
+        state_str = np.array2string(state.astype(self.state_dtype))
+
+        available_options = self.get_available_options(state, self.last_possible_actions)
+        state_option_values = self.get_state_option_values(state, available_options)
+
+        next_available_options = []
+        if not terminal:
+            next_available_options = self.get_available_options(next_state, next_state_possible_actions)
+
+        next_state_option_values_list = [0.0]
+        next_state_option_values = self.get_state_option_values(next_state)
+        if next_available_options:
+            next_state_option_values_list = [next_state_option_values[option] for option in next_available_options]
+
+        max_next_state_option_value = max(next_state_option_values_list)
+
+        for option in available_options:
+            if option.has_policy():
+                train_option = option.choose_action(state, self.last_possible_actions) == action
+                try:
+                    reset_inner_option_policy = option.policy.current_option is None
+                except AttributeError:
+                    reset_inner_option_policy = False
+            else:
+                train_option = option.actions[0] == action
+                reset_inner_option_policy = False
+
+            if train_option:
+                if reset_inner_option_policy:
+                    option.policy.current_option = None
+
+                gamma_product = max_next_state_option_value
+                if not option.terminated(next_state):
+                    try:
+                        gamma_product = next_state_option_values[option]
+                    except KeyError:
+                        gamma_product = max_next_state_option_value
+
+                self.state_option_values[state_str][option] += self.alpha * (reward - state_option_values[option] +
+                                                                             self.gamma * gamma_product)
+
+        if not (terminal or self.current_option.terminated(next_state)):
+            return
+
+        option_value = self.get_state_option_values(self.option_start_state)[self.current_option]
+        option_start_state_str = np.array2string(self.option_start_state.astype(self.state_dtype))
+        self.state_option_values[option_start_state_str][self.current_option] \
+            += self.alpha * (self.total_option_reward + (self.gamma ** self.current_option_step) *
+                             max_next_state_option_value
+                             - option_value)
+        self.current_option = None
+        self.option_start_state = None
+        self.total_option_reward = 0
         return
 
     # TODO: Make Load method
