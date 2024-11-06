@@ -433,23 +433,35 @@ class PreparednessAgent(OptionsAgent):
         option = subgoal_options[option_index]
         return option
 
-    # TODO: Make Save method
     def save(self, save_path: str) -> None:
         agent_save_file = {'options between subgoals': [{'start node': option.start_node,
                                                          'end node': option.end_node,
                                                          'start state str': option.start_state_str,
                                                          'end state str': option.end_state_str,
                                                          'hierarchy level': option.hierarchy_level,
-                                                         'policy': option.policy.
+                                                         'policy': option.get_state_values()
                                                          } for option in self.options_between_subgoals],
-                           'generic onboarding option': {},
-                           'specific onboarding options': [],
-                           'generic onboarding subgoal options': [],
-                           'specific onboarding subgoal options': []
-                           'state node lookup': {},
-                           'path lookup': {},
-                           'environment start states str': {},
-                           'state option values': {}}
+                           'generic onboarding option': {'policy':
+                                                             self.generic_onboarding_option.policy.state_action_values},
+                           'specific onboarding options': [{'end node': option.end_node,
+                                                            'end state str': option.end_state_str,
+                                                            'policy': option.get_state_values()}
+                                                           for option in self.specific_onboarding_options],
+                           'generic onboarding subgoal options': [{'end node': option.end_node,
+                                                                   'end state str': option.end_state_str,
+                                                                   'policy': option.get_state_values()}
+                                                                  for option in self.generic_onboarding_subgoal_options],
+                           'specific onboarding subgoal options': [{'end node': option.end_node,
+                                                                    'end state str': option.end_state_str,
+                                                                    'policy': option.get_state_values()}
+                                                                   for option in self.specific_onboarding_subgoal_options],
+                           'state node lookup': self.state_node_lookup,
+                           'path lookup': self.path_lookup,
+                           'environment start states str': self.environment.start_states_str,
+                           'state option values': self.state_option_values}
+
+        with open(save_path, 'w') as f:
+            json.dump(agent_save_file, f)
         return
 
     def set_onboarding(self, option_onboarding: str) -> None:
