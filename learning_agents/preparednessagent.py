@@ -36,6 +36,11 @@ class PreparednessOption(Option):
         self.has_policy = True
         return
 
+    def get_state_values(self) -> Dict[str, Dict[str, float]]:
+        if self.hierarchy_level <= 1:
+            return self.policy.state_action_values
+        return self.policy.state_option_values
+
     def initiated(self, state: np.ndarray) -> bool:
         if self.start_node is not None:
             return self.start_state_str == np.array2string(state)
@@ -430,8 +435,14 @@ class PreparednessAgent(OptionsAgent):
 
     # TODO: Make Save method
     def save(self, save_path: str) -> None:
-        agent_save_file = {'options between subgoals': [],
-                           'generic onboarding option': None,
+        agent_save_file = {'options between subgoals': [{'start node': option.start_node,
+                                                         'end node': option.end_node,
+                                                         'start state str': option.start_state_str,
+                                                         'end state str': option.end_state_str,
+                                                         'hierarchy level': option.hierarchy_level,
+                                                         'policy': option.policy.
+                                                         } for option in self.options_between_subgoals],
+                           'generic onboarding option': {},
                            'specific onboarding options': [],
                            'generic onboarding subgoal options': [],
                            'specific onboarding subgoal options': []
