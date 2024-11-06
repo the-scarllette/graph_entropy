@@ -8,12 +8,13 @@ from environments.environment import Environment
 from optionsagent import Option, OptionsAgent
 from learningagent import LearningAgent
 from qlearningagent import QLearningAgent
+from progressbar import print_progress_bar
 
 
 class PreparednessOption(Option):
 
     def __init__(self, actions: List[Option] | List[int], start_node: None | str, end_node: None | str,
-                 start_state_str: str, end_state_str: str,
+                 start_state_str: None | str, end_state_str: str,
                  hierarchy_level: int,
                  initiation_func: Callable[[np.ndarray], bool],
                  primitive_actions: bool,
@@ -46,6 +47,10 @@ class PreparednessOption(Option):
 
 
 class PreparednessAgent(OptionsAgent):
+
+    option_failure_reward = -1.0
+    option_step_reward = -0.001
+    option_success_reward = 1.0
 
     preparedness_subgoal_key = 'preparedness subgoal level'
 
@@ -93,6 +98,8 @@ class PreparednessAgent(OptionsAgent):
         self.specific_onboarding_subgoal_options = []
         self.state_node_lookup = {}
         self.path_lookup = {node: {} for node in self.state_transition_graph.nodes()}
+
+        self.environment_start_states_str = None
 
         self.current_step = 0
         self.current_option = None
@@ -159,7 +166,7 @@ class PreparednessAgent(OptionsAgent):
                       hierarchy_level: int, options: None | List[PreparednessOption]=None) -> PreparednessOption:
         primitive_actions = hierarchy_level <= 1
         if primitive_actions:
-            options = self.actions#
+            options = self.actions
 
         option = PreparednessOption(options, start_node, end_node,
                                     start_state_str, end_state_str, hierarchy_level,
@@ -198,10 +205,11 @@ class PreparednessAgent(OptionsAgent):
         # navigates to one of these nodes (only available in some cases)
 
         # Generic Onboarding
-        start_states = [np.array2string(state) for state in environment.get_start_states()]
+        self.environment_start_states_str = [np.array2string(state) for state in environment.get_start_states()]
         self.generic_onboarding_option = Option(policy=QLearningAgent(self.actions,
                                                                       self.alpha, self.epsilon, self.gamma),
-                                                initiation_func=lambda s: np.array2string(s) in start_states,
+                                                initiation_func=lambda s: np.array2string(s) in
+                                                                          self.environment_start_states_str,
                                                 terminating_func=lambda s: self.get_state_node(s) in self.subgoal_list)
         # Specific Onboarding
         self.specific_onboarding_possible = False
@@ -263,7 +271,7 @@ class PreparednessAgent(OptionsAgent):
         # Options Between Subgoals
         for option_level in self.options_between_subgoals:
             for option in self.options_between_subgoals[option_level]:
-                if option.start_state == state_str:
+                if option.start_state_str == state_str:
                     available_options.append(option_index)
                 option_index += 1
 
@@ -362,12 +370,6 @@ class PreparednessAgent(OptionsAgent):
     def save(self, save_path):
         return
 
-    def train_option(self):
-        return
-
-    def train_options(self):
-        pass
-
     def set_onboarding(self, option_onboarding: str) -> None:
         assert option_onboarding == 'none' or option_onboarding == 'specific' or option_onboarding == 'generic'
         self.option_onboarding = option_onboarding
@@ -383,4 +385,108 @@ class PreparednessAgent(OptionsAgent):
         self.options += list(self.specific_onboarding_options.values()) + self.specific_onboarding_subgoal_options
         return
 
-    def train_options(self, ):
+    def train_option(self, option: Option, environment: Environment,
+                     training_timesteps: int,
+                     option_start_states: List[np.ndarray],
+                     option_success_states: List[str],
+                     all_actions_possible: bool=False,
+                     progress_bar: bool=False) -> None:
+        # Getting Start States
+        terminated = True
+        possible_actions = self.actions
+
+        for current_timesteps in range(training_timesteps):
+            if progress_bar:
+                print_progress_bar(current_timesteps, training_timesteps,
+                                   '            >')
+
+            if terminated:
+                option_initiated = False
+                while not option_initiated:
+                    state = rand.choice(option_start_states)
+                    state = environment.reset(state)
+                    option_initiated = option.initiated(state)
+                terminated = False
+                if not all_actions_possible:
+                    possible_actions = environment.get_possible_actions(state)
+
+            action = option.choose_action(state, possible_actions)
+
+            next_state, _, terminated, _ = environment.step(action)
+
+            next_state_str = np.array2string(next_state.astype(self.state_dtype))
+
+            reward = self.option_step_reward
+            if next_state_str in option_success_states:
+                terminated = True
+                reward = self.option_success_reward
+            elif terminated or option.terminated(next_state):
+                terminated = True
+                reward = self.option_failure_reward
+
+            if not all_actions_possible:
+                possible_actions = environment.get_possible_actions(next_state)
+
+            option.policy.learn(state, action, reward, next_state, terminated, possible_actions)
+
+            state = next_state
+
+        return
+
+    def train_options(self, environment: Environment,
+                      training_timesteps: int,
+                      all_actions_possible: bool=False,
+                      progress_bar: bool=False) -> None:
+
+        # Options between subgoals
+        if progress_bar:
+            print("Training Options Between Subgoals")
+        for level in self.options_between_subgoals:
+            if progress_bar:
+                print("     Training Options at level: " + level)
+            for option in self.options_between_subgoals[level]:
+                if progress_bar:
+                    print("         Option: " + option.start_node + " -> " + option.end_node)
+                start_states = [self.state_str_to_state(option.start_state_str)]
+                success_states = [self.state_str_to_state(option.end_state_str)]
+                self.train_option(option, environment, training_timesteps,
+                                  start_states, success_states,
+                                  all_actions_possible, progress_bar)
+
+        # Onboarding Options
+        if progress_bar:
+            print("Training Generic Onboarding options")
+        start_states = [self.state_str_to_state(state) for state in self.environment_start_states_str]
+        success_states = [self.state_str_to_state(self.aggregate_graph[subgoal_node]['state'])
+                          for subgoal_node in self.subgoal_list]
+        self.train_option(self.generic_onboarding_option, environment, training_timesteps,
+                          start_states, success_states,
+                          all_actions_possible, progress_bar)
+        if progress_bar:
+            print("Training Specific Onboarding Options")
+        for option in self.specific_onboarding_options:
+            if progress_bar:
+                print("     Option towards state: " + option.end_node)
+            self.train_option(option, environment, training_timesteps,
+                              start_states, [self.state_str_to_state(option.end_state_str)],
+                              all_actions_possible, progress_bar)
+
+        # Subgoal Options
+        if progress_bar:
+            print("Training Generic Subgoal Options")
+        for option in self.generic_onboarding_subgoal_options:
+            if progress_bar:
+                print("     Options towards state: " + option.end_node)
+            self.train_option(option, environment, training_timesteps,
+                              start_states, [self.state_str_to_state(option.end_state_str)],
+                              all_actions_possible, progress_bar)
+        if progress_bar:
+            print("Training Specific Subgoal Options")
+        for option in self.specific_onboarding_subgoal_options:
+            if progress_bar:
+                print("     Option towards state: " + option.end_node)
+            self.train_option(option, environment, training_timesteps,
+                              start_states, [self.state_str_to_state(option.end_state_str)],
+                              all_actions_possible, progress_bar)
+
+        return
