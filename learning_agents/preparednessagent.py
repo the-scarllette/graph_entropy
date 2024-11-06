@@ -1,3 +1,4 @@
+import json
 import networkx as nx
 import numpy as np
 import random as rand
@@ -108,9 +109,6 @@ class PreparednessAgent(OptionsAgent):
         self.total_option_reward = 0
         self.current_option_step = 0
         self.state_option_values = {'none': {}, 'generic': {}, 'specific': {}}
-        self.state_option_values_no_onboarding = {}
-        self.state_option_values_generic_onboarding = {}
-        self.state_option_values_specific_onboarding = {}
         return
 
     def choose_action(self, state, optimal_choice=False, possible_actions=None):
@@ -371,15 +369,15 @@ class PreparednessAgent(OptionsAgent):
                     except KeyError:
                         gamma_product = max_next_state_option_value
 
-                self.state_option_values[state_str][option] += self.alpha * (reward - state_option_values[option] +
-                                                                             self.gamma * gamma_product)
+                self.state_option_values[self.option_onboarding][state_str][option] +=(
+                        self.alpha * (reward - state_option_values[option] + self.gamma * gamma_product))
 
         if not (terminal or self.current_option.terminated(next_state)):
             return
 
         option_value = self.get_state_option_values(self.option_start_state)[self.current_option]
         option_start_state_str = np.array2string(self.option_start_state.astype(self.state_dtype))
-        self.state_option_values[option_start_state_str][self.current_option] \
+        self.state_option_values[self.option_onboarding][option_start_state_str][self.current_option] \
             += self.alpha * (self.total_option_reward + (self.gamma ** self.current_option_step) *
                              max_next_state_option_value
                              - option_value)
@@ -389,7 +387,7 @@ class PreparednessAgent(OptionsAgent):
         return
 
     # TODO: Make Load method
-    def load(self, save_path):
+    def load(self, save_path: str) -> None:
         return
 
     def option_index_lookup(self, option_index: int) -> Option:
@@ -431,7 +429,16 @@ class PreparednessAgent(OptionsAgent):
         return option
 
     # TODO: Make Save method
-    def save(self, save_path):
+    def save(self, save_path: str) -> None:
+        agent_save_file = {'options between subgoals': [],
+                           'generic onboarding option': None,
+                           'specific onboarding options': [],
+                           'generic onboarding subgoal options': [],
+                           'specific onboarding subgoal options': []
+                           'state node lookup': {},
+                           'path lookup': {},
+                           'environment start states str': {},
+                           'state option values': {}}
         return
 
     def set_onboarding(self, option_onboarding: str) -> None:
