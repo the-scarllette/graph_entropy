@@ -325,8 +325,13 @@ class PreparednessAgent(OptionsAgent):
 
         return has_path
 
+    # TODO: Make Learn method
     def learn(self, state, action, reward, next_state,
               terminal=None, next_state_possible_actions=None):
+        return
+
+    # TODO: Make Load method
+    def load(self, save_path):
         return
 
     def option_index_lookup(self, option_index: int) -> Option:
@@ -367,6 +372,7 @@ class PreparednessAgent(OptionsAgent):
         option = subgoal_options[option_index]
         return option
 
+    # TODO: Make Save method
     def save(self, save_path):
         return
 
