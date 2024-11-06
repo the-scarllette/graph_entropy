@@ -325,8 +325,8 @@ class PreparednessAgent(OptionsAgent):
 
         return has_path
 
-    def learn(self, state, action, reward, next_state,
-              terminal=None, next_state_possible_actions=None):
+    def learn(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray,
+              terminal: None | bool=None, next_state_possible_actions: None | List[int]=None) -> None:
         # Q(s, o) = Q(s, o) + \alpha(r - Q(s, o) + \gamma((1 - \beta)Q(s_prime, o) + \beta(MAXQ(s_prime, o_prime)))))
         # if terminal in next_state:
         # Q(s, o) = Q(s, o) + \alpha(r - Q(s, o) + \gamma*Max(Q(next_state, o_prime)))
