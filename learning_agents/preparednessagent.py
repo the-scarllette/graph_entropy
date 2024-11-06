@@ -411,11 +411,17 @@ class PreparednessAgent(OptionsAgent):
                 option = self.create_option(option_dict['start node'], option_dict['end node'],
                                             option_dict['start state str'], option_dict['end state str'],
                                             int(option_dict['hierarchy level']), options_for_option)
-                o
+                option.set_state_values(option_dict['policy'])
                 self.options_between_subgoals[level].append(option)
             options_for_option += self.options_between_subgoals[level]
 
-        self.generic_onboarding_option = Option
+        self.environment_start_states_str = agent_save_file['environment start states']
+        self.generic_onboarding_option = Option(policy=QLearningAgent(self.actions,
+                                                                      self.alpha, self.epsilon, self.gamma),
+                                                initiation_func=lambda s: np.array2string(s) in
+                                                                          self.environment_start_states_str,
+                                                terminating_func=lambda s: self.get_state_node(s) in self.subgoal_list)
+        self.generic_onboarding_option.state_action_values = agent_save_file['generic onboarding option']['policy']
         return
 
     def option_index_lookup(self, option_index: int) -> Option:
