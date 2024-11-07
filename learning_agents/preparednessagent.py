@@ -109,7 +109,7 @@ class PreparednessAgent(OptionsAgent):
         self.generic_onboarding_subgoal_options = []
         self.specific_onboarding_subgoal_options = []
         self.state_node_lookup = {}
-        self.path_lookup = {node: {} for node, _ in self.state_transition_graph.nodes()}
+        self.path_lookup = {node: {} for node in self.state_transition_graph.nodes()}
 
         self.environment_start_states_str = None
 
