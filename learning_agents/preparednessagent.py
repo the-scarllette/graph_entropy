@@ -105,7 +105,7 @@ class PreparednessAgent(OptionsAgent):
         self.options_between_subgoals = {}
         self.generic_onboarding_option = None
         self.generic_onboarding_index = None
-        self.specific_onboarding_options = {}
+        self.specific_onboarding_options = []
         self.generic_onboarding_subgoal_options = []
         self.specific_onboarding_subgoal_options = []
         self.state_node_lookup = {}
@@ -569,7 +569,7 @@ class PreparednessAgent(OptionsAgent):
             return
         if not self.specific_onboarding_possible:
             raise AttributeError("Specific Onboarding not possible in this domain, use generic or no onboarding")
-        self.options += list(self.specific_onboarding_options.values()) + self.specific_onboarding_subgoal_options
+        self.options += self.specific_onboarding_options + self.specific_onboarding_subgoal_options
         return
 
     def train_option(self, option: Option, environment: Environment,
