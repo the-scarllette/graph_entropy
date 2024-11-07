@@ -223,8 +223,10 @@ class PreparednessAgent(OptionsAgent):
                                                 terminating_func=lambda s: self.get_state_node(s) in self.subgoal_list)
         # Specific Onboarding
         self.specific_onboarding_possible = False
+        specific_onboarding_nodes = []
         for node in self.aggregate_graph.nodes(data=True):
             if len(self.aggregate_graph.in_egdes(node)) <= 0:
+                specific_onboarding_nodes.append(node)
                 self.specific_onboarding_possible = True
                 node_str = self.aggregate_graph[node]['state']
                 option = self.create_option(None, node, None, node_str, 1)
@@ -248,12 +250,12 @@ class PreparednessAgent(OptionsAgent):
             return
         options_for_specific_onboarding_subgoal_option = options_for_option + self.specific_onboarding_options
         for node in self.aggregate_graph.nodes(data=True):
-            if node in self.specific_onboarding_subgoal_options.keys():
+            if node in specific_onboarding_nodes:
                 continue
             node_str = self.aggregate_graph[node]['state']
             option = self.create_option(None, node, None, node_str, max_option_level + 1,
                                         options_for_specific_onboarding_subgoal_option)
-            self.specific_oboarding_subgoal_options.append(option)
+            self.specific_onboarding_subgoal_options.append(option)
         return
 
     def get_state_node(self, state: np.ndarray) -> str:
@@ -398,7 +400,6 @@ class PreparednessAgent(OptionsAgent):
         self.total_option_reward = 0
         return
 
-    # TODO: Make Load method
     def load(self, save_path: str) -> None:
         with open(save_path, 'r') as f:
             agent_save_file = json.load(f)
@@ -422,6 +423,40 @@ class PreparednessAgent(OptionsAgent):
                                                                           self.environment_start_states_str,
                                                 terminating_func=lambda s: self.get_state_node(s) in self.subgoal_list)
         self.generic_onboarding_option.state_action_values = agent_save_file['generic onboarding option']['policy']
+
+        self.specific_onboarding_options = []
+        for option_dict in agent_save_file['specific onboarding options']:
+            option = self.create_option(None, option_dict['end node'],
+                                        None, option_dict['end state str'],
+                                        1)
+            option.set_state_values(option_dict['policy'])
+            self.specific_onboarding_options.append(option)
+
+        self.generic_onboarding_subgoal_options = []
+        options_for_generic_subgoal_options = options_for_option + [self.generic_onboarding_option]
+        max_option_level = int(level) + 1
+        for option_dict in agent_save_file['generic onboarding subgoal options']:
+            option = self.create_option(None, option_dict['end node'],
+                                        None, option_dict['end state str'],
+                                        max_option_level,
+                                        options_for_generic_subgoal_options)
+            option.set_state_values(option_dict['policy'])
+            self.generic_onboarding_subgoal_options.append(option)
+
+        self.specific_onboarding_subgoal_options = []
+        options_for_specific_subgoal_options = options_for_option + self.specific_onboarding_options
+        for option_dict in agent_save_file['specific onboarding subgoal options']:
+            option = self.create_option(None, option_dict['end node'],
+                                        None, option_dict['end state str'],
+                                        max_option_level,
+                                        options_for_specific_subgoal_options)
+            option.set_state_values(option_dict['policy'])
+            self.specific_onboarding_subgoal_options.append(option)
+
+        self.state_node_lookup = agent_save_file['state node lookup']
+        self.path_lookup = agent_save_file['path lookup']
+        self.environment_start_states_str = agent_save_file['environment start states str']
+        self.state_option_values = agent_save_file['state option values']
         return
 
     def option_index_lookup(self, option_index: int) -> Option:
@@ -487,7 +522,7 @@ class PreparednessAgent(OptionsAgent):
                                                                    for option in self.specific_onboarding_subgoal_options],
                            'state node lookup': self.state_node_lookup,
                            'path lookup': self.path_lookup,
-                           'environment start states str': self.environment.start_states_str,
+                           'environment start states str': self.environment_start_states_str,
                            'state option values': self.state_option_values}
 
         with open(save_path, 'w') as f:
