@@ -169,6 +169,7 @@ class PreparednessAgent(OptionsAgent):
         self.current_option_index = rand.choice(ops)
         return self.option_index_lookup(self.current_option_index)
 
+    # TODO: Create copy_agent method
     def copy_agent(self, copy_from):
         return
 
