@@ -92,6 +92,7 @@ class TinyTown(Environment):
                                 str(len(self.resources)) + "x" + str(self.width) + "x" + str(self.height)
 
         self.state_dtype = int
+        self.state_shape = (self.width + 1, self.height + 1)
         self.available_actions = {}
         return
 

@@ -2198,7 +2198,8 @@ if __name__ == "__main__":
     #    stg_values = json.load(f)
 
     preparedness_agent = PreparednessAgent(tinytown.possible_actions,
-                                           0.9, 0.1, 0.9, tinytown.state_dtype,
+                                           0.9, 0.1, 0.9,
+                                           tinytown.state_dtype, tinytown.state_shape,
                                            state_transition_graph, preparedness_aggregate_graph,
                                            option_onboarding='none')
 

@@ -3,7 +3,7 @@ import json
 import networkx as nx
 import numpy as np
 import random as rand
-from typing import Callable, Dict, List, Type
+from typing import Callable, Dict, List, Tuple, Type
 
 from environments.environment import Environment
 from learning_agents.optionsagent import Option, OptionsAgent
@@ -67,6 +67,7 @@ class PreparednessAgent(OptionsAgent):
     preparedness_subgoal_key = 'preparedness subgoal level'
 
     def __init__(self, actions: List[int], alpha: float, epsilon: float, gamma: float, state_dtype: Type,
+                 state_shape: Tuple[int, int],
                  state_transition_graph: nx.MultiDiGraph,
                  aggregate_graph: nx.MultiDiGraph,
                  option_onboarding: str):
@@ -78,6 +79,7 @@ class PreparednessAgent(OptionsAgent):
         self.epsilon = epsilon
         self.gamma = gamma
         self.state_dtype = state_dtype
+        self.state_shape = state_shape
         self.state_transition_graph = state_transition_graph
         self.aggregate_graph = aggregate_graph
         self.option_onboarding = option_onboarding
