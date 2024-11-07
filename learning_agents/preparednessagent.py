@@ -170,7 +170,6 @@ class PreparednessAgent(OptionsAgent):
         self.current_option_index = rand.choice(ops)
         return self.option_index_lookup(self.current_option_index)
 
-    # TODO: Create copy_agent method
     def copy_agent(self, copy_from: 'PreparednessAgent') -> None:
         self.specific_onboarding_possible = copy_from.specific_onboarding_possible
         self.options = copy.deepcopy(copy_from.options)
@@ -178,6 +177,20 @@ class PreparednessAgent(OptionsAgent):
         self.options_between_subgoals = copy.deepcopy(copy_from.options_between_subgoals)
         self.generic_onboarding_option = copy.deepcopy(copy_from.generic_onboarding_option)
         self.generic_onboarding_index = copy_from.generic_onboarding_index
+        self.specific_onboarding_options = copy.deepcopy(copy_from.specific_onboarding_options)
+        self.generic_onboarding_subgoal_options = copy.deepcopy(copy_from.generic_onboarding_subgoal_options)
+        self.specific_onboarding_subgoal_options = copy.deepcopy(copy_from.specific_onboarding_subgoal_options)
+        self.state_node_lookup = copy.deepcopy(copy_from.state_node_lookup)
+        self.path_lookup = copy.deepcopy(copy_from.path_lookup)
+        self.environment_start_states_str = copy_from.environment_start_states_str
+        self.state_option_values = copy.deepcopy(copy_from.state_option_values)
+
+        self.current_step = 0
+        self.current_option = None
+        self.current_option_index = None
+        self.option_start_state = None
+        self.total_option_reward = 0
+        self.current_option_step = 0
         return
 
     def create_option(self, start_node: None | str, end_node: str, start_state_str: None | str, end_state_str: str,
