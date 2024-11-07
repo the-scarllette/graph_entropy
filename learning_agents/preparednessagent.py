@@ -3,13 +3,11 @@ import json
 import networkx as nx
 import numpy as np
 import random as rand
-from scipy import sparse
 from typing import Callable, Dict, List, Type
 
 from environments.environment import Environment
-from optionsagent import Option, OptionsAgent
-from learningagent import LearningAgent
-from qlearningagent import QLearningAgent
+from learning_agents.optionsagent import Option, OptionsAgent
+from learning_agents.qlearningagent import QLearningAgent
 from progressbar import print_progress_bar
 
 
@@ -88,8 +86,8 @@ class PreparednessAgent(OptionsAgent):
         self.max_subgoal_level = -np.inf
         self.subgoals = {}
         self.subgoals_list = []
-        for node in self.aggregate_graph.nodes(data=True):
-            subgoal_level = self.aggregate_graph[node[0]][self.preparedness_subgoal_key]
+        for node, values in self.aggregate_graph.nodes(data=True):
+            subgoal_level = values[self.preparedness_subgoal_key]
             try:
                 self.subgoals[subgoal_level].append(node)
             except KeyError:
@@ -211,21 +209,28 @@ class PreparednessAgent(OptionsAgent):
         # aggregate graph. If there is no such path, then there is no such option.
 
         aggregate_graph_distances = nx.floyd_warshall_numpy(self.aggregate_graph)
-        max_option_level = np.max(aggregate_graph_distances)
+        aggregate_graph_distances_no_inf = aggregate_graph_distances.copy()
+        aggregate_graph_distances_no_inf[aggregate_graph_distances_no_inf >= np.inf] = 0
+        max_option_level = int(np.max(aggregate_graph_distances_no_inf))
+
         self.options_between_subgoals = {str(i): [] for i in range(1, max_option_level + 1)}
         options_for_option = []
 
         # Options Between Subgoals
         for k in range(1, max_option_level + 1):
-            for start_node in self.aggregate_graph.nodes(data=True):
-                start_node_str = self.aggregate_graph[start_node]['state']
-                for end_node in self.aggregate_graph.nodes(data=True):
-                    if k != aggregate_graph_distances[int(start_node)][int(end_node)]:
+            start_node_index = 0
+            for start_node, start_values in self.aggregate_graph.nodes(data=True):
+                start_node_str = start_values['state']
+                end_node_index = 0
+                for end_node, end_values in self.aggregate_graph.nodes(data=True):
+                    if k != aggregate_graph_distances[start_node_index][end_node_index]:
                         continue
-                    end_node_str = self.aggregate_graph[end_node]['state']
+                    end_node_str = end_values['state']
                     option = self.create_option(start_node, end_node, start_node_str, end_node_str, k,
                                                 options_for_option)
                     self.options_between_subgoals[str(k)].append(option)
+                    end_node_index += 1
+                start_node_index += 1
             options_for_option += self.options_between_subgoals[str(k)]
 
         # Onboarding Options
@@ -290,7 +295,7 @@ class PreparednessAgent(OptionsAgent):
             self.state_node_lookup[state_str] = node
         return node
 
-    def get_available_options(self, state: np.ndarry, possible_actions: None | List[int]=None) -> List[int]:
+    def get_available_options(self, state: np.ndarray, possible_actions: None | List[int]=None) -> List[int]:
         state_str = np.array2string(state.astype(self.state_dtype))
         available_options = []
         option_index = 0
@@ -333,7 +338,7 @@ class PreparednessAgent(OptionsAgent):
 
         return available_options
 
-    def get_state_option_values(self, state: np.ndarray, available_options: None | List[Option]) -> Dict[int, float]:
+    def get_state_option_values(self, state: np.ndarray, available_options: None | List[Option]=None) -> Dict[int, float]:
         state_str = np.array2string(state.astype(self.state_dtype))
 
         try:

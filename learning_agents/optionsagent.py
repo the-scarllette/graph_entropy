@@ -4,7 +4,6 @@ import typing
 import networkx as nx
 import numpy as np
 from scipy import sparse
-from typing import bool
 
 from environments.environment import Environment
 from learning_agents.qlearningagent import QLearningAgent
@@ -178,7 +177,7 @@ class Option:
     def has_policy(self):
         return not (self.policy is None)
 
-    def initiated(self, state: np.ndarry) -> bool:
+    def initiated(self, state: np.ndarray) -> bool:
         if self.initiation_func is None:
             return True
         return self.initiation_func(state)

@@ -2176,7 +2176,7 @@ if __name__ == "__main__":
                       [0, 1, 0]])
     board_name = 'room'
 
-    tinytown = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
+    tinytown = TinyTown(2, 2)
 
     beta = 0.5
     graphing_window = 20
@@ -2187,14 +2187,28 @@ if __name__ == "__main__":
     max_num_hops = 1
     num_agents = 3
     total_evaluation_steps = 100 #Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100
-    options_training_timesteps = 10_000
+    options_training_timesteps = 100 #tinytown 2x2: 10_000
     training_timesteps = 1_000_000 #tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
     filenames = get_filenames(tinytown)
     #adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    #state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    preparedness_aggregate_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     #with open(filenames['state transition graph values'], 'r') as f:
     #    stg_values = json.load(f)
+
+    preparedness_agent = PreparednessAgent(tinytown.possible_actions,
+                                           0.9, 0.1, 0.9, tinytown.state_dtype,
+                                           state_transition_graph, preparedness_aggregate_graph,
+                                           option_onboarding='none')
+
+    preparedness_agent.create_options(tinytown)
+    preparedness_agent.train_options(tinytown,
+                                     options_training_timesteps,
+                                     False, True)
+
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    exit()
 
     data = graphing.extract_data(filenames['results'])
     ordered_data = [data[2], data[0], data[1]]
