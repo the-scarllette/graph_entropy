@@ -1,3 +1,4 @@
+import copy
 import json
 import networkx as nx
 import numpy as np
@@ -170,7 +171,13 @@ class PreparednessAgent(OptionsAgent):
         return self.option_index_lookup(self.current_option_index)
 
     # TODO: Create copy_agent method
-    def copy_agent(self, copy_from):
+    def copy_agent(self, copy_from: 'PreparednessAgent') -> None:
+        self.specific_onboarding_possible = copy_from.specific_onboarding_possible
+        self.options = copy.deepcopy(copy_from.options)
+        self.primitive_options = copy.deepcopy(copy_from.primitive_options)
+        self.options_between_subgoals = copy.deepcopy(copy_from.options_between_subgoals)
+        self.generic_onboarding_option = copy.deepcopy(copy_from.generic_onboarding_option)
+        self.generic_onboarding_index = copy_from.generic_onboarding_index
         return
 
     def create_option(self, start_node: None | str, end_node: str, start_state_str: None | str, end_state_str: str,
@@ -454,6 +461,7 @@ class PreparednessAgent(OptionsAgent):
             option.set_state_values(option_dict['policy'])
             self.specific_onboarding_subgoal_options.append(option)
 
+        self.generic_onboarding_index = int(agent_save_file['generic onboarding index'])
         self.state_node_lookup = agent_save_file['state node lookup']
         self.path_lookup = agent_save_file['path lookup']
         self.environment_start_states_str = agent_save_file['environment start states str']
@@ -509,6 +517,7 @@ class PreparednessAgent(OptionsAgent):
                                                         for level in self.options_between_subgoals},
                            'generic onboarding option': {'policy':
                                                              self.generic_onboarding_option.policy.state_action_values},
+                           'generic onboarding index': self.generic_onboarding_index,
                            'specific onboarding options': [{'end node': option.end_node,
                                                             'end state str': option.end_state_str,
                                                             'policy': option.get_state_values()}
