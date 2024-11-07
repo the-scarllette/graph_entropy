@@ -251,7 +251,7 @@ class PreparednessAgent(OptionsAgent):
         self.specific_onboarding_possible = False
         specific_onboarding_nodes = []
         for node in self.aggregate_graph.nodes(data=True):
-            if len(self.aggregate_graph.in_egdes(node)) <= 0:
+            if len(self.aggregate_graph.in_edges(node)) <= 0:
                 specific_onboarding_nodes.append(node)
                 self.specific_onboarding_possible = True
                 node_str = self.aggregate_graph[node]['state']
