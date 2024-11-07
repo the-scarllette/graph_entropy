@@ -35,6 +35,7 @@ from learning_agents.louvainagent import LouvainAgent
 from learning_agents.multilevelgoalagent import MultiLevelGoalAgent
 from learning_agents.optionsagent import Option, OptionsAgent, create_option_goal_initiation_func, \
     generate_option_to_goal
+from learning_agents.preparednessagent import PreparednessAgent
 from learning_agents.qlearningagent import QLearningAgent
 from learning_agents.softactorcritic import SoftActorCritic
 from learning_agents.vicagent import VICAgent
@@ -460,7 +461,7 @@ def find_save_stg_subgoals(env: Environment, env_name, probability_weights=False
     return
 
 
-def get_filenames(env: Environment):
+def get_filenames(env: Environment) -> Dict[str, str]:
     adj_matrix_filename = env.environment_name + '_adj_matrix.npz'
     all_states_filename = env.environment_name + '_all_states.npy'
     stg_filename = env.environment_name + '_stg.gexf'
@@ -1791,16 +1792,23 @@ def train_multi_level_preparedness_agents(environment: Environment, file_name_pr
     return
 
 # TODO: Update train preparedness agents method
-def train_preparedness_agents(environment: Environment, file_name_prefix,
-                              options_directory, agent_directory, results_directory,
-                              training_timesteps, num_agents, evaluate_policy_window=10,
-                              all_actions_valid=True,
-                              total_eval_steps=np.inf,
-                              min_num_hops=1, max_num_hops=5,
-                              alpha=0.9, epsilon=0.1, gamma=0.9, beta=None,
-                              progress_bar=False,
-                              compressed_matrix=False):
-    stg_values_filename = file_name_prefix + '_stg_values.json'
+def train_preparedness_agents(base_agent_save_path: str,
+                              environment: Environment,
+                              training_timesteps: int, num_agents: int, evaluate_policy_window: int=10,
+                              all_actions_valid: bool=True,
+                              total_eval_steps: int=np.inf,
+                              alpha: float=0.9, epsilon: float=0.1, gamma: float=0.9,
+                              progress_bar: bool=False,
+                              compressed_matrix: bool=False) -> None:
+    filenames = get_filenames(environment)
+
+    state_transition_graph = nx.read_gexf(filenames)
+
+    base_agent = PreparednessAgent(environment.possible_actions,
+                                   alpha, epsilon, gamma,
+                                   environment.state_dtype,
+                                   )
+
     with open(stg_values_filename, 'r') as f:
         preparedness_values = json.load(f)
 
