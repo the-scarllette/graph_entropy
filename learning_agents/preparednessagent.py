@@ -31,8 +31,6 @@ class PreparednessOption(Option):
             self.policy = QLearningAgent(actions, alpha, epsilon, gamma)
         else:
             self.policy = OptionsAgent(alpha, epsilon, gamma, actions)
-
-        self.has_policy = True
         return
 
     def get_state_values(self) -> Dict[str, Dict[str, float]]:
@@ -210,29 +208,31 @@ class PreparednessAgent(OptionsAgent):
         # An option from subgoals i -> j is in level k where k is the length of shortest path from i -> j in the
         # aggregate graph. If there is no such path, then there is no such option.
 
-        aggregate_graph_distances = nx.floyd_warshall_numpy(self.aggregate_graph)
-        aggregate_graph_distances_no_inf = aggregate_graph_distances.copy()
-        aggregate_graph_distances_no_inf[aggregate_graph_distances_no_inf >= np.inf] = 0
-        max_option_level = int(np.max(aggregate_graph_distances_no_inf))
+        aggregate_graph_distances = nx.floyd_warshall(self.aggregate_graph)
+        max_option_level = -np.inf
+        for start_node in self.aggregate_graph.nodes(data=False):
+            for end_node in self.aggregate_graph.nodes(data=False):
+                distance = aggregate_graph_distances[start_node][end_node]
+                if distance >= np.inf:
+                    continue
+                if distance > max_option_level:
+                    max_option_level = distance
+        max_option_level = int(max_option_level)
 
         self.options_between_subgoals = {str(i): [] for i in range(1, max_option_level + 1)}
         options_for_option = []
 
         # Options Between Subgoals
         for k in range(1, max_option_level + 1):
-            start_node_index = 0
             for start_node, start_values in self.aggregate_graph.nodes(data=True):
                 start_node_str = start_values['state']
-                end_node_index = 0
                 for end_node, end_values in self.aggregate_graph.nodes(data=True):
-                    if k != aggregate_graph_distances[start_node_index][end_node_index]:
+                    if k != aggregate_graph_distances[start_node][end_node]:
                         continue
                     end_node_str = end_values['state']
                     option = self.create_option(start_node, end_node, start_node_str, end_node_str, k,
                                                 options_for_option)
                     self.options_between_subgoals[str(k)].append(option)
-                    end_node_index += 1
-                start_node_index += 1
             options_for_option += self.options_between_subgoals[str(k)]
 
         # Onboarding Options
@@ -248,7 +248,7 @@ class PreparednessAgent(OptionsAgent):
                                                                       self.alpha, self.epsilon, self.gamma),
                                                 initiation_func=lambda s: np.array2string(s) in
                                                                           self.environment_start_states_str,
-                                                terminating_func=lambda s: self.get_state_node(s) in self.subgoal_list)
+                                                terminating_func=lambda s: self.get_state_node(s) in self.subgoals_list)
         # Specific Onboarding
         self.specific_onboarding_possible = False
         specific_onboarding_nodes = []
@@ -667,7 +667,7 @@ class PreparednessAgent(OptionsAgent):
             if progress_bar:
                 print("     Options towards state: " + option.end_node)
             self.train_option(option, environment, training_timesteps,
-                              start_states, [self.state_str_to_state(option.end_state_str)],
+                              start_states, [option.end_state_str],
                               all_actions_possible, progress_bar)
         if progress_bar:
             print("Training Specific Subgoal Options")
