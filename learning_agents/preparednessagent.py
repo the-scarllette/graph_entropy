@@ -109,7 +109,7 @@ class PreparednessAgent(OptionsAgent):
         self.generic_onboarding_subgoal_options = []
         self.specific_onboarding_subgoal_options = []
         self.state_node_lookup = {}
-        self.path_lookup = {node: {} for node in self.state_transition_graph.nodes()}
+        self.path_lookup = {node: {} for node, _ in self.state_transition_graph.nodes()}
 
         self.environment_start_states_str = None
 
@@ -250,11 +250,11 @@ class PreparednessAgent(OptionsAgent):
         # Specific Onboarding
         self.specific_onboarding_possible = False
         specific_onboarding_nodes = []
-        for node in self.aggregate_graph.nodes(data=True):
+        for node, values in self.aggregate_graph.nodes(data=True):
             if len(self.aggregate_graph.in_edges(node)) <= 0:
                 specific_onboarding_nodes.append(node)
                 self.specific_onboarding_possible = True
-                node_str = self.aggregate_graph[node]['state']
+                node_str = values['state']
                 option = self.create_option(None, node, None, node_str, 1)
                 self.specific_onboarding_options.append(option)
 
@@ -265,8 +265,8 @@ class PreparednessAgent(OptionsAgent):
 
         # Generic Onboarding Subgoal Options
         options_for_generic_onboarding_subgoal_option = options_for_option + [self.generic_onboarding_option]
-        for node in self.aggregate_graph.nodes(data=True):
-            node_str = self.aggregate_graph[node]['state']
+        for node, values in self.aggregate_graph.nodes(data=True):
+            node_str = values['state']
             option = self.create_option(None, node, None, node_str, max_option_level + 1,
                                         options_for_generic_onboarding_subgoal_option)
             self.generic_onboarding_subgoal_options.append(option)
@@ -275,10 +275,10 @@ class PreparednessAgent(OptionsAgent):
         if not self.specific_onboarding_possible:
             return
         options_for_specific_onboarding_subgoal_option = options_for_option + self.specific_onboarding_options
-        for node in self.aggregate_graph.nodes(data=True):
+        for node, values in self.aggregate_graph.nodes(data=True):
             if node in specific_onboarding_nodes:
                 continue
-            node_str = self.aggregate_graph[node]['state']
+            node_str = values['state']
             option = self.create_option(None, node, None, node_str, max_option_level + 1,
                                         options_for_specific_onboarding_subgoal_option)
             self.specific_onboarding_subgoal_options.append(option)
@@ -289,8 +289,8 @@ class PreparednessAgent(OptionsAgent):
         try:
             node = self.state_node_lookup[state_str]
         except KeyError:
-            for node in self.state_transition_graph.nodes(data=True):
-                if state_str == self.state_node_lookup[node]['state']:
+            for node, values in self.state_transition_graph.nodes(data=True):
+                if state_str == values['state']:
                     break
             self.state_node_lookup[state_str] = node
         return node
