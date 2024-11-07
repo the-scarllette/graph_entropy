@@ -637,7 +637,7 @@ class PreparednessAgent(OptionsAgent):
                 if progress_bar:
                     print("         Option: " + option.start_node + " -> " + option.end_node)
                 start_states = [self.state_str_to_state(option.start_state_str)]
-                success_states = [self.state_str_to_state(option.end_state_str)]
+                success_states = [option.end_state_str]
                 self.train_option(option, environment, training_timesteps,
                                   start_states, success_states,
                                   all_actions_possible, progress_bar)
@@ -646,8 +646,8 @@ class PreparednessAgent(OptionsAgent):
         if progress_bar:
             print("Training Generic Onboarding options")
         start_states = [self.state_str_to_state(state) for state in self.environment_start_states_str]
-        success_states = [self.state_str_to_state(self.aggregate_graph[subgoal_node]['state'])
-                          for subgoal_node in self.subgoal_list]
+        success_states = [values['state']
+                          for _, values in self.aggregate_graph.nodes(data=True)]
         self.train_option(self.generic_onboarding_option, environment, training_timesteps,
                           start_states, success_states,
                           all_actions_possible, progress_bar)
@@ -657,7 +657,7 @@ class PreparednessAgent(OptionsAgent):
             if progress_bar:
                 print("     Option towards state: " + option.end_node)
             self.train_option(option, environment, training_timesteps,
-                              start_states, [self.state_str_to_state(option.end_state_str)],
+                              start_states, [option.end_state_str],
                               all_actions_possible, progress_bar)
 
         # Subgoal Options
