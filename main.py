@@ -35,6 +35,7 @@ from learning_agents.louvainagent import LouvainAgent
 from learning_agents.multilevelgoalagent import MultiLevelGoalAgent
 from learning_agents.optionsagent import Option, OptionsAgent, create_option_goal_initiation_func, \
     generate_option_to_goal
+from learning_agents.preparednessagent import PreparednessAgent
 from learning_agents.qlearningagent import QLearningAgent
 from learning_agents.softactorcritic import SoftActorCritic
 from learning_agents.vicagent import VICAgent
@@ -460,7 +461,7 @@ def find_save_stg_subgoals(env: Environment, env_name, probability_weights=False
     return
 
 
-def get_filenames(env: Environment):
+def get_filenames(env: Environment) -> Dict[str, str]:
     adj_matrix_filename = env.environment_name + '_adj_matrix.npz'
     all_states_filename = env.environment_name + '_all_states.npy'
     stg_filename = env.environment_name + '_stg.gexf'
@@ -1790,91 +1791,70 @@ def train_multi_level_preparedness_agents(environment: Environment, file_name_pr
 
     return
 
-# TODO: Update train preparedness agents method
-def train_preparedness_agents(environment: Environment, file_name_prefix,
-                              options_directory, agent_directory, results_directory,
-                              training_timesteps, num_agents, evaluate_policy_window=10,
-                              all_actions_valid=True,
-                              total_eval_steps=np.inf,
-                              min_num_hops=1, max_num_hops=5,
-                              alpha=0.9, epsilon=0.1, gamma=0.9, beta=None,
-                              progress_bar=False,
-                              compressed_matrix=False):
-    stg_values_filename = file_name_prefix + '_stg_values.json'
-    with open(stg_values_filename, 'r') as f:
-        preparedness_values = json.load(f)
+def train_preparedness_agents(base_agent_save_path: str,
+                              option_onboarding: str,
+                              environment: Environment,
+                              training_timesteps: int, num_agents: int, evaluate_policy_window: int=10,
+                              all_actions_valid: bool=True,
+                              total_eval_steps: int=np.inf,
+                              alpha: float=0.9, epsilon: float=0.1, gamma: float=0.9,
+                              continue_training: bool=False,
+                              progress_bar: bool=False) -> None:
+    agent_results_file = 'preparedness_agent_returns.json'
+    agent_training_results_file = 'preparedness_agent_training_returns.json'
+    filenames = get_filenames(environment)
 
-    adj_matrix = None
-    stg = None
-    state_indexer = None
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    aggregate_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
 
-    if compressed_matrix:
-        adj_matrix_filename = file_name_prefix + '_adj_matrix.txt.npz'
-        adj_matrix = sparse.load_npz(adj_matrix_filename)
+    base_agent = PreparednessAgent(environment.possible_actions,
+                                   alpha, epsilon, gamma,
+                                   environment.state_dtype,
+                                   state_transition_graph, aggregate_graph,
+                                   option_onboarding)
+    training_agent = PreparednessAgent(environment.possible_actions,
+                                   alpha, epsilon, gamma,
+                                   environment.state_dtype,
+                                   state_transition_graph, aggregate_graph,
+                                   option_onboarding)
+    base_agent.load(base_agent_save_path)
 
-        state_indexer = {preparedness_values[index]['state']: index
-                         for index in preparedness_values}
-    else:
-        stg_filename = file_name_prefix + '_stg.gexf'
-        stg = nx.read_gexf(stg_filename)
-
-    directories_to_make = [agent_directory, results_directory]
+    directories_to_make = [filenames['agents'], filenames['results']]
     for directory in directories_to_make:
         if not os.path.isdir(directory):
             os.mkdir(directory)
 
-    primitive_options = [Option(actions=[possible_action]) for possible_action in environment.possible_actions]
+    all_agent_returns = {str(i): [] for i in range(num_agents)}
+    all_agent_training_returns = {str(i): [] for i in range(num_agents)}
+    if continue_training:
+        with open(filenames['results'] + '/' + agent_results_file, 'r') as f:
+            all_agent_returns = json.load(f)
+        with open(filenames['results'] + '/' + agent_training_results_file, 'r') as f:
+            all_agent_training_returns = json.load(f)
 
-    for num_hops in range(min_num_hops, max_num_hops + 1):
-        # Creating Directory
-        agent_save_directory = "preparedness - " + str(num_hops) + ' hops agents'
-        if not os.path.isdir(agent_directory + '/' + agent_save_directory):
-            os.mkdir(agent_directory + '/' + agent_save_directory)
+    for i in range(num_agents):
+        i_str = str(i)
+        if progress_bar:
+            print("Training Preparedness agent " + option_onboarding + " onboarding: " +
+                  i_str + '/' + str(num_agents - 1))
 
-        # Collect Options
-        options = []
-        key = 'preparedness - ' + str(num_hops) + ' hops '
-        if beta is not None:
-            key += '- beta = ' + str(beta) + ' subgoal'
-        else:
-            key += 'subgoal'
-        for node in preparedness_values:
-            if preparedness_values[node][key]:
-                policy = QLearningAgent(environment.possible_actions,
-                                        alpha, epsilon, gamma)
-                policy.load_policy(options_directory + "/subgoal - " + str(node))
-                initiation_func = create_option_goal_initiation_func(node, stg, adj_matrix, state_indexer)
-                option = Option(policy=policy, initiation_func=initiation_func,
-                                terminating_func=lambda x: not initiation_func(x))
-                options.append(option)
-        options += primitive_options
+        agent_save_path = 'preparedness_agent ' + option_onboarding + '_' + i_str
 
-        # Training Agents
-        all_agent_training_returns = {}
-        all_agent_returns = {}
-        for i in range(num_agents):
-            if progress_bar:
-                print("Training " + str(num_hops) + " hops agent " + str(i))
-
-            agent = OptionsAgent(alpha, epsilon, gamma, options)
-            agent, agent_training_returns, agent_returns = train_agent(environment, agent, training_timesteps,
-                                                                       evaluate_policy_window,
-                                                                       all_actions_valid,
-                                                                       agent_save_path=(agent_directory + '/' +
-                                                                                        agent_save_directory + '/' +
-                                                                                        'agent ' + str(i)),
-                                                                       total_eval_steps=total_eval_steps,
-                                                                       progress_bar=progress_bar)
-
-            all_agent_training_returns[i] = agent_training_returns
-            all_agent_returns[i] = agent_returns
+        training_agent.copy_agent(base_agent)
+        training_agent, agent_training_returns, agent_returns = train_agent(environment, agent, training_timesteps,
+                                                                            evaluate_policy_window,
+                                                                            all_actions_valid,
+                                                                            agent_save_path=(filenames['agents'] + '/' +
+                                                                                             agent_save_path),
+                                                                            total_eval_steps=total_eval_steps,
+                                                                            progress_bar=progress_bar)
+        all_agent_training_returns[i_str] += agent_training_returns
+        all_agent_returns[i_str] += agent_returns
 
         # Saving Results
-        agent_training_results_file = 'preparedness - ' + str(num_hops) + ' hops training returns'
-        agent_results_file = 'preparedness - ' + str(num_hops) + ' hops returns'
-        with open(results_directory + '/' + agent_training_results_file, 'w') as f:
+        with open(filenames['results'] + '/' + agent_training_results_file, 'w') as f:
             json.dump(all_agent_training_returns, f)
-        with open(results_directory + '/' + agent_results_file, 'w') as f:
+        with open(filenames['results'] + '/' + agent_results_file, 'w') as f:
             json.dump(all_agent_returns, f)
 
     return
