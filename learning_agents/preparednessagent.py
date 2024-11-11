@@ -36,7 +36,7 @@ class PreparednessOption(Option):
 
     def get_state_values(self) -> Dict[str, Dict[str, float]]:
         if self.hierarchy_level <= 1:
-            return self.policy.state_action_values
+            return self.policy.q_values
         return self.policy.state_option_values
 
     def initiated(self, state: np.ndarray) -> bool:
@@ -46,7 +46,7 @@ class PreparednessOption(Option):
 
     def set_state_values(self, state_values: Dict[str, Dict[str, float]]) -> None:
         if self.hierarchy_level <= 1:
-            self.policy.state_action_values = state_values
+            self.policy.q_values = state_values
             return
         self.policy.state_option_values = state_values
         return
@@ -361,7 +361,10 @@ class PreparednessAgent(OptionsAgent):
             has_path = has_path_str == 'True'
         except KeyError:
             state_node = self.get_state_node(state)
-            has_path = nx.has_path(self.state_transition_graph, state_node, goal_node)
+            if state_node == goal_node:
+                has_path = False
+            else:
+                has_path = nx.has_path(self.state_transition_graph, state_node, goal_node)
             self.path_lookup[goal_node][state_str] = str(has_path)
 
         return has_path
@@ -451,7 +454,7 @@ class PreparednessAgent(OptionsAgent):
                                                 initiation_func=lambda s: np.array2string(s) in
                                                                           self.environment_start_states_str,
                                                 terminating_func=lambda s: self.get_state_node(s) in self.subgoal_list)
-        self.generic_onboarding_option.state_action_values = agent_save_file['generic onboarding option']['policy']
+        self.generic_onboarding_option.q_values = agent_save_file['generic onboarding option']['policy']
 
         self.specific_onboarding_options = []
         for option_dict in agent_save_file['specific onboarding options']:
@@ -537,7 +540,7 @@ class PreparednessAgent(OptionsAgent):
                                                          } for option in self.options_between_subgoals[level]]
                                                         for level in self.options_between_subgoals},
                            'generic onboarding option': {'policy':
-                                                             self.generic_onboarding_option.policy.state_action_values},
+                                                             self.generic_onboarding_option.policy.q_values},
                            'generic onboarding index': self.generic_onboarding_index,
                            'specific onboarding options': [{'end node': option.end_node,
                                                             'end state str': option.end_state_str,
@@ -581,6 +584,8 @@ class PreparednessAgent(OptionsAgent):
                      option_success_states: List[str],
                      all_actions_possible: bool=False,
                      progress_bar: bool=False) -> Tuple[int, int]:
+        rand.seed(100)
+
         # Getting Start States
         terminated = True
         possible_actions = self.actions
@@ -588,6 +593,8 @@ class PreparednessAgent(OptionsAgent):
         total_successes = 0
 
         for current_timesteps in range(training_timesteps):
+            if current_timesteps == 23:
+                ()
             if progress_bar:
                 print_progress_bar(current_timesteps, training_timesteps,
                                    '            >')
@@ -663,7 +670,8 @@ class PreparednessAgent(OptionsAgent):
         start_states = [self.state_str_to_state(state) for state in self.environment_start_states_str]
         success_states = [values['state']
                           for _, values in self.aggregate_graph.nodes(data=True)]
-        total_end_states, total_successes = self.train_option(self.generic_onboarding_option, environment, training_timesteps,
+        total_end_states, total_successes = self.train_option(self.generic_onboarding_option, environment,
+                                                              training_timesteps,
                                                               start_states, success_states,
                                                               all_actions_possible, progress_bar)
         if progress_bar:
@@ -702,6 +710,8 @@ class PreparednessAgent(OptionsAgent):
         for option in self.specific_onboarding_subgoal_options:
             if progress_bar:
                 print("     Option towards state: " + option.end_node)
+            if option.end_node == '46':
+                ()
             total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
                                                                   start_states,
                                                                   [option.end_state_str],
