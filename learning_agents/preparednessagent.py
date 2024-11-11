@@ -197,7 +197,7 @@ class PreparednessAgent(OptionsAgent):
         if primitive_actions:
             options = self.actions
 
-        option = PreparednessOption(options, start_node, end_node,
+        option = PreparednessOption(options.copy(), start_node, end_node,
                                     start_state_str, end_state_str, hierarchy_level,
                                     lambda s: self.has_path_to_node(s, end_node),
                                     primitive_actions,

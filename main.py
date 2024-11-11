@@ -2187,7 +2187,7 @@ if __name__ == "__main__":
     max_num_hops = 1
     num_agents = 3
     total_evaluation_steps = 100 #Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100
-    options_training_timesteps = 100 #tinytown 2x2: 10_000
+    options_training_timesteps = 1_000 #tinytown 2x2: 10_000
     training_timesteps = 1_000_000 #tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
     filenames = get_filenames(tinytown)
