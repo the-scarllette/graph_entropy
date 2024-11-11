@@ -438,7 +438,8 @@ class PreparednessAgent(OptionsAgent):
 
         self.options_between_subgoals = {}
         options_for_option = []
-        for level, option_list in agent_save_file['options between subgoals']:
+        for level in agent_save_file['options between subgoals']:
+            option_list = agent_save_file['options between subgoals'][level]
             self.options_between_subgoals[level] = []
             for option_dict in option_list:
                 option = self.create_option(option_dict['start node'], option_dict['end node'],
@@ -448,7 +449,7 @@ class PreparednessAgent(OptionsAgent):
                 self.options_between_subgoals[level].append(option)
             options_for_option += self.options_between_subgoals[level]
 
-        self.environment_start_states_str = agent_save_file['environment start states']
+        self.environment_start_states_str = agent_save_file['environment start states str']
         self.generic_onboarding_option = Option(policy=QLearningAgent(self.actions,
                                                                       self.alpha, self.epsilon, self.gamma),
                                                 initiation_func=lambda s: np.array2string(s) in
@@ -485,7 +486,9 @@ class PreparednessAgent(OptionsAgent):
             option.set_state_values(option_dict['policy'])
             self.specific_onboarding_subgoal_options.append(option)
 
-        self.generic_onboarding_index = int(agent_save_file['generic onboarding index'])
+        self.generic_onboarding_index = agent_save_file['generic onboarding index']
+        if self.generic_onboarding_index is not None:
+            self.generic_onboarding_index = int(self.generic_onboarding_index)
         self.state_node_lookup = agent_save_file['state node lookup']
         self.path_lookup = agent_save_file['path lookup']
         self.environment_start_states_str = agent_save_file['environment start states str']
