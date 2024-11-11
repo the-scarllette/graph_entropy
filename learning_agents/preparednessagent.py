@@ -118,6 +118,7 @@ class PreparednessAgent(OptionsAgent):
         self.current_option = None
         self.current_option_index = None
         self.option_start_state = None
+        self.last_possible_actions = None
         self.total_option_reward = 0
         self.current_option_step = 0
         self.state_option_values = {'none': {}, 'generic': {}, 'specific': {}}
@@ -393,7 +394,8 @@ class PreparednessAgent(OptionsAgent):
 
         max_next_state_option_value = max(next_state_option_values_list)
 
-        for option in available_options:
+        for option_index in available_options:
+            option = self.options[option_index]
             if option.has_policy():
                 train_option = option.choose_action(state, self.last_possible_actions) == action
                 try:
@@ -415,15 +417,15 @@ class PreparednessAgent(OptionsAgent):
                     except KeyError:
                         gamma_product = max_next_state_option_value
 
-                self.state_option_values[self.option_onboarding][state_str][option] +=(
-                        self.alpha * (reward - state_option_values[option] + self.gamma * gamma_product))
+                self.state_option_values[self.option_onboarding][state_str][option_index] +=(
+                        self.alpha * (reward - state_option_values[option_index] + self.gamma * gamma_product))
 
         if not (terminal or self.current_option.terminated(next_state)):
             return
 
-        option_value = self.get_state_option_values(self.option_start_state)[self.current_option]
+        option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
         option_start_state_str = np.array2string(self.option_start_state.astype(self.state_dtype))
-        self.state_option_values[self.option_onboarding][option_start_state_str][self.current_option] \
+        self.state_option_values[self.option_onboarding][option_start_state_str][self.current_option_index] \
             += self.alpha * (self.total_option_reward + (self.gamma ** self.current_option_step) *
                              max_next_state_option_value
                              - option_value)
@@ -570,7 +572,10 @@ class PreparednessAgent(OptionsAgent):
         assert option_onboarding == 'none' or option_onboarding == 'specific' or option_onboarding == 'generic'
         self.option_onboarding = option_onboarding
 
-        self.options = self.options_between_subgoals
+        self.options = self.primitive_options.copy()
+        for level in self.options_between_subgoals:
+            self.options += self.options_between_subgoals[level]
+
         if self.option_onboarding == 'none':
             return
         if self.option_onboarding == 'generic':

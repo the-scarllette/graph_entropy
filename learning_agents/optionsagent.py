@@ -316,11 +316,12 @@ class OptionsAgent:
         state_str = np.array2string(np.ndarray.astype(state, dtype=self.state_dtype))
 
         try:
-            option_values = self.state_option_values[state_str]
+            option_values = {int(option): self.state_option_values[state_str][option]
+                             for option in self.state_option_values[state_str]}
         except KeyError:
             if available_options is None:
                 available_options = self.get_available_options(state)
-            option_values = {option: 0.0 for option in available_options}
+            option_values = {int(option): 0.0 for option in available_options}
             self.state_option_values[state_str] = option_values
         return option_values
 

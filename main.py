@@ -1843,6 +1843,8 @@ def train_preparedness_agents(base_agent_save_path: str,
         agent_save_path = 'preparedness_agent ' + option_onboarding + '_' + i_str
 
         training_agent.copy_agent(base_agent)
+        training_agent.specific_onboarding_possible = True
+        training_agent.set_onboarding(option_onboarding)
         training_agent, agent_training_returns, agent_returns = train_agent(environment, training_agent,
                                                                             training_timesteps,
                                                                             evaluate_policy_window,
@@ -2191,7 +2193,7 @@ if __name__ == "__main__":
     num_agents = 3
     total_evaluation_steps = 25 #Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=25
     options_training_timesteps = 1_000 #tinytown 2x2: 10_000
-    training_timesteps = 1_000_000 #tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
+    training_timesteps = 20_000 #tinytown_2x2 = 20_000, tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
     filenames = get_filenames(tinytown)
     #adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
@@ -2200,11 +2202,11 @@ if __name__ == "__main__":
     #with open(filenames['state transition graph values'], 'r') as f:
     #    stg_values = json.load(f)
 
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'none',
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'specific',
                               tinytown, 100, 3,
                               all_actions_valid=False, total_eval_steps=total_evaluation_steps,
                               alpha=0.9, epsilon=0.1, gamma=0.9,
-                              continue_training=False, progress_bar=True)
+                              continue_training=True, progress_bar=True)
     exit()
 
     preparedness_agent = PreparednessAgent(tinytown.possible_actions,
