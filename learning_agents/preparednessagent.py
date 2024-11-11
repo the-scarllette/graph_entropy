@@ -283,6 +283,7 @@ class PreparednessAgent(OptionsAgent):
             if node in specific_onboarding_nodes:
                 continue
             node_str = values['state']
+            # TODO: FIX SO ONLY START FROM START NODES
             option = self.create_option(None, node, None, node_str, max_option_level + 1,
                                         options_for_specific_onboarding_subgoal_option)
             self.specific_onboarding_subgoal_options.append(option)
@@ -400,6 +401,7 @@ class PreparednessAgent(OptionsAgent):
                 train_option = option.choose_action(state, self.last_possible_actions) == action
                 try:
                     reset_inner_option_policy = option.policy.current_option is None
+                    current_inner_option = option.policy.current_option
                 except AttributeError:
                     reset_inner_option_policy = False
             else:
@@ -408,7 +410,7 @@ class PreparednessAgent(OptionsAgent):
 
             if train_option:
                 if reset_inner_option_policy:
-                    option.policy.current_option = None
+                    option.policy.current_option = current_inner_option
 
                 gamma_product = max_next_state_option_value
                 if not option.terminated(next_state):

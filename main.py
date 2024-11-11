@@ -1340,6 +1340,8 @@ def run_epoch(env: Environment,
     epoch_return = 0
     total_steps = 0
 
+    random.seed(100)
+
     while total_steps < num_steps:
         if done:
             state = env.reset()
