@@ -1228,7 +1228,7 @@ def rank_environment_evc(env: Environment, accuracy=None):
 def train_agent(env: Environment, agent, num_steps,
                 evaluate_policy_window=np.inf,
                 all_actions_valid=False, agent_save_path=None,
-                total_eval_steps=100,
+                total_eval_steps=np.inf,
                 progress_bar=False):
     current_possible_actions = env.possible_actions
     epoch_returns = []
@@ -1340,8 +1340,15 @@ def run_epoch(env: Environment,
     epoch_return = 0
     total_steps = 0
 
+    state = env.reset()
+    done = False
+    if not all_actions_valid:
+        current_possible_actions = env.get_possible_actions()
+
     while total_steps < num_steps:
         if done:
+            if num_steps >= np.inf:
+                break
             state = env.reset()
             done = False
             if not all_actions_valid:
@@ -1800,8 +1807,8 @@ def train_preparedness_agents(base_agent_save_path: str,
                               alpha: float=0.9, epsilon: float=0.1, gamma: float=0.9,
                               continue_training: bool=False,
                               progress_bar: bool=False) -> None:
-    agent_results_file = 'preparedness_agent_returns.json'
-    agent_training_results_file = 'preparedness_agent_training_returns.json'
+    agent_results_file = 'preparedness_agent_returns_' + option_onboarding + '_onboarding.json'
+    agent_training_results_file = 'preparedness_agent_training_returns_' + option_onboarding + '_onboarding.json'
     filenames = get_filenames(environment)
 
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
@@ -1840,7 +1847,7 @@ def train_preparedness_agents(base_agent_save_path: str,
             print("Training Preparedness agent " + option_onboarding + " onboarding: " +
                   i_str + '/' + str(num_agents - 1))
 
-        agent_save_path = 'preparedness_agent ' + option_onboarding + '_' + i_str
+        agent_save_path = 'preparedness_agent_' + option_onboarding + '_' + i_str
 
         training_agent.copy_agent(base_agent)
         training_agent.specific_onboarding_possible = True
@@ -2191,7 +2198,7 @@ if __name__ == "__main__":
     min_num_hops = 1
     max_num_hops = 1
     num_agents = 3
-    total_evaluation_steps = 25 #Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=25
+    total_evaluation_steps = np.inf #Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=25
     options_training_timesteps = 1_000 #tinytown 2x2: 10_000
     training_timesteps = 20_000 #tinytown_2x2 = 20_000, tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
@@ -2201,6 +2208,23 @@ if __name__ == "__main__":
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     #with open(filenames['state transition graph values'], 'r') as f:
     #    stg_values = json.load(f)
+
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'generic',
+                              tinytown, training_timesteps, 3,
+                              all_actions_valid=False, total_eval_steps=total_evaluation_steps,
+                              alpha=0.9, epsilon=0.1, gamma=0.9,
+                              continue_training=True, progress_bar=True)
+    exit()
+
+    data = graphing.extract_data(filenames['results'])
+    # ordered_data = [data[2], data[0], data[1]]
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='Tiyntown 2x2',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='std',
+                                       labels=os.listdir(filenames['results']))
+    exit()
 
     preparedness_agent = PreparednessAgent(tinytown.possible_actions,
                                            0.9, 0.1, 0.9,
@@ -2216,23 +2240,6 @@ if __name__ == "__main__":
     exit()
 
     preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
-
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'specific',
-                              tinytown, 100, 3,
-                              all_actions_valid=False, total_eval_steps=total_evaluation_steps,
-                              alpha=0.9, epsilon=0.1, gamma=0.9,
-                              continue_training=True, progress_bar=True)
-    exit()
-
-    data = graphing.extract_data(filenames['results'])
-    ordered_data = [data[2], data[0], data[1]]
-    graphing.graph_reward_per_timestep(ordered_data, graphing_window,
-                                       name='Taxicab',
-                                       xlim=[-50, 2500],
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='std')
-    exit()
 
     state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adj_matrix,
                                                                                             state_transition_graph,
