@@ -2208,10 +2208,11 @@ if __name__ == "__main__":
                                            state_transition_graph, preparedness_aggregate_graph,
                                            option_onboarding='none')
 
-    preparedness_agent.create_options(tinytown)
+    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
     preparedness_agent.train_options(tinytown,
                                      options_training_timesteps,
                                      False, True)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     exit()
 
     preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')

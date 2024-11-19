@@ -615,7 +615,6 @@ class PreparednessAgent(OptionsAgent):
                      option_success_states: List[str],
                      all_actions_possible: bool=False,
                      progress_bar: bool=False) -> Tuple[int, int]:
-        rand.seed(100)
 
         # Getting Start States
         terminated = True
