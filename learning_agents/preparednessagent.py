@@ -14,8 +14,8 @@ from progressbar import print_progress_bar
 
 class PreparednessOption(Option):
 
-    def __init__(self, actions: List[Option] | List[int], start_node: None | str, end_node: None | str,
-                 start_state_str: None | str, end_state_str: str,
+    def __init__(self, actions: List[Option] | List[int], start_node: None | List[str], end_node: None | str,
+                 start_state_str: None | List[str], end_state_str: str,
                  hierarchy_level: int,
                  initiation_func: Callable[[np.ndarray], bool],
                  primitive_actions: bool,
@@ -41,7 +41,7 @@ class PreparednessOption(Option):
 
     def initiated(self, state: np.ndarray) -> bool:
         if self.start_node is not None:
-            return self.start_state_str == np.array2string(state)
+            return np.array2string(state) in self.start_state_str
         return self.initiation_func(state)
 
     def set_state_values(self, state_values: Dict[str, Dict[str, float]]) -> None:
@@ -113,6 +113,7 @@ class PreparednessAgent(OptionsAgent):
         self.path_lookup = {node: {} for node in self.state_transition_graph.nodes()}
 
         self.environment_start_states_str = None
+        self.environment_start_nodes = None
 
         self.current_step = 0
         self.current_option = None
@@ -183,6 +184,7 @@ class PreparednessAgent(OptionsAgent):
         self.state_node_lookup = copy.deepcopy(copy_from.state_node_lookup)
         self.path_lookup = copy.deepcopy(copy_from.path_lookup)
         self.environment_start_states_str = copy_from.environment_start_states_str
+        self.environment_start_nodes = copy_from.environment_start_nodes
         self.state_option_values = copy.deepcopy(copy_from.state_option_values)
 
         self.current_step = 0
@@ -198,6 +200,20 @@ class PreparednessAgent(OptionsAgent):
         primitive_actions = hierarchy_level <= 1
         if primitive_actions:
             options = self.actions
+
+        # If start node is none, option can be initiated in:
+        #   Start states
+        #   Subgoals that have a path to the goal subgoal
+        if start_node is None:
+            start_state_str = self.environment_start_states_str
+            start_node = self.environment_start_nodes
+            if not primitive_actions:
+                for subgoal_node, subgoal_values in self.aggregate_graph.nodes(data=True):
+                    if subgoal_node == end_node:
+                        continue
+                    if nx.has_path(self.aggregate_graph, subgoal_node, end_node):
+                        start_state_str.append(subgoal_values['state'])
+                        start_node.append(subgoal_node)
 
         option = PreparednessOption(options.copy(), start_node, end_node,
                                     start_state_str, end_state_str, hierarchy_level,
@@ -232,7 +248,8 @@ class PreparednessAgent(OptionsAgent):
                     if k != aggregate_graph_distances[start_node][end_node]:
                         continue
                     end_node_str = end_values['state']
-                    option = self.create_option(start_node, end_node, start_node_str, end_node_str, k,
+                    option = self.create_option([start_node], end_node,
+                                                [start_node_str], end_node_str, k,
                                                 options_for_option)
                     self.options_between_subgoals[str(k)].append(option)
             options_for_option += self.options_between_subgoals[str(k)]
@@ -245,7 +262,11 @@ class PreparednessAgent(OptionsAgent):
         # navigates to one of these nodes (only available in some cases)
 
         # Generic Onboarding
-        self.environment_start_states_str = [np.array2string(state) for state in environment.get_start_states()]
+        self.environment_start_states_str = []
+        self.environment_start_nodes = []
+        for state in environment.get_start_states():
+            self.environment_start_states_str.append(np.array2string(state))
+            self.environment_start_nodes.append(self.get_state_node(state))
         self.generic_onboarding_option = Option(policy=QLearningAgent(self.actions,
                                                                       self.alpha, self.epsilon, self.gamma),
                                                 initiation_func=lambda s: np.array2string(s) in
@@ -258,9 +279,8 @@ class PreparednessAgent(OptionsAgent):
             if len(self.aggregate_graph.in_edges(node)) <= 0:
                 specific_onboarding_nodes.append(node)
                 self.specific_onboarding_possible = True
-                node_str = values['state']
-                # TODO: FIX SO ONLY START FROM START NODES
-                option = self.create_option(None, node, None, node_str, 1)
+                option = self.create_option(None, node,
+                                            None, values['state'], 1)
                 self.specific_onboarding_options.append(option)
 
         # Options to Subgoals
@@ -284,7 +304,6 @@ class PreparednessAgent(OptionsAgent):
             if node in specific_onboarding_nodes:
                 continue
             node_str = values['state']
-            # TODO: FIX SO ONLY START FROM START NODES and subgoals that can reach the desired subgoal
             option = self.create_option(None, node, None, node_str, max_option_level + 1,
                                         options_for_specific_onboarding_subgoal_option)
             self.specific_onboarding_subgoal_options.append(option)
@@ -447,14 +466,15 @@ class PreparednessAgent(OptionsAgent):
             option_list = agent_save_file['options between subgoals'][level]
             self.options_between_subgoals[level] = []
             for option_dict in option_list:
-                option = self.create_option(option_dict['start node'], option_dict['end node'],
-                                            option_dict['start state str'], option_dict['end state str'],
+                option = self.create_option([option_dict['start node']], option_dict['end node'],
+                                            [option_dict['start state str']], option_dict['end state str'],
                                             int(option_dict['hierarchy level']), options_for_option)
                 option.set_state_values(option_dict['policy'])
                 self.options_between_subgoals[level].append(option)
             options_for_option += self.options_between_subgoals[level]
 
         self.environment_start_states_str = agent_save_file['environment start states str']
+        self.environment_start_nodes = agent_save_file['environment start nodes']
         self.generic_onboarding_option = Option(policy=QLearningAgent(self.actions,
                                                                       self.alpha, self.epsilon, self.gamma),
                                                 initiation_func=lambda s: np.array2string(s) in
@@ -496,7 +516,6 @@ class PreparednessAgent(OptionsAgent):
             self.generic_onboarding_index = int(self.generic_onboarding_index)
         self.state_node_lookup = agent_save_file['state node lookup']
         self.path_lookup = agent_save_file['path lookup']
-        self.environment_start_states_str = agent_save_file['environment start states str']
         self.state_option_values = agent_save_file['state option values']
         return
 
@@ -565,6 +584,7 @@ class PreparednessAgent(OptionsAgent):
                            'state node lookup': self.state_node_lookup,
                            'path lookup': self.path_lookup,
                            'environment start states str': self.environment_start_states_str,
+                           'environment start nodes': self.environment_start_nodes,
                            'state option values': self.state_option_values}
 
         with open(save_path, 'w') as f:
