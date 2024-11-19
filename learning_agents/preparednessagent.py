@@ -479,7 +479,7 @@ class PreparednessAgent(OptionsAgent):
                                                                       self.alpha, self.epsilon, self.gamma),
                                                 initiation_func=lambda s: np.array2string(s) in
                                                                           self.environment_start_states_str,
-                                                terminating_func=lambda s: self.get_state_node(s) in self.subgoal_list)
+                                                terminating_func=lambda s: self.get_state_node(s) in self.subgoals_list)
         self.generic_onboarding_option.q_values = agent_save_file['generic onboarding option']['policy']
 
         self.specific_onboarding_options = []

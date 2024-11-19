@@ -2209,13 +2209,12 @@ if __name__ == "__main__":
                                            option_onboarding='none')
 
     preparedness_agent.create_options(tinytown)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     preparedness_agent.train_options(tinytown,
                                      options_training_timesteps,
                                      False, True)
-
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     exit()
+
+    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
 
     train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'specific',
                               tinytown, 100, 3,

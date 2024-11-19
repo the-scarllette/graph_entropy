@@ -362,11 +362,19 @@ class OptionsAgent:
 
         state_str = np.array2string(np.ndarray.astype(self.option_start_state, dtype=self.state_dtype))
 
-        self.state_option_values[state_str][self.current_option_index] += self.alpha * \
-                                                                          (self.total_option_reward +
-                                                                          (self.gamma ** self.current_option_step) *
-                                                                           max_next_option
-                                                                           - option_value)
+        key = self.current_option_index
+        try:
+            self.state_option_values[state_str][key] += self.alpha * \
+                                                        (self.total_option_reward +
+                                                         (self.gamma ** self.current_option_step)*
+                                                         max_next_option - option_value)
+        except KeyError:
+            key = str(key)
+            self.state_option_values[state_str][key] += self.alpha * \
+                                                        (self.total_option_reward +
+                                                         (self.gamma ** self.current_option_step) *
+                                                         max_next_option - option_value)
+
         self.current_option = None
         self.current_option_index = None
         self.option_start_state = None
