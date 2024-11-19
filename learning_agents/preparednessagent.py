@@ -205,8 +205,8 @@ class PreparednessAgent(OptionsAgent):
         #   Start states
         #   Subgoals that have a path to the goal subgoal
         if start_node is None:
-            start_state_str = self.environment_start_states_str
-            start_node = self.environment_start_nodes
+            start_state_str = self.environment_start_states_str.copy()
+            start_node = self.environment_start_nodes.copy()
             if not primitive_actions:
                 for subgoal_node, subgoal_values in self.aggregate_graph.nodes(data=True):
                     if subgoal_node == end_node:
@@ -334,7 +334,7 @@ class PreparednessAgent(OptionsAgent):
         # Options Between Subgoals
         for option_level in self.options_between_subgoals:
             for option in self.options_between_subgoals[option_level]:
-                if option.start_state_str == state_str:
+                if option.start_state_str[0] == state_str:
                     available_options.append(option_index)
                 option_index += 1
 
@@ -558,9 +558,9 @@ class PreparednessAgent(OptionsAgent):
         return option
 
     def save(self, save_path: str) -> None:
-        agent_save_file = {'options between subgoals': {level: [{'start node': option.start_node,
+        agent_save_file = {'options between subgoals': {level: [{'start node': option.start_node[0],
                                                          'end node': option.end_node,
-                                                         'start state str': option.start_state_str,
+                                                         'start state str': option.start_state_str[0],
                                                          'end state str': option.end_state_str,
                                                          'hierarchy level': option.hierarchy_level,
                                                          'policy': option.get_state_values()
@@ -683,8 +683,8 @@ class PreparednessAgent(OptionsAgent):
                 print("     Training Options at level: " + level)
             for option in self.options_between_subgoals[level]:
                 if progress_bar:
-                    print("         Option: " + option.start_node + " -> " + option.end_node)
-                start_states = [self.state_str_to_state(option.start_state_str)]
+                    print("         Option: " + option.start_node[0] + " -> " + option.end_node)
+                start_states = [self.state_str_to_state(option.start_state_str[0])]
                 success_states = [option.end_state_str]
                 total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
                                                                       start_states, success_states,
@@ -692,7 +692,7 @@ class PreparednessAgent(OptionsAgent):
                 if progress_bar:
                     sys.stdout.flush()
                     percentage_hits = percentage(total_successes, total_end_states)
-                    print("\r         Option: " + option.start_node + " -> " + option.end_node + " "
+                    print("\r         Option: " + option.start_node[0] + " -> " + option.end_node + " "
                           + str(percentage_hits) + "% hits")
 
         # Onboarding Options
@@ -729,7 +729,8 @@ class PreparednessAgent(OptionsAgent):
             if progress_bar:
                 print("     Options towards state: " + option.end_node)
             total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
-                                                                  start_states,
+                                                                  [self.state_str_to_state(state)
+                                                                   for state in option.start_state_str],
                                                                   [option.end_state_str],
                                                                   all_actions_possible, progress_bar)
             if progress_bar:
@@ -741,8 +742,6 @@ class PreparednessAgent(OptionsAgent):
         for option in self.specific_onboarding_subgoal_options:
             if progress_bar:
                 print("     Option towards state: " + option.end_node)
-            if option.end_node == '46':
-                ()
             total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
                                                                   start_states,
                                                                   [option.end_state_str],

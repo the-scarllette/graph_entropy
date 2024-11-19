@@ -1340,8 +1340,6 @@ def run_epoch(env: Environment,
     epoch_return = 0
     total_steps = 0
 
-    random.seed(100)
-
     while total_steps < num_steps:
         if done:
             state = env.reset()
@@ -2204,13 +2202,6 @@ if __name__ == "__main__":
     #with open(filenames['state transition graph values'], 'r') as f:
     #    stg_values = json.load(f)
 
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'specific',
-                              tinytown, 100, 3,
-                              all_actions_valid=False, total_eval_steps=total_evaluation_steps,
-                              alpha=0.9, epsilon=0.1, gamma=0.9,
-                              continue_training=True, progress_bar=True)
-    exit()
-
     preparedness_agent = PreparednessAgent(tinytown.possible_actions,
                                            0.9, 0.1, 0.9,
                                            tinytown.state_dtype, tinytown.state_shape,
@@ -2218,11 +2209,20 @@ if __name__ == "__main__":
                                            option_onboarding='none')
 
     preparedness_agent.create_options(tinytown)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     preparedness_agent.train_options(tinytown,
                                      options_training_timesteps,
                                      False, True)
 
-    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    exit()
+
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'specific',
+                              tinytown, 100, 3,
+                              all_actions_valid=False, total_eval_steps=total_evaluation_steps,
+                              alpha=0.9, epsilon=0.1, gamma=0.9,
+                              continue_training=True, progress_bar=True)
+    exit()
 
     data = graphing.extract_data(filenames['results'])
     ordered_data = [data[2], data[0], data[1]]
