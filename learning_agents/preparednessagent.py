@@ -259,6 +259,7 @@ class PreparednessAgent(OptionsAgent):
                 specific_onboarding_nodes.append(node)
                 self.specific_onboarding_possible = True
                 node_str = values['state']
+                # TODO: FIX SO ONLY START FROM START NODES
                 option = self.create_option(None, node, None, node_str, 1)
                 self.specific_onboarding_options.append(option)
 
@@ -283,7 +284,7 @@ class PreparednessAgent(OptionsAgent):
             if node in specific_onboarding_nodes:
                 continue
             node_str = values['state']
-            # TODO: FIX SO ONLY START FROM START NODES
+            # TODO: FIX SO ONLY START FROM START NODES and subgoals that can reach the desired subgoal
             option = self.create_option(None, node, None, node_str, max_option_level + 1,
                                         options_for_specific_onboarding_subgoal_option)
             self.specific_onboarding_subgoal_options.append(option)
