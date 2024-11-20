@@ -2209,6 +2209,20 @@ if __name__ == "__main__":
     #with open(filenames['state transition graph values'], 'r') as f:
     #    stg_values = json.load(f)
 
+    preparedness_agent = PreparednessAgent(tinytown.possible_actions,
+                                           0.9, 0.1, 0.9,
+                                           tinytown.state_dtype, tinytown.state_shape,
+                                           state_transition_graph, preparedness_aggregate_graph,
+                                           option_onboarding='none')
+
+    preparedness_agent.create_options(tinytown)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent.train_options(tinytown,
+                                     options_training_timesteps,
+                                     False, True)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    exit()
+
     data = graphing.extract_data(filenames['results'])
     # ordered_data = [data[2], data[0], data[1]]
     graphing.graph_reward_per_timestep(data, graphing_window,
@@ -2224,19 +2238,6 @@ if __name__ == "__main__":
                               all_actions_valid=False, total_eval_steps=total_evaluation_steps,
                               alpha=0.9, epsilon=0.1, gamma=0.9,
                               continue_training=True, progress_bar=True)
-    exit()
-
-    preparedness_agent = PreparednessAgent(tinytown.possible_actions,
-                                           0.9, 0.1, 0.9,
-                                           tinytown.state_dtype, tinytown.state_shape,
-                                           state_transition_graph, preparedness_aggregate_graph,
-                                           option_onboarding='none')
-
-    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent.train_options(tinytown,
-                                     options_training_timesteps,
-                                     False, True)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     exit()
 
     preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')

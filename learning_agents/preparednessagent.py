@@ -282,7 +282,7 @@ class PreparednessAgent(OptionsAgent):
                 specific_onboarding_nodes.append(node)
                 self.specific_onboarding_possible = True
                 init_cont_func = lambda s: self.has_path_to_node(s, node)
-                option = PreparednessOption(self.primitive_actions,
+                option = PreparednessOption(self.actions,
                                             None, node, None, values['state'],
                                             1,
                                             init_cont_func, init_cont_func,
@@ -536,7 +536,7 @@ class PreparednessAgent(OptionsAgent):
         for option_dict in agent_save_file['specific onboarding options']:
             node = option_dict['end node']
             init_cont_func = lambda s: self.has_path_to_node(s, node)
-            option = PreparednessOption(self.primitive_actions,
+            option = PreparednessOption(self.actions,
                                         None, node, None, option_dict['end state str'],
                                         1,
                                         init_cont_func, init_cont_func,
