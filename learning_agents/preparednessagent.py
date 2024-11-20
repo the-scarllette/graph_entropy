@@ -198,29 +198,18 @@ class PreparednessAgent(OptionsAgent):
         return
 
     def create_option(self, start_node: None | str, end_node: str, start_state_str: None | str, end_state_str: str,
-                      hierarchy_level: int, options: None | List[PreparednessOption]=None) -> PreparednessOption:
+                      hierarchy_level: int, options: None | List[PreparednessOption]=None,
+                      initiation_func: None | Callable[[np.ndarray], bool]=None) -> PreparednessOption:
         primitive_actions = hierarchy_level <= 1
         if primitive_actions:
             options = self.actions
 
-        # If start node is none, option can be initiated in:
-        #   Start states
-        #   Subgoals that have a path to the goal subgoal
-        if start_node is None:
-            start_state_str = self.environment_start_states_str.copy()
-            start_node = self.environment_start_nodes.copy()
-            if not primitive_actions:
-                for subgoal_node, subgoal_values in self.aggregate_graph.nodes(data=True):
-                    if subgoal_node == end_node:
-                        continue
-                    if nx.has_path(self.aggregate_graph, subgoal_node, end_node):
-                        start_state_str.append(subgoal_values['state'])
-                        start_node.append(subgoal_node)
-
-        initiation_cont_func = lambda s: self.has_path_to_node(s, end_node)
+        continuation_func = lambda s: self.get_state_node != end_node and self.has_path_to_node(s, end_node)
+        if initiation_func is None:
+            initiation_func = continuation_func
         option = PreparednessOption(options.copy(), start_node, end_node,
                                     start_state_str, end_state_str, hierarchy_level,
-                                    initiation_cont_func, initiation_cont_func,
+                                    initiation_func, continuation_func,
                                     primitive_actions,
                                     self.alpha, self.epsilon, self.gamma)
         return option
@@ -279,15 +268,10 @@ class PreparednessAgent(OptionsAgent):
         specific_onboarding_nodes = []
         for node, values in self.aggregate_graph.nodes(data=True):
             if len(self.aggregate_graph.in_edges(node)) <= 0:
-                specific_onboarding_nodes.append(node)
                 self.specific_onboarding_possible = True
-                init_cont_func = lambda s: self.has_path_to_node(s, node)
-                option = PreparednessOption(self.actions,
-                                            None, node, None, values['state'],
-                                            1,
-                                            init_cont_func, init_cont_func,
-                                            True,
-                                            self.alpha, self.epsilon, self.gamma)
+                specific_onboarding_nodes.append(node)
+                option = self.create_option(None, node, None, values['state'],
+                                            1, None)
                 self.specific_onboarding_options.append(option)
 
         # Options to Subgoals
@@ -300,14 +284,9 @@ class PreparednessAgent(OptionsAgent):
         options_for_generic_onboarding_subgoal_option = options_for_option + [self.generic_onboarding_option]
         for node, values in self.aggregate_graph.nodes(data=True):
             node_str = values['state']
-            init_cont_func = lambda s: self.has_path_to_node(s, node)
-            option = PreparednessOption(options_for_generic_onboarding_subgoal_option.copy(),
-                                        None, node,
-                                        None, node_str,
+            option = self.create_option(None, node, None, node_str,
                                         max_option_level + 1,
-                                        init_cont_func, init_cont_func,
-                                        False,
-                                        self.alpha, self.epsilon, self.gamma)
+                                        options_for_generic_onboarding_subgoal_option)
             self.generic_onboarding_subgoal_options.append(option)
 
         # Specific Onboarding Subgoal Options
@@ -323,20 +302,19 @@ class PreparednessAgent(OptionsAgent):
                 continue
             node_str = values['state']
             initiation_func = self.create_specific_subgoal_option_initiation_func(node)
-            option = PreparednessOption(options_for_specific_onboarding_subgoal_option.copy(),
-                                        None, node,
-                                        None, node_str,
+            option = self.create_option(None, node, None, node_str,
                                         max_option_level + 1,
-                                        initiation_func,
-                                        lambda s: self.has_path_to_node(s, node),
-                                        False,
-                                        self.alpha, self.epsilon, self.gamma)
+                                        options_for_specific_onboarding_subgoal_option,
+                                        initiation_func)
             self.specific_onboarding_subgoal_options.append(option)
         return
 
     def create_specific_subgoal_option_initiation_func(self, subgoal: str) -> Callable[[np.ndarray], bool]:
         def initiation_function(state: np.ndarray) -> bool:
             state_node = self.get_state_node(state)
+            if state_node == subgoal:
+                return False
+
             for node in self.aggregate_graph.nodes(data=False):
                 if state_node != node:
                     continue
@@ -535,13 +513,8 @@ class PreparednessAgent(OptionsAgent):
         self.specific_onboarding_options = []
         for option_dict in agent_save_file['specific onboarding options']:
             node = option_dict['end node']
-            init_cont_func = lambda s: self.has_path_to_node(s, node)
-            option = PreparednessOption(self.actions,
-                                        None, node, None, option_dict['end state str'],
-                                        1,
-                                        init_cont_func, init_cont_func,
-                                        True,
-                                        self.alpha, self.epsilon, self.gamma)
+            option = self.create_option(None, node, None, option_dict['end state str'],
+                                        1, None)
             option.set_state_values(option_dict['policy'])
             self.specific_onboarding_options.append(option)
 
@@ -550,13 +523,9 @@ class PreparednessAgent(OptionsAgent):
         max_option_level = int(level) + 1
         for option_dict in agent_save_file['generic onboarding subgoal options']:
             init_cont_func = lambda s: self.has_path_to_node(s, option_dict['start node'])
-            option = PreparednessOption(options_for_generic_subgoal_options.copy(),
-                                        None, option_dict['end node'],
-                                        None, option_dict['end state str'],
+            option = self.create_option(None, node, None, option_dict['end state str'],
                                         max_option_level,
-                                        init_cont_func, init_cont_func,
-                                        False,
-                                        self.alpha, self.epsilon, self.gamma)
+                                        options_for_generic_subgoal_options)
             option.set_state_values(option_dict['policy'])
             self.generic_onboarding_subgoal_options.append(option)
 
@@ -565,14 +534,10 @@ class PreparednessAgent(OptionsAgent):
         for option_dict in agent_save_file['specific onboarding subgoal options']:
             node = option_dict['end node']
             initiation_func = self.create_specific_subgoal_option_initiation_func(node)
-            option = PreparednessOption(options_for_specific_subgoal_options.copy(),
-                                        None, node,
-                                        None, option_dict['end state str'],
+            option = self.create_option(None, node, None, option_dict['end state str'],
                                         max_option_level,
-                                        initiation_func,
-                                        lambda s: self.has_path_to_node(s, node),
-                                        False,
-                                        self.alpha, self.epsilon, self.gamma)
+                                        options_for_specific_subgoal_options,
+                                        initiation_func)
             option.set_state_values(option_dict['policy'])
             self.specific_onboarding_subgoal_options.append(option)
 
@@ -692,8 +657,6 @@ class PreparednessAgent(OptionsAgent):
         total_successes = 0
 
         for current_timesteps in range(training_timesteps):
-            if current_timesteps == 23:
-                ()
             if progress_bar:
                 print_progress_bar(current_timesteps, training_timesteps,
                                    '            >')
@@ -704,7 +667,7 @@ class PreparednessAgent(OptionsAgent):
                     if option_start_states is not None:
                         state = rand.choice(option_start_states)
                     else:
-                        state_node = rand.choice(self.state_transition_graph.nodes())
+                        state_node = rand.choice(list(self.path_lookup.keys()))
                         state = self.node_to_state(state_node)
                     state = environment.reset(state)
                     option_initiated = option.initiated(state)
@@ -743,6 +706,8 @@ class PreparednessAgent(OptionsAgent):
                       all_actions_possible: bool=False,
                       progress_bar: bool=False) -> None:
 
+        rand.seed(100)
+
         def percentage(x, y):
             return round((x/y) * 100, 1)
 
@@ -767,6 +732,7 @@ class PreparednessAgent(OptionsAgent):
                           + str(percentage_hits) + "% hits")
 
         # Onboarding Options
+        # Generic Onboarding Options
         if progress_bar:
             print("Training Generic Onboarding option")
         success_states = [values['state']
@@ -780,6 +746,7 @@ class PreparednessAgent(OptionsAgent):
             print(" Onboarding Option " + str(percentage_hits) + "% hits")
         if progress_bar:
             print("Training Specific Onboarding Options")
+        # Specific onboarding options
         for option in self.specific_onboarding_options:
             if progress_bar:
                 print("     Option towards state: " + option.end_node)
