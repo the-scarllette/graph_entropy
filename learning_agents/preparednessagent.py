@@ -584,6 +584,10 @@ class PreparednessAgent(OptionsAgent):
         self.state_option_values = agent_save_file['state option values']
         return
 
+    def node_to_state(self, node: str) -> np.ndarray:
+        state_str = self.state_transition_graph.nodes(data=True)[node]['state']
+        return self.state_str_to_state(state_str)
+
     def option_index_lookup(self, option_index: int) -> Option:
         # Generic Onboarding Option
         if (self.option_onboarding == 'generic') and (option_index == self.generic_onboarding_index):
@@ -676,8 +680,8 @@ class PreparednessAgent(OptionsAgent):
 
     def train_option(self, option: Option, environment: Environment,
                      training_timesteps: int,
-                     option_start_states: List[np.ndarray],
                      option_success_states: List[str],
+                     option_start_states: None | List[np.ndarray] = None,
                      all_actions_possible: bool=False,
                      progress_bar: bool=False) -> Tuple[int, int]:
 
@@ -697,10 +701,13 @@ class PreparednessAgent(OptionsAgent):
             if terminated:
                 option_initiated = False
                 while not option_initiated:
-                    state = rand.choice(option_start_states)
+                    if option_start_states is not None:
+                        state = rand.choice(option_start_states)
+                    else:
+                        state_node = rand.choice(self.state_transition_graph.nodes())
+                        state = self.node_to_state(state_node)
                     state = environment.reset(state)
                     option_initiated = option.initiated(state)
-                terminated = False
                 if not all_actions_possible:
                     possible_actions = environment.get_possible_actions(state)
 
@@ -751,7 +758,7 @@ class PreparednessAgent(OptionsAgent):
                 start_states = [self.state_str_to_state(option.start_state_str[0])]
                 success_states = [option.end_state_str]
                 total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
-                                                                      start_states, success_states,
+                                                                      success_states, start_states,
                                                                       all_actions_possible, progress_bar)
                 if progress_bar:
                     sys.stdout.flush()
@@ -762,12 +769,11 @@ class PreparednessAgent(OptionsAgent):
         # Onboarding Options
         if progress_bar:
             print("Training Generic Onboarding option")
-        start_states = [self.state_str_to_state(state) for state in self.environment_start_states_str]
         success_states = [values['state']
                           for _, values in self.aggregate_graph.nodes(data=True)]
         total_end_states, total_successes = self.train_option(self.generic_onboarding_option, environment,
                                                               training_timesteps,
-                                                              start_states, success_states,
+                                                              success_states, None,
                                                               all_actions_possible, progress_bar)
         if progress_bar:
             percentage_hits = percentage(total_successes, total_end_states)
@@ -778,8 +784,8 @@ class PreparednessAgent(OptionsAgent):
             if progress_bar:
                 print("     Option towards state: " + option.end_node)
             total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
-                                                                  start_states,
                                                                   [option.end_state_str],
+                                                                  None,
                                                                   all_actions_possible, progress_bar)
             if progress_bar:
                 sys.stdout.flush()
@@ -787,28 +793,29 @@ class PreparednessAgent(OptionsAgent):
                 print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) + "% hits")
 
         # Subgoal Options
+        # Generic Subgoal Options
         if progress_bar:
             print("Training Generic Subgoal Options")
         for option in self.generic_onboarding_subgoal_options:
             if progress_bar:
                 print("     Options towards state: " + option.end_node)
             total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
-                                                                  [self.state_str_to_state(state)
-                                                                   for state in option.start_state_str],
                                                                   [option.end_state_str],
+                                                                  None,
                                                                   all_actions_possible, progress_bar)
             if progress_bar:
                 sys.stdout.flush()
                 percentage_hits = percentage(total_successes, total_end_states)
                 print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) + "% hits")
+        # Specific Subgoal Options
         if progress_bar:
             print("Training Specific Subgoal Options")
         for option in self.specific_onboarding_subgoal_options:
             if progress_bar:
                 print("     Option towards state: " + option.end_node)
             total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
-                                                                  start_states,
                                                                   [option.end_state_str],
+                                                                  None,
                                                                   all_actions_possible, progress_bar)
             if progress_bar:
                 sys.stdout.flush()
