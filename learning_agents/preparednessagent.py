@@ -18,6 +18,7 @@ class PreparednessOption(Option):
                  start_state_str: None | List[str], end_state_str: str,
                  hierarchy_level: int,
                  initiation_func: Callable[[np.ndarray], bool],
+                 continuation_func: Callable[[np.ndarray], bool],
                  primitive_actions: bool,
                  alpha: float, epsilon: float, gamma: float):
         self.actions = actions
@@ -27,6 +28,7 @@ class PreparednessOption(Option):
         self.end_state_str = end_state_str
         self.hierarchy_level = hierarchy_level
         self.initiation_func = initiation_func
+        self.continuation_func = continuation_func
 
         if primitive_actions:
             self.policy = QLearningAgent(actions, alpha, epsilon, gamma)
@@ -54,7 +56,7 @@ class PreparednessOption(Option):
     def terminated(self, state: np.ndarray) -> bool:
         if self.end_state_str == np.array2string(state):
             return True
-        return not self.initiation_func(state)
+        return not self.continuation_func(state)
 
 
 class PreparednessAgent(OptionsAgent):
@@ -215,9 +217,10 @@ class PreparednessAgent(OptionsAgent):
                         start_state_str.append(subgoal_values['state'])
                         start_node.append(subgoal_node)
 
+        initiation_cont_func = lambda s: self.has_path_to_node(s, end_node)
         option = PreparednessOption(options.copy(), start_node, end_node,
                                     start_state_str, end_state_str, hierarchy_level,
-                                    lambda s: self.has_path_to_node(s, end_node),
+                                    initiation_cont_func, initiation_cont_func,
                                     primitive_actions,
                                     self.alpha, self.epsilon, self.gamma)
         return option
@@ -278,10 +281,11 @@ class PreparednessAgent(OptionsAgent):
             if len(self.aggregate_graph.in_edges(node)) <= 0:
                 specific_onboarding_nodes.append(node)
                 self.specific_onboarding_possible = True
+                init_cont_func = lambda s: self.has_path_to_node(s, node)
                 option = PreparednessOption(self.primitive_actions,
                                             None, node, None, values['state'],
                                             1,
-                                            lambda s: self.has_path_to_node(s, node),
+                                            init_cont_func, init_cont_func,
                                             True,
                                             self.alpha, self.epsilon, self.gamma)
                 self.specific_onboarding_options.append(option)
@@ -296,11 +300,12 @@ class PreparednessAgent(OptionsAgent):
         options_for_generic_onboarding_subgoal_option = options_for_option + [self.generic_onboarding_option]
         for node, values in self.aggregate_graph.nodes(data=True):
             node_str = values['state']
+            init_cont_func = lambda s: self.has_path_to_node(s, node)
             option = PreparednessOption(options_for_generic_onboarding_subgoal_option.copy(),
                                         None, node,
                                         None, node_str,
                                         max_option_level + 1,
-                                        lambda s: self.has_path_to_node(s, node),
+                                        init_cont_func, init_cont_func,
                                         False,
                                         self.alpha, self.epsilon, self.gamma)
             self.generic_onboarding_subgoal_options.append(option)
@@ -323,6 +328,7 @@ class PreparednessAgent(OptionsAgent):
                                         None, node_str,
                                         max_option_level + 1,
                                         initiation_func,
+                                        lambda s: self.has_path_to_node(s, node),
                                         False,
                                         self.alpha, self.epsilon, self.gamma)
             self.specific_onboarding_subgoal_options.append(option)
@@ -529,10 +535,11 @@ class PreparednessAgent(OptionsAgent):
         self.specific_onboarding_options = []
         for option_dict in agent_save_file['specific onboarding options']:
             node = option_dict['end node']
+            init_cont_func = lambda s: self.has_path_to_node(s, node)
             option = PreparednessOption(self.primitive_actions,
                                         None, node, None, option_dict['end state str'],
                                         1,
-                                        lambda s: self.has_path_to_node(s, node),
+                                        init_cont_func, init_cont_func,
                                         True,
                                         self.alpha, self.epsilon, self.gamma)
             option.set_state_values(option_dict['policy'])
@@ -542,11 +549,12 @@ class PreparednessAgent(OptionsAgent):
         options_for_generic_subgoal_options = options_for_option + [self.generic_onboarding_option]
         max_option_level = int(level) + 1
         for option_dict in agent_save_file['generic onboarding subgoal options']:
+            init_cont_func = lambda s: self.has_path_to_node(s, option_dict['start node'])
             option = PreparednessOption(options_for_generic_subgoal_options.copy(),
                                         None, option_dict['end node'],
                                         None, option_dict['end state str'],
                                         max_option_level,
-                                        lambda s: self.has_path_to_node(s, option_dict['end node']),
+                                        init_cont_func, init_cont_func,
                                         False,
                                         self.alpha, self.epsilon, self.gamma)
             option.set_state_values(option_dict['policy'])
@@ -562,6 +570,7 @@ class PreparednessAgent(OptionsAgent):
                                         None, option_dict['end state str'],
                                         max_option_level,
                                         initiation_func,
+                                        lambda s: self.has_path_to_node(s, node),
                                         False,
                                         self.alpha, self.epsilon, self.gamma)
             option.set_state_values(option_dict['policy'])
