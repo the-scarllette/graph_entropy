@@ -2209,13 +2209,6 @@ if __name__ == "__main__":
     #with open(filenames['state transition graph values'], 'r') as f:
     #    stg_values = json.load(f)
 
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'generic',
-                              tinytown, training_timesteps, 3,
-                              all_actions_valid=False, total_eval_steps=total_evaluation_steps,
-                              alpha=0.9, epsilon=0.1, gamma=0.9,
-                              continue_training=True, progress_bar=True)
-    exit()
-
     data = graphing.extract_data(filenames['results'])
     # ordered_data = [data[2], data[0], data[1]]
     graphing.graph_reward_per_timestep(data, graphing_window,
@@ -2224,6 +2217,13 @@ if __name__ == "__main__":
                                        y_label='Average Epoch Return',
                                        error_bars='std',
                                        labels=os.listdir(filenames['results']))
+    exit()
+
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'generic',
+                              tinytown, training_timesteps, 3,
+                              all_actions_valid=False, total_eval_steps=total_evaluation_steps,
+                              alpha=0.9, epsilon=0.1, gamma=0.9,
+                              continue_training=True, progress_bar=True)
     exit()
 
     preparedness_agent = PreparednessAgent(tinytown.possible_actions,
