@@ -257,7 +257,7 @@ class PreparednessAgent(OptionsAgent):
         # Onboarding Options
         # can vary how options are constructed:
         # no_onboarding: Only options are between subgoals
-        # generic onboarding: A single option that navigates from any start state to any subgoal
+        # generic onboarding: A single option that navigates from any state with a path to a subgoal, to a subgoal
         # specific onboarding: An option for each node in the aggregate graph that has no in-edges, each option
         # navigates to one of these nodes (only available in some cases)
 
@@ -269,8 +269,7 @@ class PreparednessAgent(OptionsAgent):
             self.environment_start_nodes.append(self.get_state_node(state))
         self.generic_onboarding_option = Option(policy=QLearningAgent(self.actions,
                                                                       self.alpha, self.epsilon, self.gamma),
-                                                initiation_func=lambda s: np.array2string(s) in
-                                                                          self.environment_start_states_str,
+                                                initiation_func=self.generic_onboarding_initiation_function,
                                                 terminating_func=lambda s: self.get_state_node(s) in self.subgoals_list)
         # Specific Onboarding
         self.specific_onboarding_possible = False
@@ -279,8 +278,12 @@ class PreparednessAgent(OptionsAgent):
             if len(self.aggregate_graph.in_edges(node)) <= 0:
                 specific_onboarding_nodes.append(node)
                 self.specific_onboarding_possible = True
-                option = self.create_option(None, node,
-                                            None, values['state'], 1)
+                option = PreparednessOption(self.primitive_actions,
+                                            None, node, None, values['state'],
+                                            1,
+                                            lambda s: self.has_path_to_node(s, node),
+                                            True,
+                                            self.alpha, self.epsilon, self.gamma)
                 self.specific_onboarding_options.append(option)
 
         # Options to Subgoals
@@ -289,14 +292,21 @@ class PreparednessAgent(OptionsAgent):
         # Creates two sets of options, one that uses generic_onboarding and one that uses specific_onboarding
 
         # Generic Onboarding Subgoal Options
+        # Can initiate from any state where there is a path to their subgoal
         options_for_generic_onboarding_subgoal_option = options_for_option + [self.generic_onboarding_option]
         for node, values in self.aggregate_graph.nodes(data=True):
             node_str = values['state']
-            option = self.create_option(None, node, None, node_str, max_option_level + 1,
-                                        options_for_generic_onboarding_subgoal_option)
+            option = PreparednessOption(options_for_generic_onboarding_subgoal_option.copy(),
+                                        None, node,
+                                        None, node_str,
+                                        max_option_level + 1,
+                                        lambda s: self.has_path_to_node(s, node),
+                                        False,
+                                        self.alpha, self.epsilon, self.gamma)
             self.generic_onboarding_subgoal_options.append(option)
 
         # Specific Onboarding Subgoal Options
+        # TODO: Fix the initiation function for specific onboarding subgoal options
         if not self.specific_onboarding_possible:
             return
         options_for_specific_onboarding_subgoal_option = options_for_option + self.specific_onboarding_options
@@ -308,6 +318,12 @@ class PreparednessAgent(OptionsAgent):
                                         options_for_specific_onboarding_subgoal_option)
             self.specific_onboarding_subgoal_options.append(option)
         return
+
+    def generic_onboarding_initiation_function(self, s: np.ndarray) -> bool:
+        for subgoal in self.subgoals_list:
+            if self.has_path_to_node(s, subgoal):
+                return True
+        return False
 
     def get_state_node(self, state: np.ndarray) -> str:
         state_str = np.array2string(state)
@@ -477,16 +493,19 @@ class PreparednessAgent(OptionsAgent):
         self.environment_start_nodes = agent_save_file['environment start nodes']
         self.generic_onboarding_option = Option(policy=QLearningAgent(self.actions,
                                                                       self.alpha, self.epsilon, self.gamma),
-                                                initiation_func=lambda s: np.array2string(s) in
-                                                                          self.environment_start_states_str,
+                                                initiation_func=self.generic_onboarding_initiation_function,
                                                 terminating_func=lambda s: self.get_state_node(s) in self.subgoals_list)
         self.generic_onboarding_option.q_values = agent_save_file['generic onboarding option']['policy']
 
         self.specific_onboarding_options = []
         for option_dict in agent_save_file['specific onboarding options']:
-            option = self.create_option(None, option_dict['end node'],
-                                        None, option_dict['end state str'],
-                                        1)
+            node = option_dict['end node']
+            option = PreparednessOption(self.primitive_actions,
+                                        None, node, None, option_dict['end state str'],
+                                        1,
+                                        lambda s: self.has_path_to_node(s, node),
+                                        True,
+                                        self.alpha, self.epsilon, self.gamma)
             option.set_state_values(option_dict['policy'])
             self.specific_onboarding_options.append(option)
 
@@ -494,15 +513,19 @@ class PreparednessAgent(OptionsAgent):
         options_for_generic_subgoal_options = options_for_option + [self.generic_onboarding_option]
         max_option_level = int(level) + 1
         for option_dict in agent_save_file['generic onboarding subgoal options']:
-            option = self.create_option(None, option_dict['end node'],
+            option = PreparednessOption(options_for_generic_subgoal_options.copy(),
+                                        None, option_dict['end node'],
                                         None, option_dict['end state str'],
                                         max_option_level,
-                                        options_for_generic_subgoal_options)
+                                        lambda s: self.has_path_to_node(s, option_dict['end node']),
+                                        False,
+                                        self.alpha, self.epsilon, self.gamma)
             option.set_state_values(option_dict['policy'])
             self.generic_onboarding_subgoal_options.append(option)
 
         self.specific_onboarding_subgoal_options = []
         options_for_specific_subgoal_options = options_for_option + self.specific_onboarding_options
+        # TODO: Fix loading specific onboarding subgoal options so it uses the correct initiation function
         for option_dict in agent_save_file['specific onboarding subgoal options']:
             option = self.create_option(None, option_dict['end node'],
                                         None, option_dict['end state str'],
