@@ -306,7 +306,10 @@ class PreparednessAgent(OptionsAgent):
             self.generic_onboarding_subgoal_options.append(option)
 
         # Specific Onboarding Subgoal Options
-        # TODO: Fix the initiation function for specific onboarding subgoal options
+        # Initiation states:
+        #   Start states
+        #   Subgoal states that have a path to the corresponding subgoal
+        #   States that have a path to an onboarded subgoal and a path to the corresponding subgoal
         if not self.specific_onboarding_possible:
             return
         options_for_specific_onboarding_subgoal_option = options_for_option + self.specific_onboarding_options
@@ -314,14 +317,40 @@ class PreparednessAgent(OptionsAgent):
             if node in specific_onboarding_nodes:
                 continue
             node_str = values['state']
-            option = self.create_option(None, node, None, node_str, max_option_level + 1,
-                                        options_for_specific_onboarding_subgoal_option)
+            initiation_func = self.create_specific_subgoal_option_initiation_func(node)
+            option = PreparednessOption(options_for_specific_onboarding_subgoal_option.copy(),
+                                        None, node,
+                                        None, node_str,
+                                        max_option_level + 1,
+                                        initiation_func,
+                                        False,
+                                        self.alpha, self.epsilon, self.gamma)
             self.specific_onboarding_subgoal_options.append(option)
         return
 
-    def generic_onboarding_initiation_function(self, s: np.ndarray) -> bool:
+    def create_specific_subgoal_option_initiation_func(self, subgoal: str) -> Callable[[np.ndarray], bool]:
+        def initiation_function(state: np.ndarray) -> bool:
+            state_node = self.get_state_node(state)
+            for node in self.aggregate_graph.nodes(data=False):
+                if state_node != node:
+                    continue
+                if nx.has_path(self.aggregate_graph, node, subgoal):
+                    return True
+
+            for option in self.specific_onboarding_options:
+                onboarding_subgoal = option.end_node
+                if not nx.has_path(self.aggregate_graph, onboarding_subgoal, subgoal):
+                    continue
+                if self.has_path_to_node(state, onboarding_subgoal):
+                    return True
+
+            return False
+
+        return initiation_function
+
+    def generic_onboarding_initiation_function(self, state: np.ndarray) -> bool:
         for subgoal in self.subgoals_list:
-            if self.has_path_to_node(s, subgoal):
+            if self.has_path_to_node(state, subgoal):
                 return True
         return False
 
@@ -525,12 +554,16 @@ class PreparednessAgent(OptionsAgent):
 
         self.specific_onboarding_subgoal_options = []
         options_for_specific_subgoal_options = options_for_option + self.specific_onboarding_options
-        # TODO: Fix loading specific onboarding subgoal options so it uses the correct initiation function
         for option_dict in agent_save_file['specific onboarding subgoal options']:
-            option = self.create_option(None, option_dict['end node'],
+            node = option_dict['end node']
+            initiation_func = self.create_specific_subgoal_option_initiation_func(node)
+            option = PreparednessOption(options_for_specific_subgoal_options.copy(),
+                                        None, node,
                                         None, option_dict['end state str'],
                                         max_option_level,
-                                        options_for_specific_subgoal_options)
+                                        initiation_func,
+                                        False,
+                                        self.alpha, self.epsilon, self.gamma)
             option.set_state_values(option_dict['policy'])
             self.specific_onboarding_subgoal_options.append(option)
 
