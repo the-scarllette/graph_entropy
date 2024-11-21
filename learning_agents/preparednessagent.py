@@ -676,6 +676,12 @@ class PreparednessAgent(OptionsAgent):
 
             action = option.choose_action(state, possible_actions)
 
+            # Occurs if sub-option is not fully trained and takes itself to a state where it terminates
+            # but the parent option does not terminate, but has no other options to initiate
+            if action is None:
+                terminated = True
+                continue
+
             next_state, _, terminated, _ = environment.step(action)
 
             next_state_str = np.array2string(next_state.astype(self.state_dtype))
