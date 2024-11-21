@@ -125,7 +125,7 @@ class TaxiCab(Environment):
         elif self.use_fuel:
             self.state_shape = 5
 
-        self.state_dtype = float
+        self.state_dtype = int
 
         self.hashable_states = hashable_states
 

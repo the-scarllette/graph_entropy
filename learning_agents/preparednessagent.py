@@ -20,7 +20,8 @@ class PreparednessOption(Option):
                  initiation_func: Callable[[np.ndarray], bool],
                  continuation_func: Callable[[np.ndarray], bool],
                  primitive_actions: bool,
-                 alpha: float, epsilon: float, gamma: float):
+                 alpha: float, epsilon: float, gamma: float,
+                 state_dtype: Type):
         self.actions = actions
         self.start_node = start_node
         self.start_state_str = start_state_str
@@ -29,6 +30,7 @@ class PreparednessOption(Option):
         self.hierarchy_level = hierarchy_level
         self.initiation_func = initiation_func
         self.continuation_func = continuation_func
+        self.state_dtype = state_dtype
 
         if primitive_actions:
             self.policy = QLearningAgent(actions, alpha, epsilon, gamma)
@@ -43,7 +45,7 @@ class PreparednessOption(Option):
 
     def initiated(self, state: np.ndarray) -> bool:
         if self.start_node is not None:
-            return np.array2string(state) in self.start_state_str
+            return np.array2string(state.astype(self.state_dtype)) in self.start_state_str
         return self.initiation_func(state)
 
     def set_state_values(self, state_values: Dict[str, Dict[str, float]]) -> None:
@@ -54,7 +56,7 @@ class PreparednessOption(Option):
         return
 
     def terminated(self, state: np.ndarray) -> bool:
-        if self.end_state_str == np.array2string(state):
+        if self.end_state_str == np.array2string(state.astype(self.state_dtype)):
             return True
         return not self.continuation_func(state)
 
@@ -211,7 +213,8 @@ class PreparednessAgent(OptionsAgent):
                                     start_state_str, end_state_str, hierarchy_level,
                                     initiation_func, continuation_func,
                                     primitive_actions,
-                                    self.alpha, self.epsilon, self.gamma)
+                                    self.alpha, self.epsilon, self.gamma,
+                                    self.state_dtype)
         return option
 
     def create_options(self, environment: Environment) -> None:
@@ -257,7 +260,7 @@ class PreparednessAgent(OptionsAgent):
         self.environment_start_states_str = []
         self.environment_start_nodes = []
         for state in environment.get_start_states():
-            self.environment_start_states_str.append(np.array2string(state))
+            self.environment_start_states_str.append(np.array2string(state.astype(self.state_dtype)))
             self.environment_start_nodes.append(self.get_state_node(state))
         self.generic_onboarding_option = Option(policy=QLearningAgent(self.actions,
                                                                       self.alpha, self.epsilon, self.gamma),
@@ -341,7 +344,7 @@ class PreparednessAgent(OptionsAgent):
         return False
 
     def get_state_node(self, state: np.ndarray) -> str:
-        state_str = np.array2string(state)
+        state_str = np.array2string(state.astype(self.state_dtype))
         try:
             node = self.state_node_lookup[state_str]
         except KeyError:
@@ -407,7 +410,7 @@ class PreparednessAgent(OptionsAgent):
         return option_values
 
     def has_path_to_node(self, state: np.ndarray, goal_node: str):
-        state_str = np.array2string(state)
+        state_str = np.array2string(state.astype(self.state_dtype))
 
         try:
             has_path_str = self.path_lookup[goal_node][state_str]
@@ -717,7 +720,9 @@ class PreparednessAgent(OptionsAgent):
                       all_actions_possible: bool=False,
                       progress_bar: bool=False) -> None:
 
-        def percentage(x, y):
+        def percentage(x: int, y: int) -> float:
+            if y <= 0:
+                return -1.0
             return round((x/y) * 100, 1)
 
         # Options between subgoals
