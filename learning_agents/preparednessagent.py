@@ -59,6 +59,7 @@ class PreparednessOption(Option):
         return not self.continuation_func(state)
 
 
+# TODO: Fix Save and Load Agent bugs
 class PreparednessAgent(OptionsAgent):
 
     option_failure_reward = -1.0
@@ -508,7 +509,7 @@ class PreparednessAgent(OptionsAgent):
                                                                       self.alpha, self.epsilon, self.gamma),
                                                 initiation_func=self.generic_onboarding_initiation_function,
                                                 terminating_func=lambda s: self.get_state_node(s) in self.subgoals_list)
-        self.generic_onboarding_option.q_values = agent_save_file['generic onboarding option']['policy']
+        self.generic_onboarding_option.q_values = agent_save_file['generic onboarding option']['policy'].copy()
 
         self.specific_onboarding_options = []
         for option_dict in agent_save_file['specific onboarding options']:
@@ -522,7 +523,6 @@ class PreparednessAgent(OptionsAgent):
         options_for_generic_subgoal_options = options_for_option + [self.generic_onboarding_option]
         max_option_level = int(level) + 1
         for option_dict in agent_save_file['generic onboarding subgoal options']:
-            init_cont_func = lambda s: self.has_path_to_node(s, option_dict['start node'])
             option = self.create_option(None, node, None, option_dict['end state str'],
                                         max_option_level,
                                         options_for_generic_subgoal_options)
@@ -711,8 +711,6 @@ class PreparednessAgent(OptionsAgent):
                       training_timesteps: int,
                       all_actions_possible: bool=False,
                       progress_bar: bool=False) -> None:
-
-        rand.seed(100)
 
         def percentage(x, y):
             return round((x/y) * 100, 1)
