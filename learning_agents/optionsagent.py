@@ -419,6 +419,9 @@ class OptionsAgent:
                               sep=' ', dtype=self.state_dtype)
         state = state.reshape(self.state_shape)
         return state
+    
+    def state_to_state_str(self, state: np.ndarray) -> str:
+        return np.array2string(np.ndarray.astype(state, dtype=self.state_dtype))
 
     def terminated(self, state):
         if self.terminating_func is None:
