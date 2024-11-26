@@ -5,7 +5,7 @@ import typing
 import networkx as nx
 import numpy as np
 from scipy import sparse
-from typing import Callable, List, Tuple
+from typing import Callable, List, Tuple, Type
 
 from environments.environment import Environment
 from learning_agents.optionsagent import Option, OptionsAgent
@@ -39,6 +39,7 @@ class SubgoalAgent(OptionsAgent):
 
     def __init__(self, actions: List[int], alpha: float, epsilon: float, gamma: float,
                  state_shape: Tuple[int, int],
+                 state_dtype: Type,
                  state_transition_graph: nx.MultiDiGraph,
                  subgoals: List[str],
                  subgoal_distance: int=30) -> None:
@@ -47,6 +48,7 @@ class SubgoalAgent(OptionsAgent):
         self.epsilon = epsilon
         self.gamma = gamma
         self.state_shape = state_shape
+        self.state_dtype = state_dtype
         self.state_transition_graph = state_transition_graph
         self.subgoals = subgoals
         self.subgoal_distance = subgoal_distance
