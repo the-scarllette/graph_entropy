@@ -44,6 +44,7 @@ class SubgoalAgent(OptionsAgent):
                  subgoals: List[str],
                  subgoal_distance: int=30) -> None:
         self.actions = actions
+        self.num_actions = len(actions)
         self.alpha = alpha
         self.epsilon = epsilon
         self.gamma = gamma
@@ -69,13 +70,17 @@ class SubgoalAgent(OptionsAgent):
 
     def copy_agent(self, copy_from: 'SubgoalAgent') -> None:
         self.options = copy.deepcopy(self.options)
-        self.state_node_lookup = copy.deepycopy(self.state_node_lookup)
+        self.state_node_lookup = copy.deepcopy(self.state_node_lookup)
         self.option_initiation_lookup = copy.deepcopy(self.option_initiation_lookup)
         self.state_option_values = copy.deepcopy(self.state_option_values)
         return
 
     def create_options(self) -> None:
         self.options = []
+        for action in self.actions:
+            option = Option([action])
+            self.options.append(option)
+
         for subgoal in self.subgoals:
             distances = nx.shortest_path_length(self.state_transition_graph, target=subgoal)
             initiation_set = [self.node_to_state(node) for node in list(distances.keys())
@@ -119,6 +124,9 @@ class SubgoalAgent(OptionsAgent):
 
         self.options = []
         self.subgoals = []
+        for action in self.actions:
+            option = Option([action])
+            self.options.append(option)
         for subgoal in list(agent_save_file['options'].keys()):
             option_dict = agent_save_file['options'][subgoal]
             option = SubgoalOption(self.actions, self.alpha, self.epsilon, self.gamma, subgoal, [self.state_str_to_state(state_str)
@@ -136,10 +144,10 @@ class SubgoalAgent(OptionsAgent):
         return self.state_str_to_state(state_str)
 
     def save(self, save_path: str) -> None:
-        agent_save_file = {'options': {option.subgoal: {'initiation_set': [self.state_to_state_str(state)
-                                                                           for state in option.initiation_set],
-                                                        'policy': option.policy.q_values}
-                                       for option in self.options},
+        agent_save_file = {'options': {self.options[i].subgoal: {'initiation_set': [self.state_to_state_str(state)
+                                                                           for state in self.options[i].initiation_set],
+                                                        'policy': self.options[i].policy.q_values}
+                                       for i in range(self.num_actions, len(self.options))},
                            'state_node_lookup': self.state_node_lookup,
                            'option_initiation_lookup': self.option_initiation_lookup,
                            'state_option_values': self.state_option_values}
@@ -208,7 +216,8 @@ class SubgoalAgent(OptionsAgent):
         if progress_bar:
             print("Training Subgoal Options")
 
-        for option in self.options:
+        for i in range(self.num_actions, len(self.options)):
+            option = self.options[i]
             if progress_bar:
                 print("     Option -> " + option.subgoal)
             total_end_states, total_successes = self.train_option(option, environment, training_timesteps,

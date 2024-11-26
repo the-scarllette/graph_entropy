@@ -11,6 +11,7 @@ class BetweennessAgent(SubgoalAgent):
                  state_transition_graph: nx.MultiDiGraph,
                  subgoal_distance: int=30) -> None:
         self.actions = actions
+        self.num_actions = len(actions)
         self.alpha = alpha
         self.epsilon = epsilon
         self.gamma = gamma

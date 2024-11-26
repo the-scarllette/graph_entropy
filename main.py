@@ -1367,35 +1367,36 @@ def run_epoch(env: Environment,
     return epoch_return
 
 # TODO: Fix so works with new betweenness agent
-def train_betweenness_agents(environment: Environment,
+def train_betweenness_agents(base_agent_save_path: str,
+                             environment: Environment,
                              training_timesteps, num_agents, evaluate_policy_window=10,
                              all_actions_valid=True,
-                             base_agent_save_path: str=None,
                              total_eval_steps=np.inf,
                              continue_training=False,
-                             alpha=0.9, epsilon=0.1, gamma=0.9,
+                             alpha=0.9, epsilon=0.1, gamma=0.9, subgoal_distance: int=30,
                              progress_bar=False):
-    all_agent_training_returns = {}
-    all_agent_returns = {}
-    filenames = get_filenames(environment)
-    state_transition_graph = nx.read_gexf(filenames[2]) # nx.from_scipy_sparse_array(adj_matrix, create_using=nx.DiGraph)
-    with open(filenames[3], 'r') as f:
-        stg_values = json.load(f)
-    agent_directory = filenames[4] + '/betweenness_agents'
-    results_directory = filenames[5]
-    agent_training_results_file = 'betweenness_training_returns.json'
-    agent_results_file = 'betweenness_epoch_returns.json'
+    all_agent_training_returns = {str(i): [] for i in range(num_agents)}
+    all_agent_returns = {str(i): [] for i in range(num_agents)}
+    agent_training_results_file = filenames['results'] + '/betweenness_training_returns.json'
+    agent_results_file = filenames['results'] + '/betweenness_epoch_returns.json'
+    stg = nx.read_gexf(filenames['state transition graph'])
 
-    directories_to_make = [agent_directory, results_directory]
+    directories_to_make = [filenames['agents'], filenames['results']]
     for directory in directories_to_make:
         if not os.path.isdir(directory):
             os.mkdir(directory)
 
     if continue_training:
-        with open(results_directory + '/' + agent_results_file, 'r') as f:
+        with open(agent_results_file, 'r') as f:
             all_agent_returns = json.load(f)
-        with open(results_directory + '/' + agent_training_results_file, 'r') as f:
+        with open(agent_training_results_file, 'r') as f:
             all_agent_training_returns = json.load(f)
+
+    base_agent = BetweennessAgent(environment.possible_actions,
+                                  alpha, epsilon, gamma,
+                                  environment.state_shape, environment.state_dtype,
+                                  stg, subgoal_distance)
+    base_agent.load(filenames['agents'] + '/' + base_agent_save_path)
 
     # Training Agent
     for i in range(num_agents):
@@ -1404,82 +1405,30 @@ def train_betweenness_agents(environment: Environment,
         agent_filename = '/betweenness_agent_' + str(i) + '.json'
         agent = BetweennessAgent(environment.possible_actions,
                                  alpha, epsilon, gamma,
-                                 state_transition_graph, environment.state_shape,
-                                 environment.state_dtype)
+                                 environment.state_shape, environment.state_dtype,
+                                 stg, subgoal_distance)
         if continue_training:
-            agent.load(agent_directory + agent_filename)
+            agent.load(filenames['agents'] + '/' + agent_filename)
         else:
-            agent.load(agent_directory + '/' + base_agent_save_path)
+            agent.copy_agent(base_agent)
 
         # Train Agent
         agent, agent_training_returns, agent_returns = train_agent(environment, agent, training_timesteps,
                                                                    evaluate_policy_window,
                                                                    all_actions_valid,
-                                                                   agent_save_path=(agent_directory +
+                                                                   agent_save_path=(filenames['agents'] +
                                                                                     agent_filename),
                                                                    total_eval_steps=total_eval_steps,
                                                                    progress_bar=progress_bar)
 
-        if continue_training:
-            all_agent_training_returns[str(i)] += agent_training_returns
-            all_agent_returns[str(i)] += agent_returns
-        else:
-            all_agent_training_returns[str(i)] = agent_training_returns
-            all_agent_returns[str(i)] = agent_returns
+        all_agent_training_returns[str(i)] += agent_training_returns
+        all_agent_returns[str(i)] += agent_returns
 
         # Saving Results
-        with open(results_directory + '/' + agent_training_results_file, 'w') as f:
+        with open(agent_training_results_file, 'w') as f:
             json.dump(all_agent_training_returns, f)
-        with open(results_directory + '/' + agent_results_file, 'w') as f:
+        with open(agent_results_file, 'w') as f:
             json.dump(all_agent_returns, f)
-
-    return
-
-
-def train_betweenness_options(environment: Environment, file_name_prefix, training_timesteps,
-                              all_actions_valid=True, compressed_matrix=False,
-                              options_save_directory=None,
-                              alpha=0.9, epsilon=0.1, gamma=0.9,
-                              progress_bar=False, progress_bar_prefix=None):
-    stg_values_filename = file_name_prefix + '_stg_values.json'
-    with open(stg_values_filename, 'r') as f:
-        stg_values = json.load(f)
-
-    adj_matrix = None
-    stg = None
-    state_indexer = None
-
-    if compressed_matrix:
-        adj_matrix_filename = file_name_prefix + '_adj_matrix.txt.npz'
-        adj_matrix = sparse.load_npz(adj_matrix_filename)
-
-        state_indexer = {stg_values[index]['state']: index
-                         for index in stg_values}
-    else:
-        stg_filename = file_name_prefix + '_stg.gexf'
-        stg = nx.read_gexf(stg_filename)
-
-    if (options_save_directory is not None) and (not os.path.isdir(options_save_directory)):
-        os.mkdir(options_save_directory)
-
-    subgoals_with_options = []
-    subgoals = [node for node in stg_values
-                if stg_values[node]['betweenness local maxima'] == 'True']
-
-    for subgoal in subgoals:
-        save_path = options_save_directory + "/subgoal - " + str(subgoal)
-        if (subgoal in subgoals_with_options) or os.path.isfile(save_path):
-            continue
-        if progress_bar_prefix is not None:
-            print(progress_bar_prefix)
-
-        option = generate_option_to_goal(environment, subgoal,
-                                         training_timesteps,
-                                         stg, adj_matrix, state_indexer,
-                                         all_actions_valid,
-                                         alpha, epsilon, gamma,
-                                         progress_bar,
-                                         save_path)
 
     return
 
@@ -2195,12 +2144,12 @@ if __name__ == "__main__":
     max_num_hops = 1
     num_agents = 3
     total_evaluation_steps = np.inf #Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=25
-    options_training_timesteps = 100 #tinytown 2x2: 10_000, taxicab arrival-prob 50_000
-    training_timesteps = 20_000 #tinytown_2x2 = 20_000, tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
+    options_training_timesteps = 100 #tinytown 2x2: 10_000, taxicab arrival-prob 25_000
+    training_timesteps = 100 #tinytown_2x2 = 20_000, tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
     filenames = get_filenames(tinytown)
     #adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    preparedness_aggregate_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    #preparedness_aggregate_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     #with open(filenames['state transition graph values'], 'r') as f:
     #    stg_values = json.load(f)
@@ -2208,21 +2157,29 @@ if __name__ == "__main__":
     betweennessagent = BetweennessAgent(tinytown.possible_actions, 0.9, 0.1, 0.9,
                                         tinytown.state_shape, tinytown.state_dtype,
                                         state_transition_graph, 30)
-    betweennessagent.find_betweenness_subgoals()
     betweennessagent.load(filenames['agents'] + '/betweenness_base_agent.json')
     betweennessagent.train_options(tinytown, options_training_timesteps,
                                    False, True)
     betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
     exit()
 
+    train_betweenness_agents('/betweenness_base_agent.json', tinytown,
+                             training_timesteps, num_agents, evaluate_policy_window,
+                             False, total_evaluation_steps, False,
+                             0.9, 0.1, 0.9, 30, True)
+    exit()
+
     preparedness_agent = PreparednessAgent(taxicab.possible_actions,
-                                           0.9, 0.1, 0.9,
+                                           0.9, 0.3, 0.9,
                                            taxicab.state_dtype, taxicab.state_shape,
                                            state_transition_graph, preparedness_aggregate_graph,
                                            option_onboarding='none')
 
-    #preparedness_agent.create_options(taxicab)
-    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent.create_options(taxicab)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent.option_failure_reward = 0.0
+    preparedness_agent.option_step_reward = -0.001
+    preparedness_agent.option_success_reward = 1.0
     preparedness_agent.train_options(taxicab,
                                      options_training_timesteps,
                                      False, True)
