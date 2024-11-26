@@ -4,7 +4,7 @@ import typing
 import networkx as nx
 import numpy as np
 from scipy import sparse
-from typing import List
+from typing import List, Tuple
 
 from environments.environment import Environment
 from learning_agents.qlearningagent import QLearningAgent
@@ -287,7 +287,7 @@ class OptionsAgent:
         self.current_option_index = None
         return
 
-    def get_available_options(self, state: np.ndarray, possible_actions: None|List[int]=None):
+    def get_available_options(self, state: np.ndarray, possible_actions: None|List[int]=None) -> List[int]:
         available_options = []
         option_index = 0
         for option in self.options:
@@ -427,3 +427,4 @@ class OptionsAgent:
         if self.terminating_func is None:
             return True
         return self.terminating_func(state)
+

@@ -26,7 +26,6 @@ from environments.taxicab import TaxiCab
 from environments.tinytown import TinyTown
 from environments.waterbucket import WaterBucket
 import graphing
-from learning_agents.betweennessagent import BetweennessAgent
 from learning_agents.dadsagent import DADSAgent
 from learning_agents.diaynagent import DIAYNAgent
 from learning_agents.eigenoptionagent import EigenOptionAgent
@@ -394,10 +393,6 @@ def find_save_environment_stg(env: Environment, save_file_prefix: str, compresse
     nx.set_node_attributes(graph, state_transition_graph_values)
     nx.write_gexf(graph, stg_save_path)
     sparse.save_npz(adjacency_matrix_save_path, adjacency_matrix)
-    return
-
-
-def find_betweenness_subgoals(env: Environment, stg_values=None):
     return
 
 
@@ -2199,7 +2194,7 @@ if __name__ == "__main__":
     max_num_hops = 1
     num_agents = 3
     total_evaluation_steps = np.inf #Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=25
-    options_training_timesteps = 10_000 #tinytown 2x2: 10_000, taxicab arrival-prob 20_000
+    options_training_timesteps = 20_000 #tinytown 2x2: 10_000, taxicab arrival-prob 50_000
     training_timesteps = 20_000 #tinytown_2x2 = 20_000, tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
     filenames = get_filenames(taxicab)
@@ -2210,7 +2205,7 @@ if __name__ == "__main__":
     #    stg_values = json.load(f)
 
     preparedness_agent = PreparednessAgent(taxicab.possible_actions,
-                                           0.9, 0.35, 0.9,
+                                           0.9, 0.1, 0.9,
                                            taxicab.state_dtype, taxicab.state_shape,
                                            state_transition_graph, preparedness_aggregate_graph,
                                            option_onboarding='none')

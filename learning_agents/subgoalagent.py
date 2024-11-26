@@ -15,16 +15,27 @@ from progressbar import print_progress_bar
 
 class SubgoalOption(Option):
 
-    def __init__(self, actions: List[int], subgoal: str, path_function: Callable[[np.ndarray, str], bool]) -> None:
+    def __init__(self, actions: List[int], subgoal: str, initiation_set: List[np.ndarray]) -> None:
         self.actions = None
         self.policy = QLearningAgent(actions, self.alpha, self.epsilon, self.gamma)
         self.subgoal = subgoal
-        self.initiation_func = lambda state: path_function(state, self.subgoal)
-        self.terminating_func = lambda state: not path_function(state, self.subgoal)
+        self.initiation_set = initiation_set
         return
 
+    def initiated(self, state: np.ndarray) -> bool:
+        for initiation_state in self.initiation_set:
+            if np.array_equal(state, initiation_state):
+                return True
+        return False
+
+    def terminated(self, state: np.ndarray) -> bool:
+        return not self.initiated(state)
 
 class SubgoalAgent(OptionsAgent):
+
+    option_failure_reward = -1.0
+    option_step_reward = -0.001
+    option_success_reward = 1.0
 
     def __init__(self, actions: List[int], alpha: float, epsilon: float, gamma: float,
                  state_shape: Tuple[int, int],
@@ -40,10 +51,10 @@ class SubgoalAgent(OptionsAgent):
         self.subgoals = subgoals
         self.subgoal_distance = subgoal_distance
 
-        self.options = [SubgoalOption(self.actions, subgoal, self.option_initiation) for subgoal in self.subgoals]
+        self.options = []
 
         self.state_node_lookup = {}
-        self.path_lookup = {node: {} for node in self.state_transition_graph.nodes()}
+        self.option_initiation_lookup = {}
 
         self.current_option = None
         self.current_option_index = None
@@ -57,9 +68,37 @@ class SubgoalAgent(OptionsAgent):
     def copy_agent(self, copy_from: 'SubgoalAgent') -> None:
         self.options = copy.deepcopy(self.options)
         self.state_node_lookup = copy.deepycopy(self.state_node_lookup)
-        self.path_lookup = copy.deepcopy(self.path_lookup)
+        self.option_initiation_lookup = copy.deepcopy(self.option_initiation_lookup)
         self.state_option_values = copy.deepcopy(self.state_option_values)
         return
+
+    def create_options(self) -> None:
+        self.options = []
+        for subgoal in self.subgoals:
+            distances = nx.shortest_path_length(self.state_transition_graph, target=subgoal)
+            initiation_set = [self.node_to_state(node) for node, distance in distances
+                                if (node != subgoal) and (distance <= self.subgoal_distance)]
+            option = SubgoalOption(self.actions, subgoal, initiation_set)
+            self.options.append(option)
+        return
+
+    def get_available_options(self, state: np.ndarray, possible_actions: None|List[int]=None) -> List[int]:
+        state_str = self.state_to_state_str(state)
+
+        try:
+            available_options = self.option_initiation_lookup[state_str]
+        except KeyError:
+            option_index = 0
+            available_options = []
+
+            for option in self.options:
+                if option.initiated(state):
+                    available_options.append(option_index)
+                option_index += 1
+
+            self.option_initiation_lookup[state_str] = available_options
+
+        return available_options
 
     def get_state_node(self, state: np.ndarray) -> str:
         state_str = self.state_to_state_str(state)
@@ -79,40 +118,102 @@ class SubgoalAgent(OptionsAgent):
         self.options = []
         self.subgoals = []
         for subgoal, option_dict in agent_save_file['options']:
-            option = SubgoalOption(self.actions, subgoal, self.option_initiation)
-            option.policy.q_values = option_dict['q_values']
+            option = SubgoalOption(self.actions, subgoal, [self.state_str_to_state(state_str)
+                                                           for state_str in option_dict['initiation_set']])
+            option.policy.q_values = option_dict['policy']
             self.options.append(option)
 
         self.state_node_lookup = agent_save_file['state_node_lookup']
-        self.path_lookup = agent_save_file['path_lookup']
+        self.option_initiation_lookup = agent_save_file['option_initiation_lookup']
         self.state_option_values = agent_save_file['state_option_values']
         return
 
-    def option_initiation(self, state: np.ndarray, subgoal: str) -> bool:
-        state_str = self.state_to_state_str(state)
-
-        try:
-            option_initiated_str = self.path_lookup[subgoal][state_str]
-            option_initiated = option_initiated_str == 'True'
-        except KeyError:
-            state_node = self.get_state_node(state)
-            if state_node == subgoal:
-                option_initiated = False
-            else:
-                path_distance = nx.shortest_path_length(self.state_transition_graph, state_node, subgoal)
-                option_initiated = path_distance <= self.subgoal_distance
-            option_initiated_str = 'True' if option_initiated else 'False'
-            self.path_lookup[subgoal][state_str] = option_initiated_str
-
-        return option_initiated
+    def node_to_state(self, node: str) -> np.ndarray:
+        state_str = self.state_transition_graph.nodes(data=True)[node]['state']
+        return self.state_str_to_state(state_str)
 
     def save(self, save_path: str) -> None:
-        agent_save_file = {'options': {option.subgoal: {'policy': option.policy.q_values}
+        agent_save_file = {'options': {option.subgoal: {'initiation_set': [self.state_to_state_str(state)
+                                                                           for state in option.initiation_set],
+                                                        'policy': option.policy.q_values}
                                        for option in self.options},
                            'state_node_lookup': self.state_node_lookup,
-                           'path_lookup': self.path_lookup,
+                           'option_initiation_lookup': self.option_initiation_lookup,
                            'state_option_values': self.state_option_values}
 
         with open(save_path, 'w') as f:
             json.dump(agent_save_file, f)
+        return
+
+    def train_option(self, option: Option, environment: Environment,
+                     training_timesteps: int,
+                     all_actions_possible: bool=False,
+                     progress_bar: bool=False) -> Tuple[int, int]:
+
+        # Getting Start States
+        terminated = True
+        possible_actions = self.actions
+        total_end_states = 0
+        total_successes = 0
+
+        for current_timesteps in range(training_timesteps):
+            if progress_bar:
+                print_progress_bar(current_timesteps, training_timesteps,
+                                   '        >')
+
+            if terminated:
+                state = rand.choice(option.initiation_set)
+                state = environment.reset(state)
+                if not all_actions_possible:
+                    possible_actions = environment.get_possible_actions(state)
+
+            action = option.choose_action(state, possible_actions)
+
+            next_state, _, terminated, _ = environment.step(action)
+            next_state_node = self.get_state_node(next_state)
+
+            reward = self.option_step_reward
+            if next_state_node == option.subgoal:
+                terminated = True
+                reward = self.option_success_reward
+                total_successes += 1
+            elif terminated or option.terminated(next_state):
+                terminated = True
+                reward = self.option_failure_reward
+
+            if terminated:
+                total_end_states += 1
+
+            if not all_actions_possible:
+                possible_actions = environment.get_possible_actions(next_state)
+
+            option.policy.learn(state, action, reward, next_state, terminated, possible_actions)
+
+            state = next_state
+
+        return total_end_states, total_successes
+
+    def train_options(self, environment: Environment,
+                      training_timesteps: int,
+                      all_actions_possible: bool,
+                      progress_bar: bool=False) -> None:
+        def percentage(x: int, y: int) -> float:
+            if y <= 0:
+                return -1.0
+            return round((x/y) * 100, 1)
+
+        if progress_bar:
+            print("Training Subgoal Options")
+
+        for option in self.options:
+            if progress_bar:
+                print("     Option -> " + option.subgoal)
+            success_states = [self.node_to_state(option.subgoal)]
+            total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
+                                                                  success_states,
+                                                                  all_actions_possible=all_actions_possible,
+                                                                  progress_bar=progress_bar)
+            if progress_bar:
+                percentage_hits = percentage(total_successes, total_end_states)
+                print("     Option -> " + option.subgoal + " " + str(percentage_hits) + "% hits")
         return
