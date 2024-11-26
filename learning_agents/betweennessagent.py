@@ -35,15 +35,16 @@ class BetweennessAgent(SubgoalAgent):
         return
 
     def find_betweenness_subgoals(self, state_transition_graph_values: Dict[str, Dict[str, str]]|None=None) -> Dict[str, Dict[str, str]]|None:
-        betweenness_values = nx.betweenness_centrality(state_transition_graph_values)
+        betweenness_values = nx.betweenness_centrality(self.state_transition_graph)
         self.subgoals = []
 
-        for node, betweenness in betweenness_values:
+        for node in betweenness_values.keys():
+            betweenness = betweenness_values[node]
             is_subgoal = True
             for neighbour in nx.all_neighbors(self.state_transition_graph, node):
                 if neighbour == node:
                     continue
-                neighbour_betweenness = betweenness[neighbour]
+                neighbour_betweenness = betweenness_values[neighbour]
                 if neighbour_betweenness >= betweenness:
                     is_subgoal = False
                     break

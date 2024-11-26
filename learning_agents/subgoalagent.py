@@ -15,9 +15,9 @@ from progressbar import print_progress_bar
 
 class SubgoalOption(Option):
 
-    def __init__(self, actions: List[int], subgoal: str, initiation_set: List[np.ndarray]) -> None:
+    def __init__(self, actions: List[int], alpha, epsilon, gamma, subgoal: str, initiation_set: List[np.ndarray]) -> None:
         self.actions = None
-        self.policy = QLearningAgent(actions, self.alpha, self.epsilon, self.gamma)
+        self.policy = QLearningAgent(actions, alpha, epsilon, gamma)
         self.subgoal = subgoal
         self.initiation_set = initiation_set
         return
@@ -78,9 +78,9 @@ class SubgoalAgent(OptionsAgent):
         self.options = []
         for subgoal in self.subgoals:
             distances = nx.shortest_path_length(self.state_transition_graph, target=subgoal)
-            initiation_set = [self.node_to_state(node) for node, distance in distances
-                                if (node != subgoal) and (distance <= self.subgoal_distance)]
-            option = SubgoalOption(self.actions, subgoal, initiation_set)
+            initiation_set = [self.node_to_state(node) for node in list(distances.keys())
+                                if (node != subgoal) and (distances[node] <= self.subgoal_distance)]
+            option = SubgoalOption(self.actions, self.alpha, self.epsilon, self.gamma, subgoal, initiation_set)
             self.options.append(option)
         return
 
@@ -119,8 +119,9 @@ class SubgoalAgent(OptionsAgent):
 
         self.options = []
         self.subgoals = []
-        for subgoal, option_dict in agent_save_file['options']:
-            option = SubgoalOption(self.actions, subgoal, [self.state_str_to_state(state_str)
+        for subgoal in list(agent_save_file['options'].keys()):
+            option_dict = agent_save_file['options'][subgoal]
+            option = SubgoalOption(self.actions, self.alpha, self.epsilon, self.gamma, subgoal, [self.state_str_to_state(state_str)
                                                            for state_str in option_dict['initiation_set']])
             option.policy.q_values = option_dict['policy']
             self.options.append(option)
@@ -210,11 +211,9 @@ class SubgoalAgent(OptionsAgent):
         for option in self.options:
             if progress_bar:
                 print("     Option -> " + option.subgoal)
-            success_states = [self.node_to_state(option.subgoal)]
             total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
-                                                                  success_states,
-                                                                  all_actions_possible=all_actions_possible,
-                                                                  progress_bar=progress_bar)
+                                                                  all_actions_possible,
+                                                                  progress_bar)
             if progress_bar:
                 percentage_hits = percentage(total_successes, total_end_states)
                 print("     Option -> " + option.subgoal + " " + str(percentage_hits) + "% hits")

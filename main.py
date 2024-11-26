@@ -26,6 +26,7 @@ from environments.taxicab import TaxiCab
 from environments.tinytown import TinyTown
 from environments.waterbucket import WaterBucket
 import graphing
+from learning_agents.betweennessagent import BetweennessAgent
 from learning_agents.dadsagent import DADSAgent
 from learning_agents.diaynagent import DIAYNAgent
 from learning_agents.eigenoptionagent import EigenOptionAgent
@@ -1365,7 +1366,7 @@ def run_epoch(env: Environment,
 
     return epoch_return
 
-
+# TODO: Fix so works with new betweenness agent
 def train_betweenness_agents(environment: Environment,
                              training_timesteps, num_agents, evaluate_policy_window=10,
                              all_actions_valid=True,
@@ -2183,7 +2184,7 @@ if __name__ == "__main__":
                       [0, 1, 0]])
     board_name = 'room'
 
-    taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
+    tinytown = TinyTown(2, 2)
 
     beta = 0.5
     graphing_window = 20
@@ -2194,15 +2195,25 @@ if __name__ == "__main__":
     max_num_hops = 1
     num_agents = 3
     total_evaluation_steps = np.inf #Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=25
-    options_training_timesteps = 20_000 #tinytown 2x2: 10_000, taxicab arrival-prob 50_000
+    options_training_timesteps = 100 #tinytown 2x2: 10_000, taxicab arrival-prob 50_000
     training_timesteps = 20_000 #tinytown_2x2 = 20_000, tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
-    filenames = get_filenames(taxicab)
+    filenames = get_filenames(tinytown)
     #adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparedness_aggregate_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     #with open(filenames['state transition graph values'], 'r') as f:
     #    stg_values = json.load(f)
+
+    betweennessagent = BetweennessAgent(tinytown.possible_actions, 0.9, 0.1, 0.9,
+                                        tinytown.state_shape, tinytown.state_dtype,
+                                        state_transition_graph, 30)
+    betweennessagent.find_betweenness_subgoals()
+    betweennessagent.load(filenames['agents'] + '/betweenness_base_agent.json')
+    betweennessagent.train_options(tinytown, options_training_timesteps,
+                                   False, True)
+    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    exit()
 
     preparedness_agent = PreparednessAgent(taxicab.possible_actions,
                                            0.9, 0.1, 0.9,
