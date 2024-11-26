@@ -65,10 +65,6 @@ class SubgoalAgent(OptionsAgent):
         option = SubgoalOption(self.actions, subgoal, initiation_set)
         return option
 
-    # TODO: Create get_available_options method
-    def get_available_options(self, state: np.ndarray, possible_actions: None|List[int]=None) -> List[str]:
-        return
-
     # TODO: Create load method
     def load(self, save_path: str) -> None:
         return
