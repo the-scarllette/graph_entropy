@@ -91,7 +91,6 @@ class SubgoalAgent(OptionsAgent):
             self.options.append(option)
         return
 
-    # TODO FIX FOR ONLY SOME POSSIBLE ACTIONS
     def get_available_options(self, state: np.ndarray, possible_actions: None|List[int]=None) -> List[int]:
         state_str = self.state_to_state_str(state)
 
