@@ -33,6 +33,8 @@ class BetweennessAgent(SubgoalAgent):
         self.total_option_reward = 0
         self.current_option_step = 0
         self.state_option_values = {}
+        self.current_step = 0
+        self.intra_option = False
         return
 
     def find_betweenness_subgoals(self, state_transition_graph_values: Dict[str, Dict[str, str]]|None=None) -> Dict[str, Dict[str, str]]|None:

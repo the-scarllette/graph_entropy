@@ -331,54 +331,69 @@ class OptionsAgent:
                               next_state_possible_actions=None):
         return
 
-    def learn(self, state, action, reward, next_state,
-              terminal=None, next_state_possible_actions=None):
-        if self.intra_option:
-            self.intra_option_learning(state, action, reward, next_state, terminal)
-            return
+    def learn(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray,
+              terminal: bool|None=None, next_state_possible_actions: List[int]|None=None):
+        # Q(s, o) = Q(s, o) + \alpha(r - Q(s, o) + \gamma((1 - \beta)Q(s_prime, o) + \beta(MAXQ(s_prime, o_prime)))))
 
-        self.total_option_reward += reward
+        # if terminal in next_state
+        # Q(s, o) = Q(s, o) + \alpha(r - Q(s, o) + \gamma*MAXQ(next_state, o_prime))
+
+        # if not terminal in next_state
+        # Q(s, o) = Q(s, o) + \alpha*(r - Q(s, o) + \gamma*Q(s_prime, o))
+
+        state_str = self.state_to_state_str(state)
+        available_options = self.get_available_options(state, self.last_possible_actions)
+        state_option_values = self.get_state_option_values(state, available_options)
+
+        next_available_options = []
+        if not terminal:
+            next_available_options = self.get_available_options(next_state, next_state_possible_actions)
+
+        next_state_option_values_list = [0.0]
+        next_state_option_values = self.get_state_option_values(next_state, next_available_options)
+        if next_available_options:
+            next_state_option_values_list = [next_state_option_values[option] for option in next_available_options]
+        max_next_state_option_value = max(next_state_option_values_list)
+
+        for option_index in available_options:
+            option = self.options[option_index]
+            if option.has_policy():
+                train_option = option.choose_action(state, self.last_possible_actions) == action
+                try:
+                    reset_inner_option_policy = option.policy.current_option is None
+                except AttributeError:
+                    reset_inner_option_policy = False
+            else:
+                train_option = option.actions[0] == action
+                reset_inner_option_policy = False
+
+            if train_option:
+                if reset_inner_option_policy:
+                    option.policy.current_option = None
+
+                gamma_product = max_next_state_option_value
+                if not option.terminated(next_state):
+                    try:
+                        gamma_product = next_state_option_values[option_index]
+                    except KeyError:
+                        gamma_product = max_next_state_option_value
+
+                self.state_option_values[state_str][option_index] += self.alpha * (reward -
+                                                                                   state_option_values[option_index] +
+                                                                                   self.gamma * gamma_product)
+
         if not (terminal or self.current_option.terminated(next_state)):
             return
 
-        try:
-            self.current_option.policy.current_option = None
-        except AttributeError:
-            ()
-
         option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
-        all_next_options = []
-        if not terminal:
-            all_next_options = self.get_state_option_values(next_state)
-
-        next_options = all_next_options
-        if next_state_possible_actions is not None:
-            next_options = self.get_available_options(next_state, next_state_possible_actions)
-
-        if (not next_options) or (not all_next_options):
-            next_option_values = [0.0]
-        else:
-            next_option_values = [all_next_options[option] for option in next_options]
-        max_next_option = max(next_option_values)
-
-        state_str = np.array2string(np.ndarray.astype(self.option_start_state, dtype=self.state_dtype))
-
-        key = self.current_option_index
-        try:
-            self.state_option_values[state_str][key] += self.alpha * \
-                                                        (self.total_option_reward +
-                                                         (self.gamma ** self.current_option_step)*
-                                                         max_next_option - option_value)
-        except KeyError:
-            key = str(key)
-            self.state_option_values[state_str][key] += self.alpha * \
-                                                        (self.total_option_reward +
-                                                         (self.gamma ** self.current_option_step) *
-                                                         max_next_option - option_value)
-
+        option_start_state_str = self.state_to_state_str(self.option_start_state)
+        self.state_option_values[option_start_state_str][self.current_option_index] \
+            += self.alpha * (self.total_option_reward + (self.gamma ** self.current_option_step) *
+                             max_next_state_option_value
+                             - option_value)
         self.current_option = None
-        self.current_option_index = None
         self.option_start_state = None
+        self.current_option_index = None
         self.total_option_reward = 0
         return
 

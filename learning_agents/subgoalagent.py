@@ -66,13 +66,15 @@ class SubgoalAgent(OptionsAgent):
         self.total_option_reward = 0
         self.current_option_step = 0
         self.state_option_values = {}
+        self.current_step = 0
+        self.intra_option = False
         return
 
     def copy_agent(self, copy_from: 'SubgoalAgent') -> None:
-        self.options = copy.deepcopy(self.options)
-        self.state_node_lookup = copy.deepcopy(self.state_node_lookup)
-        self.option_initiation_lookup = copy.deepcopy(self.option_initiation_lookup)
-        self.state_option_values = copy.deepcopy(self.state_option_values)
+        self.options = copy.deepcopy(copy_from.options)
+        self.state_node_lookup = copy.deepcopy(copy_from.state_node_lookup)
+        self.option_initiation_lookup = copy.deepcopy(copy_from.option_initiation_lookup)
+        self.state_option_values = copy.deepcopy(copy_from.state_option_values)
         return
 
     def create_options(self) -> None:
@@ -89,6 +91,7 @@ class SubgoalAgent(OptionsAgent):
             self.options.append(option)
         return
 
+    # TODO FIX FOR ONLY SOME POSSIBLE ACTIONS
     def get_available_options(self, state: np.ndarray, possible_actions: None|List[int]=None) -> List[int]:
         state_str = self.state_to_state_str(state)
 
@@ -99,7 +102,10 @@ class SubgoalAgent(OptionsAgent):
             available_options = []
 
             for option in self.options:
-                if option.initiated(state):
+                if option.actions is not None:
+                    if possible_actions is None or option.actions[0] in possible_actions:
+                        available_options.append(option_index)
+                elif option.initiated(state):
                     available_options.append(option_index)
                 option_index += 1
 

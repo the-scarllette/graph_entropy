@@ -1332,7 +1332,6 @@ def run_epoch(env: Environment,
               num_steps: int,
               all_actions_valid: bool = True):
     current_possible_actions = env.possible_actions
-    done = True
     epoch_return = 0
     total_steps = 0
 
@@ -1346,7 +1345,6 @@ def run_epoch(env: Environment,
             if num_steps >= np.inf:
                 break
             state = env.reset()
-            done = False
             if not all_actions_valid:
                 current_possible_actions = env.get_possible_actions()
 
@@ -2133,6 +2131,7 @@ if __name__ == "__main__":
                       [0, 1, 0]])
     board_name = 'room'
 
+    #taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     tinytown = TinyTown(2, 2)
 
     beta = 0.5
@@ -2144,8 +2143,8 @@ if __name__ == "__main__":
     max_num_hops = 1
     num_agents = 3
     total_evaluation_steps = np.inf #Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=25
-    options_training_timesteps = 100 #tinytown 2x2: 10_000, taxicab arrival-prob 25_000
-    training_timesteps = 100 #tinytown_2x2 = 20_000, tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
+    options_training_timesteps = 10_000 #tinytown 2x2: 10_000, taxicab arrival-prob 25_000
+    training_timesteps = 20_000 #tinytown_2x2 = 20_000, tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
     filenames = get_filenames(tinytown)
     #adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
@@ -2154,19 +2153,31 @@ if __name__ == "__main__":
     #with open(filenames['state transition graph values'], 'r') as f:
     #    stg_values = json.load(f)
 
-    betweennessagent = BetweennessAgent(tinytown.possible_actions, 0.9, 0.1, 0.9,
-                                        tinytown.state_shape, tinytown.state_dtype,
-                                        state_transition_graph, 30)
-    betweennessagent.load(filenames['agents'] + '/betweenness_base_agent.json')
-    betweennessagent.train_options(tinytown, options_training_timesteps,
-                                   False, True)
-    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    data = graphing.extract_data(filenames['results'])
+    # ordered_data = [data[2], data[0], data[1]]
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='Tiyntown 2x2',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='std',
+                                       labels=os.listdir(filenames['results']))
     exit()
 
     train_betweenness_agents('/betweenness_base_agent.json', tinytown,
                              training_timesteps, num_agents, evaluate_policy_window,
                              False, total_evaluation_steps, False,
                              0.9, 0.1, 0.9, 30, True)
+    exit()
+
+    betweennessagent = BetweennessAgent(tinytown.possible_actions, 0.9, 0.1, 0.9,
+                                        tinytown.state_shape, tinytown.state_dtype,
+                                        state_transition_graph, 30)
+    betweennessagent.find_betweenness_subgoals()
+    betweennessagent.create_options()
+    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    betweennessagent.train_options(tinytown, options_training_timesteps,
+                                   False, True)
+    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
     exit()
 
     preparedness_agent = PreparednessAgent(taxicab.possible_actions,
@@ -2184,16 +2195,6 @@ if __name__ == "__main__":
                                      options_training_timesteps,
                                      False, True)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
-    exit()
-
-    data = graphing.extract_data(filenames['results'])
-    # ordered_data = [data[2], data[0], data[1]]
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='Tiyntown 2x2',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='std',
-                                       labels=os.listdir(filenames['results']))
     exit()
 
     train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'generic',
