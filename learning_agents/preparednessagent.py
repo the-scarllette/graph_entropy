@@ -143,6 +143,9 @@ class PreparednessAgent(OptionsAgent):
 
         if self.current_option.has_policy():
             chosen_action = self.current_option.choose_action(state, possible_actions)
+            if chosen_action is None:
+                self.current_option = None
+                self.choose_action(state, optimal_choice, possible_actions)
         else:
             chosen_action = self.current_option.actions[self.current_option_step]
 
@@ -428,13 +431,14 @@ class PreparednessAgent(OptionsAgent):
     def learn(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray,
               terminal: None | bool=None, next_state_possible_actions: None | List[int]=None) -> None:
         # Q(s, o) = Q(s, o) + \alpha(r - Q(s, o) + \gamma((1 - \beta)Q(s_prime, o) + \beta(MAXQ(s_prime, o_prime)))))
-        # if terminal in next_state:
-        # Q(s, o) = Q(s, o) + \alpha(r - Q(s, o) + \gamma*Max(Q(next_state, o_prime)))
-        # if not terminal in next_state:
-        # Q(s, o) = Q(s, o) + \alpha*(r - Q(s, o) + \gamma*Q(s_prime, o)
 
-        state_str = np.array2string(state.astype(self.state_dtype))
+        # if terminal in next_state
+        # Q(s, o) = Q(s, o) + \alpha(r - Q(s, o) + \gamma*MAXQ(next_state, o_prime))
 
+        # if not terminal in next_state
+        # Q(s, o) = Q(s, o) + \alpha*(r - Q(s, o) + \gamma*Q(s_prime, o))
+
+        state_str = self.state_to_state_str(state)
         available_options = self.get_available_options(state, self.last_possible_actions)
         state_option_values = self.get_state_option_values(state, available_options)
 
@@ -443,10 +447,9 @@ class PreparednessAgent(OptionsAgent):
             next_available_options = self.get_available_options(next_state, next_state_possible_actions)
 
         next_state_option_values_list = [0.0]
-        next_state_option_values = self.get_state_option_values(next_state)
+        next_state_option_values = self.get_state_option_values(next_state, next_available_options)
         if next_available_options:
             next_state_option_values_list = [next_state_option_values[option] for option in next_available_options]
-
         max_next_state_option_value = max(next_state_option_values_list)
 
         for option_index in available_options:
@@ -455,7 +458,6 @@ class PreparednessAgent(OptionsAgent):
                 train_option = option.choose_action(state, self.last_possible_actions) == action
                 try:
                     reset_inner_option_policy = option.policy.current_option is None
-                    current_inner_option = option.policy.current_option
                 except AttributeError:
                     reset_inner_option_policy = False
             else:
@@ -464,29 +466,31 @@ class PreparednessAgent(OptionsAgent):
 
             if train_option:
                 if reset_inner_option_policy:
-                    option.policy.current_option = current_inner_option
+                    option.policy.current_option = None
 
                 gamma_product = max_next_state_option_value
                 if not option.terminated(next_state):
                     try:
-                        gamma_product = next_state_option_values[option]
+                        gamma_product = next_state_option_values[option_index]
                     except KeyError:
                         gamma_product = max_next_state_option_value
 
-                self.state_option_values[self.option_onboarding][state_str][option_index] +=(
-                        self.alpha * (reward - state_option_values[option_index] + self.gamma * gamma_product))
+                self.state_option_values[self.option_onboarding][state_str][option_index] += self.alpha * (reward -
+                                                                                   state_option_values[option_index] +
+                                                                                   self.gamma * gamma_product)
 
         if not (terminal or self.current_option.terminated(next_state)):
             return
 
         option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
-        option_start_state_str = np.array2string(self.option_start_state.astype(self.state_dtype))
+        option_start_state_str = self.state_to_state_str(self.option_start_state)
         self.state_option_values[self.option_onboarding][option_start_state_str][self.current_option_index] \
             += self.alpha * (self.total_option_reward + (self.gamma ** self.current_option_step) *
                              max_next_state_option_value
                              - option_value)
         self.current_option = None
         self.option_start_state = None
+        self.current_option_index = None
         self.total_option_reward = 0
         return
 

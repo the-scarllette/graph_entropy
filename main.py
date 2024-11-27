@@ -2131,7 +2131,7 @@ if __name__ == "__main__":
                       [0, 1, 0]])
     board_name = 'room'
 
-    #taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
+    # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     tinytown = TinyTown(2, 2)
 
     beta = 0.5
@@ -2142,16 +2142,27 @@ if __name__ == "__main__":
     min_num_hops = 1
     max_num_hops = 1
     num_agents = 3
-    total_evaluation_steps = np.inf #Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=25
+    total_evaluation_steps = np.inf #Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=np.inf
     options_training_timesteps = 10_000 #tinytown 2x2: 10_000, taxicab arrival-prob 25_000
     training_timesteps = 20_000 #tinytown_2x2 = 20_000, tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
     filenames = get_filenames(tinytown)
     #adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    #preparedness_aggregate_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    preparedness_aggregate_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     #with open(filenames['state transition graph values'], 'r') as f:
     #    stg_values = json.load(f)
+
+    betweennessagent = BetweennessAgent(tinytown.possible_actions, 0.9, 0.1, 0.9,
+                                        tinytown.state_shape, tinytown.state_dtype,
+                                        state_transition_graph, 10)
+    betweennessagent.find_betweenness_subgoals()
+    betweennessagent.create_options()
+    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    betweennessagent.train_options(tinytown, options_training_timesteps,
+                                   False, True)
+    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    exit()
 
     data = graphing.extract_data(filenames['results'])
     # ordered_data = [data[2], data[0], data[1]]
@@ -2163,21 +2174,11 @@ if __name__ == "__main__":
                                        labels=os.listdir(filenames['results']))
     exit()
 
-    train_betweenness_agents('/betweenness_base_agent.json', tinytown,
-                             training_timesteps, num_agents, evaluate_policy_window,
-                             False, total_evaluation_steps, False,
-                             0.9, 0.1, 0.9, 30, True)
-    exit()
-
-    betweennessagent = BetweennessAgent(tinytown.possible_actions, 0.9, 0.1, 0.9,
-                                        tinytown.state_shape, tinytown.state_dtype,
-                                        state_transition_graph, 30)
-    betweennessagent.find_betweenness_subgoals()
-    betweennessagent.create_options()
-    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
-    betweennessagent.train_options(tinytown, options_training_timesteps,
-                                   False, True)
-    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'generic',
+                              tinytown, training_timesteps, 3,
+                              all_actions_valid=False, total_eval_steps=total_evaluation_steps,
+                              alpha=0.9, epsilon=0.1, gamma=0.9,
+                              continue_training=False, progress_bar=True)
     exit()
 
     preparedness_agent = PreparednessAgent(taxicab.possible_actions,
@@ -2185,23 +2186,19 @@ if __name__ == "__main__":
                                            taxicab.state_dtype, taxicab.state_shape,
                                            state_transition_graph, preparedness_aggregate_graph,
                                            option_onboarding='none')
-
     preparedness_agent.create_options(taxicab)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
     preparedness_agent.option_failure_reward = 0.0
-    preparedness_agent.option_step_reward = -0.001
-    preparedness_agent.option_success_reward = 1.0
     preparedness_agent.train_options(taxicab,
                                      options_training_timesteps,
                                      False, True)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     exit()
 
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'generic',
-                              taxicab, training_timesteps, 3,
-                              all_actions_valid=False, total_eval_steps=total_evaluation_steps,
-                              alpha=0.9, epsilon=0.1, gamma=0.9,
-                              continue_training=False, progress_bar=True)
+    train_betweenness_agents('/betweenness_base_agent.json', tinytown,
+                             training_timesteps, num_agents, evaluate_policy_window,
+                             False, total_evaluation_steps, False,
+                             0.9, 0.1, 0.9, 30, True)
     exit()
 
     preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')

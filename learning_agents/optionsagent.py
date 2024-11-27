@@ -378,19 +378,31 @@ class OptionsAgent:
                     except KeyError:
                         gamma_product = max_next_state_option_value
 
-                self.state_option_values[state_str][option_index] += self.alpha * (reward -
-                                                                                   state_option_values[option_index] +
-                                                                                   self.gamma * gamma_product)
+                try:
+                    self.state_option_values[state_str][option_index] += self.alpha * (reward -
+                                                                                       state_option_values[option_index] +
+                                                                                       self.gamma * gamma_product)
+                except KeyError:
+                    self.state_option_values[state_str][str(option_index)] += self.alpha * (reward -
+                                                                                       state_option_values[
+                                                                                           option_index] +
+                                                                                       self.gamma * gamma_product)
 
         if not (terminal or self.current_option.terminated(next_state)):
             return
 
         option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
         option_start_state_str = self.state_to_state_str(self.option_start_state)
-        self.state_option_values[option_start_state_str][self.current_option_index] \
-            += self.alpha * (self.total_option_reward + (self.gamma ** self.current_option_step) *
-                             max_next_state_option_value
-                             - option_value)
+        try:
+            self.state_option_values[option_start_state_str][self.current_option_index] \
+                += self.alpha * (self.total_option_reward + (self.gamma ** self.current_option_step) *
+                                 max_next_state_option_value
+                                 - option_value)
+        except KeyError:
+            self.state_option_values[option_start_state_str][str(self.current_option_index)] \
+                += self.alpha * (self.total_option_reward + (self.gamma ** self.current_option_step) *
+                                 max_next_state_option_value
+                                 - option_value)
         self.current_option = None
         self.option_start_state = None
         self.current_option_index = None
