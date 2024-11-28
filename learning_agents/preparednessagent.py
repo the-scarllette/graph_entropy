@@ -21,7 +21,7 @@ class PreparednessOption(Option):
                  continuation_func: Callable[[np.ndarray], bool],
                  primitive_actions: bool,
                  alpha: float, epsilon: float, gamma: float,
-                 state_dtype: Type):
+                 state_dtype: Type,):
         self.actions = actions
         self.start_node = start_node
         self.start_state_str = start_state_str
@@ -35,7 +35,8 @@ class PreparednessOption(Option):
         if primitive_actions:
             self.policy = QLearningAgent(actions, alpha, epsilon, gamma)
         else:
-            self.policy = OptionsAgent(alpha, epsilon, gamma, actions)
+            self.policy = OptionsAgent(alpha, epsilon, gamma, self.actions,
+                                       state_dtype=self.state_dtype)
         return
 
     def get_state_values(self) -> Dict[str, Dict[str, float]]:
@@ -143,11 +144,8 @@ class PreparednessAgent(OptionsAgent):
 
         if self.current_option.has_policy():
             chosen_action = self.current_option.choose_action(state, possible_actions)
-            if chosen_action is None:
-                self.current_option = None
-                self.choose_action(state, optimal_choice, possible_actions)
         else:
-            chosen_action = self.current_option.actions[self.current_option_step]
+            chosen_action = self.current_option.actions[0]
 
         self.current_option_step += 1
         return chosen_action
@@ -721,64 +719,78 @@ class PreparednessAgent(OptionsAgent):
 
     def train_options(self, environment: Environment,
                       training_timesteps: int,
+                      min_level: None | int=None, max_level: None | int=None,
+                      train_between_options: bool=True,
+                      train_onboarding_options: bool=True, train_subgoal_options: bool=True,
                       all_actions_possible: bool=False,
                       progress_bar: bool=False) -> None:
 
         def percentage(x: int, y: int) -> float:
             if y <= 0:
                 return -1.0
-            return round((x/y) * 100, 1)
+            return round((x/y) * 100, 3)
+
+        if min_level is None:
+            min_level = -np.inf
+        if max_level is None:
+            max_level = np.inf
 
         # Options between subgoals
-        if progress_bar:
-            print("Training Options Between Subgoals")
-        for level in self.options_between_subgoals:
+        if train_between_options:
             if progress_bar:
-                print("     Training Options at level: " + level)
-            for option in self.options_between_subgoals[level]:
+                print("Training Options Between Subgoals")
+            for level in self.options_between_subgoals:
+                if not (min_level <= int(level) <= max_level):
+                    continue
                 if progress_bar:
-                    print("         Option: " + option.start_node[0] + " -> " + option.end_node)
-                start_states = [self.state_str_to_state(option.start_state_str[0])]
-                success_states = [option.end_state_str]
+                    print("     Training Options at level: " + level)
+                for option in self.options_between_subgoals[level]:
+                    if progress_bar:
+                        print("         Option: " + option.start_node[0] + " -> " + option.end_node)
+                    start_states = [self.state_str_to_state(option.start_state_str[0])]
+                    success_states = [option.end_state_str]
+                    total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
+                                                                          success_states, start_states,
+                                                                          all_actions_possible, progress_bar)
+                    if progress_bar:
+                        sys.stdout.flush()
+                        percentage_hits = percentage(total_successes, total_end_states)
+                        print("\r         Option: " + option.start_node[0] + " -> " + option.end_node + " "
+                              + str(percentage_hits) + "% hits")
+
+        # Onboarding Options
+        # Generic Onboarding Options
+        if train_onboarding_options:
+            if progress_bar:
+                print("Training Generic Onboarding option")
+            success_states = [values['state']
+                              for _, values in self.aggregate_graph.nodes(data=True)]
+            total_end_states, total_successes = self.train_option(self.generic_onboarding_option, environment,
+                                                                  training_timesteps,
+                                                                  success_states, None,
+                                                                  all_actions_possible, progress_bar)
+            if progress_bar:
+                percentage_hits = percentage(total_successes, total_end_states)
+                print(" Onboarding Option " + str(percentage_hits) + "% hits")
+            if progress_bar:
+                print("Training Specific Onboarding Options")
+            # Specific onboarding options
+            for option in self.specific_onboarding_options:
+                if progress_bar:
+                    print("     Option towards state: " + option.end_node)
                 total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
-                                                                      success_states, start_states,
+                                                                      [option.end_state_str],
+                                                                      None,
                                                                       all_actions_possible, progress_bar)
                 if progress_bar:
                     sys.stdout.flush()
                     percentage_hits = percentage(total_successes, total_end_states)
-                    print("\r         Option: " + option.start_node[0] + " -> " + option.end_node + " "
-                          + str(percentage_hits) + "% hits")
-
-        # Onboarding Options
-        # Generic Onboarding Options
-        if progress_bar:
-            print("Training Generic Onboarding option")
-        success_states = [values['state']
-                          for _, values in self.aggregate_graph.nodes(data=True)]
-        total_end_states, total_successes = self.train_option(self.generic_onboarding_option, environment,
-                                                              training_timesteps,
-                                                              success_states, None,
-                                                              all_actions_possible, progress_bar)
-        if progress_bar:
-            percentage_hits = percentage(total_successes, total_end_states)
-            print(" Onboarding Option " + str(percentage_hits) + "% hits")
-        if progress_bar:
-            print("Training Specific Onboarding Options")
-        # Specific onboarding options
-        for option in self.specific_onboarding_options:
-            if progress_bar:
-                print("     Option towards state: " + option.end_node)
-            total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
-                                                                  [option.end_state_str],
-                                                                  None,
-                                                                  all_actions_possible, progress_bar)
-            if progress_bar:
-                sys.stdout.flush()
-                percentage_hits = percentage(total_successes, total_end_states)
-                print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) + "% hits")
+                    print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) + "% hits")
 
         # Subgoal Options
         # Generic Subgoal Options
+        if not train_subgoal_options:
+            return
         if progress_bar:
             print("Training Generic Subgoal Options")
         for option in self.generic_onboarding_subgoal_options:
