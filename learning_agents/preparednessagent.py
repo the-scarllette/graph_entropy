@@ -21,7 +21,8 @@ class PreparednessOption(Option):
                  continuation_func: Callable[[np.ndarray], bool],
                  primitive_actions: bool,
                  alpha: float, epsilon: float, gamma: float,
-                 state_dtype: Type,):
+                 state_dtype: Type,
+                 subgoal_graph: None | nx.MultiGraph=None):
         self.actions = actions
         self.start_node = start_node
         self.start_state_str = start_state_str
@@ -35,8 +36,8 @@ class PreparednessOption(Option):
         if primitive_actions:
             self.policy = QLearningAgent(actions, alpha, epsilon, gamma)
         else:
-            self.policy = OptionsAgent(alpha, epsilon, gamma, self.actions,
-                                       state_dtype=self.state_dtype)
+            self.policy = PreparednessOptionPolicy(alpha, epsilon, gamma, self.actions,
+                                                   self.state_dtype, subgoal_graph, self.end_node)
         return
 
     def get_state_values(self) -> Dict[str, Dict[str, float]]:
@@ -60,6 +61,37 @@ class PreparednessOption(Option):
         if self.end_state_str == np.array2string(state.astype(self.state_dtype)):
             return True
         return not self.continuation_func(state)
+
+
+class PreparednessOptionPolicy(OptionsAgent):
+
+    def __init__(self, alpha: float, epsilon: float, gamma: float, options: List[Option],
+                 state_dtype: Type,
+                 subgoal_graph: nx.MultiDiGraph, end_node: str):
+        super(PreparednessOptionPolicy, self).__init__(alpha, epsilon, gamma, options, state_dtype=state_dtype)
+        self.subgoal_graph = subgoal_graph
+        self.end_node = end_node
+        return
+
+    def get_available_options(self, state: np.ndarray, possible_actions: None|List[int]=None) -> List[int]:
+        available_options = []
+        option_index = 0
+        for option in self.options:
+            if (possible_actions is not None) and (not option.has_policy()):
+                if option.actions[0] in possible_actions:
+                    available_options.append(option_index)
+                    option_index += 1
+                    continue
+            elif option.initiated(state):
+                try:
+                    option_end_node = option.end_node
+                    if (option_end_node == self.end_node) or nx.has_path(self.subgoal_graph,
+                                                                         option_end_node, self.end_node):
+                        available_options.append(option_index)
+                except AttributeError:
+                    available_options.append(option_index)
+            option_index += 1
+        return available_options
 
 
 class PreparednessAgent(OptionsAgent):
@@ -215,7 +247,7 @@ class PreparednessAgent(OptionsAgent):
                                     initiation_func, continuation_func,
                                     primitive_actions,
                                     self.alpha, self.epsilon, self.gamma,
-                                    self.state_dtype)
+                                    self.state_dtype, self.aggregate_graph)
         return option
 
     def create_options(self, environment: Environment) -> None:
