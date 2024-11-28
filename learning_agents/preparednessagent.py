@@ -65,7 +65,7 @@ class PreparednessOption(Option):
 class PreparednessAgent(OptionsAgent):
 
     option_failure_reward = -1.0
-    option_step_reward = -0.001
+    option_step_reward = -0.0001
     option_success_reward = 1.0
 
     preparedness_subgoal_key = 'preparedness subgoal level'
@@ -435,6 +435,7 @@ class PreparednessAgent(OptionsAgent):
 
         # if not terminal in next_state
         # Q(s, o) = Q(s, o) + \alpha*(r - Q(s, o) + \gamma*Q(s_prime, o))
+        self.total_option_reward += reward
 
         state_str = self.state_to_state_str(state)
         available_options = self.get_available_options(state, self.last_possible_actions)

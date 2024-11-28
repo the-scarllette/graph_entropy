@@ -197,8 +197,8 @@ class Option:
 
 class OptionsAgent:
 
-    def __init__(self, alpha, epsilon, gamma, options, step_size=None, intra_option=False, state_dtype=int,
-                 termination_func=None):
+    def __init__(self, alpha, epsilon, gamma, options, step_size=None, state_dtype=int,
+                 termination_func=None, intra_option=True):
         self.alpha = alpha
         self.epsilon = epsilon
         self.gamma = gamma
@@ -340,6 +340,7 @@ class OptionsAgent:
 
         # if not terminal in next_state
         # Q(s, o) = Q(s, o) + \alpha*(r - Q(s, o) + \gamma*Q(s_prime, o))
+        self.total_option_reward += reward
 
         state_str = self.state_to_state_str(state)
         available_options = self.get_available_options(state, self.last_possible_actions)
@@ -403,6 +404,34 @@ class OptionsAgent:
                 += self.alpha * (self.total_option_reward + (self.gamma ** self.current_option_step) *
                                  max_next_state_option_value
                                  - option_value)
+        self.current_option = None
+        self.option_start_state = None
+        self.current_option_index = None
+        self.total_option_reward = 0
+        return
+
+    def learn_no_intra(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray,
+              terminal: bool|None=None, next_state_possible_actions: List[int]|None=None) -> None:
+        # Q(s, o) = Q(s, o) + \alpha(r - Q(s, o) + \gamma * MAXQ(next_state, o_prime))
+        if not (terminal or self.current_option.terminated(next_state)):
+            return
+
+        next_available_options = []
+        if not terminal:
+            next_available_options = self.get_available_options(next_state, next_state_possible_actions)
+
+        next_state_option_values_list = [0.0]
+        next_state_option_values = self.get_state_option_values(next_state, next_available_options)
+        if next_available_options:
+            next_state_option_values_list = [next_state_option_values[option] for option in next_available_options]
+        max_next_state_option_value = max(next_state_option_values_list)
+
+        option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
+        option_start_state_str = self.state_to_state_str(self.option_start_state)
+        self.state_option_values[option_start_state_str][self.current_option_index] \
+            += self.alpha * (self.total_option_reward + (self.gamma ** self.current_option_step) *
+                             max_next_state_option_value
+                             - option_value)
         self.current_option = None
         self.option_start_state = None
         self.current_option_index = None
