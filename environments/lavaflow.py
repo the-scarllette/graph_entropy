@@ -1,8 +1,22 @@
+import networkx as nx
 import numpy as np
 import random
 from typing import Any
 
 from environments.environment import Environment
+
+# Agent appears in a maze with 1 or more squares of lava
+# agent can move (N, S, E, W), place a block (N, S, E, W) or terminate the environment
+# each timestep all lava spreads to adjacent squares, not through walls or blocks
+# terminal if:
+#   take the terminate action
+#   lava and agent occupy the same tile
+# agent cannot take the place blocks action if there is no path such that lava could reach the agent
+# reward
+#   0 each timestep
+#   -0.1 for an illegal action (placing a block on an occupied square, moving into a wall)
+#   -1.0 for entering lava or terminating when lava can reach the agent
+#   when terminating and lava can no loner reach agent, +1.0 for each empty square the agent could reach
 
 
 class LavaFlow(Environment):
@@ -14,6 +28,9 @@ class LavaFlow(Environment):
     south_block_action = 5
     east_block_action = 6
     west_block_action = 7
+    terminate_action = 8
+    possible_actions = [north_action, south_action, east_action, west_action,
+                        north_block_action, south_block_action, east_block_action, west_block_action]
 
     move_actions = [north_action, south_action, east_action, west_action]
     possible_actions = [north_action, south_action, east_action, west_action,
@@ -23,55 +40,59 @@ class LavaFlow(Environment):
     agent_tile = 1
     lava_tile = 2
     block_tile = 3
-    potential_goal_tile = 4
-    goal_tile = 5
-    goal_and_agent_tile = 6
-    possible_goal_and_agent_tile = 7
 
     blocked_tiles = [lava_tile, block_tile]
 
-    default_board = np.array([[4, 0, 1, 2],
-                              [4, 0, 0, 2]])
+    default_board = np.array([[empty_tile, empty_tile, empty_tile, lava_tile],
+                              [empty_tile, agent_tile, empty_tile, empty_tile]])
     default_board_name = 'corridor'
 
-    step_reward = 0.0
-    success_reward = 1.0
     failure_reward = -1.0
+    invalid_action_reward = -0.1
+    step_reward = 0.0
 
-    def __init__(self, board=None, prob_goal_appearing=0.1, board_name=None):
-        self.prob_goal_appearing = prob_goal_appearing
+    def __init__(self, board: None | np.ndarray=None, board_name: None | str =None):
+        self.state_dtype = int
 
         self.board = board
+        self.board_name = board_name
         if self.board is None:
             self.board = self.default_board
-        self.width = self.board.shape[1]
-        self.height = self.board.shape[0]
-        self.potential_goal_locations = []
-        self.agent_start = None
-        for x in range(self.width):
-            for y in range(self.height):
-                tile = self.board[y, x]
-                if tile == self.agent_tile:
-                    if self.agent_start is not None:
-                        raise ValueError("Invalid board, boards can only contain 1 agent start location")
-                    self.agent_start = (x, y)
-                elif tile == self.potential_goal_tile:
-                    self.potential_goal_locations.append((x, y))
+            self.board_name = self.default_board_name
 
-        self.goal_location = None
-        self.x = self.y = None
+        self.board_graph = None
+        self.state_shape = self.board.shape
+
         self.current_state = None
         self.terminal = True
-
-        self.environment_name = 'lavaflow'
-        if board_name is None:
-            board_name = self.default_board_name
-        self.environment_name += '_' + board_name
+        self.environment_name += 'lavaflow_' + board_name
         return
+
+    def build_state_graph(self) -> None:
+        self.board_graph = nx.Graph()
+        for i in range(self.state_shape[0]):
+            for j in range(self.state_shape[1]):
+                if self.board[i, j] == self.block_tile:
+                    continue
+                node = self.cord_node_key(i, j)
+                self.board_graph.add_node(node)
+
+                for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
+                    for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
+                        if self.board[next_i, next_j] == self.block_tile:
+                            continue
+                        connected_node = self.cord_node_key(next_i, next_j)
+                        self.board_graph.add_node(connected_node)
+                        self.board_graph.add_edge(connected_node, node)
+        return
+
+    def cord_node_key(self, i: int, j: int) -> int:
+        return (self.state_shape[0] * j) + i
 
     def get_start_states(self):
         return [self.board.copy()]
 
+    # TODO: Successor states
     def get_successor_states(self, state, probability_weights=False):
         stationary_actions = 0
         num_successors = 0
@@ -195,6 +216,7 @@ class LavaFlow(Environment):
             return True
         return state[node_y, node_x] in tiles_to_block
 
+    # TODO: is_terminal
     def is_terminal(self, state=None):
         # Terminal if
         # Agent is on a goal location
@@ -270,6 +292,7 @@ class LavaFlow(Environment):
 
         return False
 
+    # TODO: Reset
     def reset(self) -> Any:
         self.current_state = self.board.copy()
         self.x = self.agent_start[0]
@@ -291,16 +314,14 @@ class LavaFlow(Environment):
                         new_state[node[1], node[0]] = self.lava_tile
         return new_state
 
-    def step(self, action) -> (Any, float, bool, Any):
-        if (self.goal_location == (0, 1)) and (self.current_state[1, 0] == self.block_tile):
-            self.terminal = True
-            reward = self.failure_reward
-            return self.current_state.copy(),reward, True, None
+    # TODO: Step
+    def step(self, action: int) -> (np.ndarray, float, bool, None):
+        # agent takes action
+        # spread lava
+        # update board graph
+        # is terminal?
+        # reward
 
-        current_state_temp = self.current_state.copy()
-        x = self.x
-        y = self.y
-        reward = self.step_reward
 
         # Agent takes action
         if action in [self.north_action, self.north_block_action]:
