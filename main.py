@@ -27,8 +27,6 @@ from environments.tinytown import TinyTown
 from environments.waterbucket import WaterBucket
 import graphing
 from learning_agents.betweennessagent import BetweennessAgent
-from learning_agents.dadsagent import DADSAgent
-from learning_agents.diaynagent import DIAYNAgent
 from learning_agents.eigenoptionagent import EigenOptionAgent
 from learning_agents.learningagent import LearningAgent
 from learning_agents.louvainagent import LouvainAgent
@@ -37,8 +35,6 @@ from learning_agents.optionsagent import Option, OptionsAgent, create_option_goa
     generate_option_to_goal
 from learning_agents.preparednessagent import PreparednessAgent
 from learning_agents.qlearningagent import QLearningAgent
-from learning_agents.softactorcritic import SoftActorCritic
-from learning_agents.vicagent import VICAgent
 from progressbar import print_progress_bar
 
 
@@ -621,7 +617,6 @@ def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5,
                                               unweighted=True, limit=max_hop)
 
     subgoals = {hop: [] for hop in range(1, max_hop + 1)}
-    all_subgoals_found = False
     hops = min_hops
     while hops <= max_hop:
         local_maxima_key = get_local_maxima_key(hops)
@@ -1010,7 +1005,6 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
                     ((1 - beta) * preparedness_values[str(node)]['structural entropy ' + name_suffix])
 
     # Finding Subgoals
-    '''
     subgoals = [[] for _ in range(min_computed_hops, max_computed_hops + 1)] +\
             [[] for _ in range(min_num_hops, max_num_hops + 1)]
     num_subgoals = [0 for _ in range(min_computed_hops, max_computed_hops + 1)] +\
@@ -1076,7 +1070,6 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
     if not hierarchy_level_found:
         level -= 1
         print("Hierarchy level maxed-out")
-    '''
 
     return preparedness_values
 
@@ -2125,8 +2118,8 @@ if __name__ == "__main__":
                       [0, 1, 0]])
     board_name = 'room'
 
-    #taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
-    tinytown = TinyTown(2, 2)
+    # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
+    tinytown = TinyTown(2, 3, pick_every=0)
 
     beta = 0.5
     graphing_window = 20
@@ -2136,38 +2129,63 @@ if __name__ == "__main__":
     min_num_hops = 1
     max_num_hops = 1
     num_agents = 3
-    total_evaluation_steps = np.inf  #Taxicab = 100, Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=np.inf
-    options_training_timesteps = 100 #tinytown 2x2: 50_000, taxicab arrival-prob 25_000
-    training_timesteps = 10_000 #tinytown_2x2 = 20_000, tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
+    total_evaluation_steps = 35  #Taxicab = 100, Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=np.inf, tinytown_2x3=35
+    options_training_timesteps = 50_000 #tinytown 2x2: 25_000, taxicab arrival-prob 50_000
+    training_timesteps = 25_000 #tinytown_2x2 = 20_000, tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
     filenames = get_filenames(tinytown)
-    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    #with open(filenames['state transition graph values'], 'r') as f:
+    # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    # preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    # state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    # with open(filenames['state transition graph values'], 'r') as f:
     #    stg_values = json.load(f)
 
+    train_q_learning_agent(tinytown,
+                           training_timesteps, num_agents,
+                           progress_bar=True,
+                           all_actions_valid=False,
+                           total_eval_steps=total_evaluation_steps)
+    exit()
+
+    data = graphing.extract_data(filenames['results'])
+    # ordered_data = [data[2], data[0], data[1]]
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='Tinytown',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='std')
+    exit()
+
+    stg_values = preparedness_efficient(adj_matrix, beta=0.5,
+                                        min_num_hops=4, max_num_hops=4, compressed_matrix=True,
+                                        computed_hops_range=[1, 3],
+                                        existing_stg_values=stg_values)
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+
+    preparedness_agent = PreparednessAgent(taxicab.possible_actions,
+                                           0.9, 0.1, 0.9,
+                                           taxicab.state_dtype, taxicab.state_shape,
+                                           state_transition_graph, preparednesss_subgoal_graph,
+                                           option_onboarding='none')
+    preparedness_agent.create_options(taxicab)
+    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent.train_options(taxicab,
+                                     options_training_timesteps,
+                                     train_between_options=True,
+                                     train_onboarding_options=False, train_subgoal_options=True,
+                                     all_actions_possible=True, progress_bar=True)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    exit()
+
     print(tinytown.environment_name)
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'specific',
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'generic',
                               tinytown, training_timesteps, 3,
                               all_actions_valid=False, total_eval_steps=total_evaluation_steps,
                               alpha=0.9, epsilon=0.1, gamma=0.9,
                               continue_training=False, progress_bar=True)
-    exit()
-
-    preparedness_agent = PreparednessAgent(tinytown.possible_actions,
-                                           0.9, 0.1, 0.9,
-                                           tinytown.state_dtype, tinytown.state_shape,
-                                           state_transition_graph, preparednesss_subgoal_graph,
-                                           option_onboarding='none')
-    preparedness_agent.create_options(tinytown)
-    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent.train_options(tinytown,
-                                     options_training_timesteps,
-                                     train_between_options=False,
-                                     train_onboarding_options=False, train_subgoal_options=True,
-                                     all_actions_possible=False, progress_bar=True)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     exit()
 
     state_transition_graph, preparedness_subgoal_graph, stg_values =(
@@ -2177,23 +2195,6 @@ if __name__ == "__main__":
     nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
     with open(filenames['state transition graph values'], 'w') as f:
         json.dump(stg_values, f)
-    exit()
-
-    data = graphing.extract_data(filenames['results'])
-    # ordered_data = [data[2], data[0], data[1]]
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='Modified Taxicab',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='std',
-                                       labels=os.listdir(filenames['results']))
-    exit()
-
-    train_q_learning_agent(taxicab,
-                           training_timesteps, num_agents,
-                           progress_bar=True,
-                           all_actions_valid=True,
-                           total_eval_steps=total_evaluation_steps)
     exit()
 
     train_betweenness_agents('/betweenness_base_agent.json', taxicab,

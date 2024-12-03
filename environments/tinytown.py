@@ -208,7 +208,7 @@ class TinyTown(Environment):
         start = np.full((self.height + 1, self.width + 1), self.empty_tile)
         for resource in possible_resources:
             start_state = start.copy()
-            start_state.itemset((self.height, self.width), resource)
+            start_state.itemset((self.width, self.height), resource)
             start_states.append(start_state)
         return start_states
 
@@ -259,7 +259,7 @@ class TinyTown(Environment):
                 num_next_resources = 1
             for resource in next_resources:
                 successor = state.copy()
-                successor.itemset((self.height, self.width), resource)
+                successor.itemset((self.width, self.height), resource)
                 successor_states.append(successor)
 
             # Finding Probability Weights
@@ -285,7 +285,7 @@ class TinyTown(Environment):
                     possible_actions += 1
                     successor = state.copy()
                     successor.itemset((y, x), resource)
-                    successor.itemset((self.height, self.width), self.empty_tile)
+                    successor.itemset((self.width, self.height), self.empty_tile)
                     successor_states.append(successor)
 
         probability = 1.0
@@ -308,7 +308,7 @@ class TinyTown(Environment):
                     return False
 
         # State is full and environment is in resource phase
-        if not (state[(self.height, self.width)] == self.empty_tile):
+        if not (state[(self.width, self.height)] == self.empty_tile):
             return True
 
         # Can build
@@ -364,7 +364,7 @@ class TinyTown(Environment):
 
             self.building_phase = True
             self.next_resource = self.empty_tile
-            self.board.itemset((self.height, self.width), self.next_resource)
+            self.board.itemset((self.width, self.height), self.next_resource)
 
         elif self.building_phase and not action == self.total_num_actions - 1:
             action_dict = self.action_lookup[action]
@@ -394,14 +394,14 @@ class TinyTown(Environment):
             self.next_resource = rand.choice(self.resources)
             if self.pick_every == 1:
                 self.next_resource = self.any_tile
-            self.board.itemset((self.height, self.width), self.next_resource)
+            self.board.itemset((self.width, self.height), self.next_resource)
 
         if self.is_state_terminal(self.board) or (action == self.total_num_actions - 1 and self.board_full()):
             reward = self.score_state(self.board)
             self.building_phase = False
             self.terminal = True
             self.next_resource = self.empty_tile
-            self.board.itemset((self.height, self.width), self.next_resource)
+            self.board.itemset((self.width, self.height), self.next_resource)
 
             return self.board.copy(), reward, self.terminal, None
 
@@ -421,7 +421,7 @@ class TinyTown(Environment):
             self.next_resource = self.any_tile
         else:
             self.next_resource = rand.choice(self.resources)
-        self.board.itemset((self.height, self.width), self.next_resource)
+        self.board.itemset((self.width, self.height), self.next_resource)
 
         self.building_phase = False
         self.terminal = False
