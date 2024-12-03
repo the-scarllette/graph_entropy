@@ -953,7 +953,7 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
         raise ValueError("One of beta or beta values must not be None")
 
     def get_name_suffix(x):
-        return '- ' + str(x) + ' hops'
+        return ' - ' + str(x) + ' hops'
 
     num_nodes = adjacency_matrix.shape[0]
     if beta is not None:
@@ -973,7 +973,7 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
         if progress_bar:
             print(str(node) + '/' + str(num_nodes))
             print_progress_bar(node, num_nodes, 'Computing Preparedness: ', 'Complete')
-        distances = sparse.csgraph.dijkstra(adjacency_matrix, indices=node, unweighted=True,
+        distances = sparse.csgraph.dijkstra(adjacency_matrix, directed=True, indices=node, unweighted=True,
                                             limit=max_num_hops + 1)
         if existing_stg_values is None:
             preparedness_values[str(node)] = {}
@@ -994,6 +994,8 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
                     node_frequency_entropy(adjacency_matrix, node, min_num_hops, log_base,
                                            accuracy, compressed_matrix, neighbours)
             preparedness_values[str(node)]['frequency entropy ' + name_suffix] = frequency_entropy
+            if min_computed_hops <= num_hops <= max_computed_hops:
+                continue
             preparedness_values[str(node)]['structural entropy ' + name_suffix] = \
                 node_structural_entropy(adjacency_matrix, node, min_num_hops, log_base,
                                         accuracy, compressed_matrix, neighbours)
@@ -1005,25 +1007,22 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
                     ((1 - beta) * preparedness_values[str(node)]['structural entropy ' + name_suffix])
 
     # Finding Subgoals
-    subgoals = [[] for _ in range(min_computed_hops, max_computed_hops + 1)] +\
-            [[] for _ in range(min_num_hops, max_num_hops + 1)]
-    num_subgoals = [0 for _ in range(min_computed_hops, max_computed_hops + 1)] +\
-                   [0 for _ in range(min_num_hops, max_num_hops + 1)]
+    '''
+    subgoals = {i: [] for i in range(min(min_computed_hops, min_num_hops), max(max_computed_hops, max_num_hops) + 1)}
+    all_subgoals = []
     for node in range(num_nodes):
-        distances = sparse.csgraph.dijkstra(adjacency_matrix, indices=node, unweighted=True,
+        distances = sparse.csgraph.dijkstra(adjacency_matrix, directed=False, indices=node, unweighted=True,
                                             limit=max_num_hops + 1)
 
-        for num_hops in range(min_computed_hops, max_computed_hops + 1):
+        for num_hops in range(min(min_num_hops, min_computed_hops), max(max_num_hops, max_computed_hops) + 1):
             preparedness_key = get_preparedness_key(num_hops, beta) + ' - local maxima'
             try:
                 if preparedness_values[str(node)][preparedness_key] == 'True':
-                    index = num_hops - min_computed_hops
-                    subgoals[index].append(node)
-                    num_subgoals[index] += 1
+                    subgoals[num_hops].append(node)
+                    all_subgoals.append(node)
+                    continue
             except KeyError:
-                preparedness_values[str(node)][preparedness_key] = 'False'
-
-        for num_hops in range(min_num_hops, max_num_hops + 1):
+                ()
             is_subgoal_str = 'False'
 
             neighbours = np.where((0 < distances) & (distances <= num_hops))[0]
@@ -1036,11 +1035,15 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
                 is_subgoal_str = 'False'
                 if preparedness_values[str(node)][preparedness_key] > sorted_values[-1]:
                     is_subgoal_str = 'True'
-                    index = num_hops + max_computed_hops - min_computed_hops + 1 - min_num_hops
-                    subgoals[index].append(node)
-                    num_subgoals[index] += 1
+                    subgoals[num_hops].append(node)
+                    all_subgoals.append(node)
 
             preparedness_values[str(node)][preparedness_key + ' - local maxima'] = is_subgoal_str
+
+    # Pruning Subgoals
+    pruned_subgoals = {i: [] for i in range(min(min_computed_hops, min_num_hops),
+                                            max(max_computed_hops, max_num_hops) + 1)}
+
 
     # Finding hierarchy level
     level = min_num_hops + 1
@@ -1070,7 +1073,7 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
     if not hierarchy_level_found:
         level -= 1
         print("Hierarchy level maxed-out")
-
+    '''
     return preparedness_values
 
 
@@ -1897,7 +1900,7 @@ def train_q_learning_agent(environment: Environment,
         agent = QLearningAgent(environment.possible_actions, alpha, epsilon, gamma,
                                intrinsic_reward, intrinsic_reward_lambda)
         if continue_training:
-            agent.load_policy(filenames['agents'] + '/q_learning_agent ' + str(i))
+            agent.load_policy(filenames['agents'] + '/q_learning_agent_' + str(i) + '.json')
         agent, training_returns, epoch_returns = train_agent(environment, agent, training_timesteps,
                                                              evaluate_policy_window,
                                                              all_actions_valid,
@@ -2119,10 +2122,10 @@ if __name__ == "__main__":
     board_name = 'room'
 
     # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
-    tinytown = TinyTown(2, 3, pick_every=0)
+    tinytown = TinyTown(2, 3, pick_every=1)
 
     beta = 0.5
-    graphing_window = 20
+    graphing_window = 50
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
     hops = 5
@@ -2131,7 +2134,7 @@ if __name__ == "__main__":
     num_agents = 3
     total_evaluation_steps = 35  #Taxicab = 100, Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=np.inf, tinytown_2x3=35
     options_training_timesteps = 50_000 #tinytown 2x2: 25_000, taxicab arrival-prob 50_000
-    training_timesteps = 25_000 #tinytown_2x2 = 20_000, tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
+    training_timesteps = 70_000 #tinytown_2x2 = 20_000, tinytown_2x3(choice)=100_000, tinytown_2x3(random)=150_000 tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
     filenames = get_filenames(tinytown)
     # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
@@ -2140,26 +2143,46 @@ if __name__ == "__main__":
     # with open(filenames['state transition graph values'], 'r') as f:
     #    stg_values = json.load(f)
 
-    train_q_learning_agent(tinytown,
-                           training_timesteps, num_agents,
-                           progress_bar=True,
-                           all_actions_valid=False,
-                           total_eval_steps=total_evaluation_steps)
-    exit()
-
     data = graphing.extract_data(filenames['results'])
-    # ordered_data = [data[2], data[0], data[1]]
     graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='Tinytown',
+                                       name='Tinytown (2x3)',
                                        x_label='Epoch',
                                        y_label='Average Epoch Return',
                                        error_bars='std')
+    exit()
+
+    train_q_learning_agent(tinytown,
+                           training_timesteps, num_agents,
+                           continue_training=True,
+                           progress_bar=True,
+                           all_actions_valid=False,
+                           total_eval_steps=total_evaluation_steps)
     exit()
 
     stg_values = preparedness_efficient(adj_matrix, beta=0.5,
                                         min_num_hops=4, max_num_hops=4, compressed_matrix=True,
                                         computed_hops_range=[1, 3],
                                         existing_stg_values=stg_values)
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    nx.set_node_attributes(state_transition_graph, stg_values)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    state_transition_graph, stg_values, subgoals_no_empty = label_preparedness_subgoals(adj_matrix,
+                                                                                        state_transition_graph,
+                                                                                        stg_values,
+                                                                                        max_hop=4)
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    for i in range(1, 4):
+        print(subgoals_no_empty[i])
+    exit()
+
+    adj_matrix, state_transition_graph, stg_values = tinytown.get_adjacency_matrix(probability_weights=True,
+                                                                                  compressed_matrix=True,
+                                                                                  progress_bar=True)
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'w') as f:
         json.dump(stg_values, f)
     exit()

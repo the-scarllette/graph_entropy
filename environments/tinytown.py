@@ -205,7 +205,7 @@ class TinyTown(Environment):
             possible_resources = self.resources
 
         start_states = []
-        start = np.full((self.height + 1, self.width + 1), self.empty_tile)
+        start = np.full((self.width + 1, self.height + 1), self.empty_tile)
         for resource in possible_resources:
             start_state = start.copy()
             start_state.itemset((self.width, self.height), resource)
@@ -218,7 +218,7 @@ class TinyTown(Environment):
 
         successor_states = []
         possible_actions = 0
-        resource_to_place = state[self.height, self.width]
+        resource_to_place = state[self.width, self.height]
 
         # Building Phase
         if resource_to_place == self.empty_tile:
