@@ -31,10 +31,8 @@ class LavaFlow(Environment):
     terminate_action = 8
     possible_actions = [north_action, south_action, east_action, west_action,
                         north_block_action, south_block_action, east_block_action, west_block_action]
-
     move_actions = [north_action, south_action, east_action, west_action]
-    possible_actions = [north_action, south_action, east_action, west_action,
-                        north_block_action, south_block_action, east_block_action, west_block_action]
+    block_actions = [north_block_action, south_block_action, east_block_action, west_block_action]
 
     empty_tile = 0
     agent_tile = 1
@@ -63,28 +61,48 @@ class LavaFlow(Environment):
         self.board_graph = None
         self.state_shape = self.board.shape
 
+        self.agent_start_i = None
+        self.agent_start_j = None
+        self.agent_i = None
+        self.agent_j = None
+        for i in range(self.state_shape[0]):
+            for j in range(self.state_shape[1]):
+                if self.board[i, j] == self.agent_tile:
+                    if self.agent_start_i is not None:
+                        raise ValueError("Board must include exactly 1 agent tile")
+                    self.agent_start_i, self.agent_start_j = i, j
+                    break
+            if self.agent_start_i is not None:
+                break
+        if self.agent_start_j is None:
+            raise ValueError("Board must include exactly 1 agent tile")
+        self.safe_from_lava = False
+        self.lava_nodes = []
+
         self.current_state = None
         self.terminal = True
         self.environment_name += 'lavaflow_' + board_name
         return
 
-    def build_board_graph(self) -> None:
-        self.board_graph = nx.Graph()
+    def build_state_graph(self, state: np.ndarray | None) -> nx.Graph:
+        if state is None:
+            state = self.board
+        state_graph = nx.Graph()
         for i in range(self.state_shape[0]):
             for j in range(self.state_shape[1]):
-                if self.board[i, j] == self.block_tile:
+                if state[i, j] == self.block_tile:
                     continue
                 node = self.cord_node_key(i, j)
-                self.board_graph.add_node(node)
+                state_graph.add_node(node)
 
                 for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
                     for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
-                        if self.board[next_i, next_j] == self.block_tile:
+                        if state[next_i, next_j] == self.block_tile:
                             continue
                         connected_node = self.cord_node_key(next_i, next_j)
-                        self.board_graph.add_node(connected_node)
-                        self.board_graph.add_edge(connected_node, node)
-        return
+                        state_graph.add_node(connected_node)
+                        state_graph.add_edge(connected_node, node)
+        return state_graph
 
     def cord_node_key(self, i: int, j: int) -> int:
         return (self.state_shape[0] * j) + i
@@ -201,20 +219,17 @@ class LavaFlow(Environment):
             merged_weights = [1.0] * num_merged_successors
         return merged_successors, merged_weights
 
-    def is_node_blocked(self, node, state=None, tiles_to_block=None):
+    def has_path_to_lava(self, state: np.ndarray | None=None) -> bool:
         if state is None:
             if self.terminal:
-                raise AttributeError("To find if a node is blocked, provide a state or make the environment"
-                                     "non-terminal")
+                raise AttributeError("Must provide a state or environment must not be terminal")
             state = self.current_state
-        if tiles_to_block is None:
-            tiles_to_block = self.blocked_tiles
 
-        node_x = node[0]
-        node_y = node[1]
-        if (not (0 <= node_x < self.width)) or (not (0 <= node_y < self.height)):
-            return True
-        return state[node_y, node_x] in tiles_to_block
+        agent_node = self.cord_node_key(self.agent_i, self.agent_j)
+        for lava_node in self.lava_nodes:
+            if nx.has_path(self.)
+
+        return
 
     # TODO: is_terminal
     def is_terminal(self, state=None):
@@ -292,9 +307,15 @@ class LavaFlow(Environment):
 
         return False
 
-    def reset(self) -> np.ndarray:
+    # TODO: add variable state input
+    def reset(self, state: np.ndarray | None) -> np.ndarray:
+
         self.current_state = self.board.copy()
         self.build_board_graph()
+        self.agent_i, self.agent_j = self.agent_start_i, self.agent_start_j
+        self.safe_from_lava = False
+        self.terminal = False
+        self.reset = []
         return self.current_state.copy()
 
     def spread_lava(self, state):
@@ -317,17 +338,71 @@ class LavaFlow(Environment):
         # is terminal?
         # reward
 
+        reward = self.step_reward
+        i, j = self.agent_i, self.agent_j
 
-        # Agent takes action
+        # Finding position of action
         if action in [self.north_action, self.north_block_action]:
-            y -= 1
+            i -= 1
         elif action in [self.south_action, self.south_block_action]:
-            y += 1
+            i += 1
         elif action in [self.east_action, self.east_block_action]:
-            x += 1
+            j += 1
         else:
-            x -= 1
-        if action in self.move_actions:
+            j -= 1
+        # Finding out if action possible
+        action_possible = True
+        if i < 0 or i >= self.state_shape[0]:
+            reward = self.invalid_action_reward
+            action_possible = False
+        elif j < 0 or j >= self.state_shape[1]:
+            reward = self.invalid_action_reward
+            action_possible = False
+        else:
+            next_tile = self.current_state[i, j]
+            if next_tile == self.block_tile
+                reward = self.invalid_action_reward
+                action_possible = False
+        # Moving Agent
+        if (action in self.move_actions) and action_possible:
+            self.current_state[self.agent_i, self.agent_j] = self.empty_tile
+            self.agent_i, self.agent_j = i, j
+            if next_tile == self.lava_tile:
+                reward = self.failure_reward
+                self.terminal = True
+            else:
+                self.current_state[self.agent_i, self.agent_j] = self.agent_tile
+        #Placing Block
+        elif (action in self.place_block_actions) and action_possible:
+            if self.safe_from_lava:
+                reward = self.invalid_action_reward
+                action_possible = False
+            else:
+                self.current_state[i, j] = self.block_tile
+                self.board_graph.remove_node(self.cord_node_key(i, j)) # updating graph
+        elif action_possible and (action == self.terminate_action):
+            self.terminal = True
+
+        # Spread Lava;
+        for i in range(self.state_shape[0]):
+            for j in range(self.state_shape[1]):
+                if self.current_state[i, j] == self.lava_tile:
+                    for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
+                        for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
+                            if self.current_state[next_i, next_j] == self.agent_tile:
+                                self.terminal = True
+                            self.current_state[next_i, next_j] = self.lava_tile
+                            lava_node = self.cord_node_key(next_i, next_j)
+                            if lava_node not in self.lava_nodes:
+                                self.lava_nodes.append(lava_node)
+
+        # Check if path from agent to lava exists
+
+
+        # Check if terminal
+        return self.current_state.copy(), reward, self.terminal, None
+
+
             if not self.is_node_blocked((x, y), self.current_state, [self.block_tile]):
                 new_tile_lookup = {self.agent_tile: self.empty_tile,
                                    self.goal_and_agent_tile: self.goal_tile,
