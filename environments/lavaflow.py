@@ -68,7 +68,7 @@ class LavaFlow(Environment):
         self.environment_name += 'lavaflow_' + board_name
         return
 
-    def build_state_graph(self) -> None:
+    def build_board_graph(self) -> None:
         self.board_graph = nx.Graph()
         for i in range(self.state_shape[0]):
             for j in range(self.state_shape[1]):
@@ -292,14 +292,9 @@ class LavaFlow(Environment):
 
         return False
 
-    # TODO: Reset
-    def reset(self) -> Any:
+    def reset(self) -> np.ndarray:
         self.current_state = self.board.copy()
-        self.x = self.agent_start[0]
-        self.y = self.agent_start[1]
-        self.goal_location = None
-
-        self.terminal = False
+        self.build_board_graph()
         return self.current_state.copy()
 
     def spread_lava(self, state):
