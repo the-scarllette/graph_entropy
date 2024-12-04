@@ -38,18 +38,27 @@ class LavaFlow(Environment):
     agent_tile = 1
     lava_tile = 2
     block_tile = 3
+    is_terminal_tile = 4
 
-    blocked_tiles = [lava_tile, block_tile]
-
-    default_board = np.array([[empty_tile, empty_tile, empty_tile, lava_tile],
-                              [empty_tile, agent_tile, empty_tile, empty_tile]])
+    # # # # #
+    # 0 0 0 #
+    # 0 0 L #
+    # 0 0 0 #
+    # # # # #
+    default_board = np.array([[block_tile, block_tile, block_tile, block_tile, block_tile],
+                              [block_tile, empty_tile, empty_tile, empty_tile, block_tile],
+                              [block_tile, empty_tile, empty_tile, lava_tile, block_tile],
+                              [block_tile, empty_tile, empty_tile, empty_tile, block_tile],
+                              [block_tile, block_tile, block_tile, block_tile, block_tile]])
     default_board_name = 'corridor'
+    default_terminal_lookup = (0, 0)
 
     failure_reward = -1.0
     invalid_action_reward = -0.1
     step_reward = 0.0
 
-    def __init__(self, board: None | np.ndarray=None, board_name: None | str =None):
+    def __init__(self, board: None | np.ndarray=None, board_name: None | str =None,
+                 terminal_lookup_cords: None | Tuple[int, int]=None):
         self.state_dtype = int
 
         self.board = board
@@ -57,6 +66,9 @@ class LavaFlow(Environment):
         if self.board is None:
             self.board = self.default_board
             self.board_name = self.default_board_name
+        self.terminal_lookup_cords = terminal_lookup_cords
+        if self.terminal_lookup_cords is None:
+            self.terminal_lookup_cords = self.default_terminal_lookup
 
         self.board_graph = None
         self.state_shape = self.board.shape
@@ -122,7 +134,13 @@ class LavaFlow(Environment):
         return [self.board.copy()]
 
     # TODO: Successor states
-    def get_successor_states(self, state, probability_weights=False):
+    def get_successor_states(self, state: np.ndarray, probability_weights: bool):
+        # if terminal:
+        #   no successors
+        # moving N, S, W, E
+        # placing N, S, W, E
+        # terminal action: move to terminal state
+
         stationary_actions = 0
         num_successors = 0
         successors = []
@@ -249,11 +267,7 @@ class LavaFlow(Environment):
         if state is None:
             state = self.current_state
 
-        for i in range(self.state_shape[0]):
-            for j in range(self.state_shape[1]):
-                if state[i, j] == self.agent_tile:
-                    return True
-        return False
+        return state[self.terminal_lookup_cords] == self.is_terminal_tile
 
     def reset(self, state: np.ndarray | None) -> np.ndarray:
         if state is None:
@@ -267,7 +281,7 @@ class LavaFlow(Environment):
             self.board_graph = self.build_board_graph()
             self.agent_i, self.agent_j = self.get_agent_cords(self.current_state)
             self.safe_from_lava = not self.has_path_to_lava()
-            self.terminal = self.agent_i is None
+            self.terminal = self.is_terminal(self.current_state)
 
         self.lava_nodes = self.get_lava_nodes(self.current_state)
         return self.current_state.copy()
@@ -304,6 +318,7 @@ class LavaFlow(Environment):
             self.agent_i, self.agent_j = i, j
             if next_tile == self.lava_tile:
                 reward = self.failure_reward
+                self.current_state[self.terminal_lookup_cords] = self.is_terminal_tile
                 self.terminal = True
             else:
                 self.current_state[self.agent_i, self.agent_j] = self.agent_tile
@@ -316,6 +331,7 @@ class LavaFlow(Environment):
                 self.current_state[i, j] = self.block_tile
                 self.board_graph.remove_node(self.cord_node_key(i, j)) # updating graph
         elif action_possible and (action == self.terminate_action):
+            self.current_state[self.terminal_lookup_cords] = self.is_terminal_tile
             self.terminal = True
 
         # Spread Lava;
@@ -325,6 +341,7 @@ class LavaFlow(Environment):
                     for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
                         for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
                             if self.current_state[next_i, next_j] == self.agent_tile:
+                                self.current_state[self.terminal_lookup_cords] = self.is_terminal_tile
                                 self.terminal = True
                             self.current_state[next_i, next_j] = self.lava_tile
                             lava_node = self.cord_node_key(next_i, next_j)
