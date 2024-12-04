@@ -565,7 +565,10 @@ class PreparednessAgent(OptionsAgent):
                                             hierarchy_level, options_for_option)
                 option.set_state_values(option_dict['policy'])
                 if hierarchy_level > 1:
-                    option.set_option_lookup(option_dict['hierarchy level'])
+                    try:
+                        option.set_option_lookup(option_dict['option lookup'])
+                    except KeyError:
+                        pass
                 self.options_between_subgoals[level].append(option)
             options_for_option += self.options_between_subgoals[level]
 
@@ -597,7 +600,10 @@ class PreparednessAgent(OptionsAgent):
                                         max_option_level,
                                         options_for_generic_subgoal_options)
             option.set_state_values(option_dict['policy'])
-            option.set_option_lookup(option_dict['option lookup'])
+            try:
+                option.set_option_lookup(option_dict['option lookup'])
+            except KeyError:
+                pass
             self.generic_onboarding_subgoal_options.append(option)
 
         self.specific_onboarding_subgoal_options = []
@@ -610,7 +616,10 @@ class PreparednessAgent(OptionsAgent):
                                         options_for_specific_subgoal_options,
                                         initiation_func)
             option.set_state_values(option_dict['policy'])
-            option.set_option_lookup(option_dict['option lookup'])
+            try:
+                option.set_option_lookup(option_dict['option lookup'])
+            except KeyError:
+                pass
             self.specific_onboarding_subgoal_options.append(option)
 
         self.generic_onboarding_index = agent_save_file['generic onboarding index']
