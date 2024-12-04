@@ -1,7 +1,7 @@
 import networkx as nx
 import numpy as np
 import random
-from typing import Any
+from typing import List, Tuple
 
 from environments.environment import Environment
 
@@ -77,7 +77,7 @@ class LavaFlow(Environment):
         if self.agent_start_j is None:
             raise ValueError("Board must include exactly 1 agent tile")
         self.safe_from_lava = False
-        self.lava_nodes = []
+        self.lava_nodes = self.get_lava_nodes(self.board)
 
         self.current_state = None
         self.terminal = True
@@ -106,6 +106,17 @@ class LavaFlow(Environment):
 
     def cord_node_key(self, i: int, j: int) -> int:
         return (self.state_shape[0] * j) + i
+
+    def get_agent_cords(self, state: np.ndarray) -> Tuple[int, int] | Tuple[None, None]:
+        for i in range(self.state_shape[0]):
+            for j in range(self.state_shape[1]):
+                if state[i, j] == self.agent_tile:
+                    return i, j
+        return None, None
+
+    def get_lava_nodes(self, state: np.ndarray) -> List[int]:
+        return [self.cord_node_lookup(i, j) for i in range(self.state_shape[0]) for j in range(self.state_shape[1])
+                if self.current_state[i, j] == self.lava_tile]
 
     def get_start_states(self):
         return [self.board.copy()]
@@ -244,15 +255,21 @@ class LavaFlow(Environment):
                     return True
         return False
 
-    # TODO: add variable state input
     def reset(self, state: np.ndarray | None) -> np.ndarray:
+        if state is None:
+            self.current_state = self.board.copy()
+            self.board_graph = self.build_board_graph()
+            self.agent_i, self.agent_j = self.agent_start_i, self.agent_start_j
+            self.safe_from_lava = False
+            self.terminal = False
+        else:
+            self.current_state = state.copy()
+            self.board_graph = self.build_board_graph()
+            self.agent_i, self.agent_j = self.get_agent_cords(self.current_state)
+            self.safe_from_lava = not self.has_path_to_lava()
+            self.terminal = self.agent_i is None
 
-        self.current_state = self.board.copy()
-        self.build_board_graph()
-        self.agent_i, self.agent_j = self.agent_start_i, self.agent_start_j
-        self.safe_from_lava = False
-        self.terminal = False
-        self.reset = []
+        self.lava_nodes = self.get_lava_nodes(self.current_state)
         return self.current_state.copy()
 
     def step(self, action: int) -> (np.ndarray, float, bool, None):
