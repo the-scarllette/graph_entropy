@@ -223,13 +223,16 @@ class LavaFlow(Environment):
         if state is None:
             if self.terminal:
                 raise AttributeError("Must provide a state or environment must not be terminal")
-            state = self.current_state
+            state_graph = self.board_graph
+        else:
+            state_graph = self.build_state_graph(state)
 
         agent_node = self.cord_node_key(self.agent_i, self.agent_j)
-        for lava_node in self.lava_nodes:
-            if nx.has_path(self.)
 
-        return
+        for lava_node in self.lava_nodes:
+            if nx.has_path(state_graph, lava_node, agent_node):
+                return True
+        return False
 
     # TODO: is_terminal
     def is_terminal(self, state=None):
@@ -332,12 +335,6 @@ class LavaFlow(Environment):
 
     # TODO: Step
     def step(self, action: int) -> (np.ndarray, float, bool, None):
-        # agent takes action
-        # spread lava
-        # update board graph
-        # is terminal?
-        # reward
-
         reward = self.step_reward
         i, j = self.agent_i, self.agent_j
 
@@ -360,7 +357,7 @@ class LavaFlow(Environment):
             action_possible = False
         else:
             next_tile = self.current_state[i, j]
-            if next_tile == self.block_tile
+            if next_tile == self.block_tile:
                 reward = self.invalid_action_reward
                 action_possible = False
         # Moving Agent
@@ -397,62 +394,8 @@ class LavaFlow(Environment):
                                 self.lava_nodes.append(lava_node)
 
         # Check if path from agent to lava exists
-
+        if not self.safe_from_lava or self.terminal:
+            self.safe_from_lava = not self.has_path_to_lava()
 
         # Check if terminal
-        return self.current_state.copy(), reward, self.terminal, None
-
-
-            if not self.is_node_blocked((x, y), self.current_state, [self.block_tile]):
-                new_tile_lookup = {self.agent_tile: self.empty_tile,
-                                   self.goal_and_agent_tile: self.goal_tile,
-                                   self.possible_goal_and_agent_tile: self.potential_goal_tile,
-                                   self.empty_tile: self.agent_tile,
-                                   self.goal_tile: self.goal_and_agent_tile,
-                                   self.potential_goal_tile: self.possible_goal_and_agent_tile,
-                                   self.lava_tile: self.lava_tile}
-                current_state_temp[self.y, self.x] = new_tile_lookup[current_state_temp[self.y, self.x]]
-                self.x = x
-                self.y = y
-                current_state_temp[(self.y, self.x)] = new_tile_lookup[current_state_temp[(self.y, self.x)]]
-        elif (0 <= x < self.width) and (0 <= y < self.height):
-            if (current_state_temp[y, x] == self.goal_tile) or  (self.goal_location is None and
-                                                                 current_state_temp[y, x] == self.potential_goal_tile):
-                self.terminal = True
-                reward += self.failure_reward
-                self.current_state = current_state_temp.copy()
-                return self.current_state.copy(), reward, self.terminal, None
-            current_state_temp[y, x] = self.block_tile
-
-        # Lava spreads
-        current_state_temp = self.spread_lava(current_state_temp)
-
-        # Assign Goal
-        if self.goal_location is None:
-            if random.uniform(0, 1) <= self.prob_goal_appearing:
-                valid_goal_locations = [loc for loc in self.potential_goal_locations
-                                        if current_state_temp[loc[1], loc[0]] not in
-                                               [self.lava_tile, self.block_tile]]
-
-                if len(valid_goal_locations) <= 0:
-                    reward += self.failure_reward
-                    self.terminal = True
-                    return self.current_state.copy(), reward, self.terminal, None
-
-                self.goal_location = random.choice(valid_goal_locations)
-                new_tile_lookup = {self.potential_goal_tile: self.goal_tile,
-                                   self.possible_goal_and_agent_tile: self.goal_and_agent_tile}
-                current_state_temp[self.goal_location[1], self.goal_location[0]] = new_tile_lookup[
-                    current_state_temp[self.goal_location[1], self.goal_location[0]]]
-
-        # Check if goal reached
-        self.current_state = current_state_temp.copy()
-
-        if self.current_state[self.y, self.x] == self.goal_and_agent_tile:
-            reward += self.success_reward
-            self.terminal = True
-        elif self.is_terminal(self.current_state):
-            reward += self.failure_reward
-            self.terminal = True
-
         return self.current_state.copy(), reward, self.terminal, None

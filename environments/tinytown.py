@@ -410,7 +410,7 @@ class TinyTown(Environment):
     def reset(self, start_state=None) -> Any:
         if start_state is not None:
             self.board = start_state.copy()
-            self.next_resource = self.board[self.height, self.width]
+            self.next_resource = self.board[self.width, self.height]
             self.building_phase = self.next_resource == self.empty_tile
             self.terminal = False
             return self.board.copy()
