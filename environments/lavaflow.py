@@ -47,10 +47,10 @@ class LavaFlow(Environment):
     # # # # #
     default_board = np.array([[block_tile, block_tile, block_tile, block_tile, block_tile],
                               [block_tile, empty_tile, empty_tile, empty_tile, block_tile],
-                              [block_tile, empty_tile, empty_tile, lava_tile, block_tile],
+                              [block_tile, agent_tile, empty_tile, lava_tile, block_tile],
                               [block_tile, empty_tile, empty_tile, empty_tile, block_tile],
                               [block_tile, block_tile, block_tile, block_tile, block_tile]])
-    default_board_name = 'corridor'
+    default_board_name = 'room'
     default_terminal_lookup = (0, 0)
 
     failure_reward = -1.0
@@ -133,8 +133,7 @@ class LavaFlow(Environment):
     def get_start_states(self):
         return [self.board.copy()]
 
-    # TODO: Successor states
-    def get_successor_states(self, state: np.ndarray, probability_weights: bool):
+    def get_successor_states(self, state: np.ndarray, probability_weights: bool) -> Tuple[np.ndarray, float]:
         # if terminal:
         #   no successors
         # moving N, S, W, E
@@ -142,111 +141,83 @@ class LavaFlow(Environment):
         # terminal action: move to terminal state
 
         stationary_actions = 0
-        num_successors = 0
-        successors = []
+        successor_states = []
         weights = []
 
-        if state[0, 0] == 7:
-            w = 2
+        def add_successor(to_add, num_reaching_actions):
+            successor_states.append(to_add)
+            weights.append(num_reaching_actions)
+            return
+
 
         if self.is_terminal(state):
-            return successors, weights
+            return successor_states, weights
 
-        agent_x = agent_y = goal_x = goal_y = None
-        for x in range(self.width):
-            for y in range(self.height):
-                if state[y, x] in [self.agent_tile, self.possible_goal_and_agent_tile]:
-                    agent_x = x
-                    agent_y = y
-                elif state[y, x] == self.goal_tile:
-                    goal_x = x
-                    goal_y = y
+        safe_from_lava = not self.has_path_to_lava(state)
+        if safe_from_lava:
+            stationary_actions += 4
 
-        removing_agent_tile = {self.agent_tile: self.empty_tile,
-                               self.goal_and_agent_tile: self.goal_tile,
-                               self.possible_goal_and_agent_tile: self.potential_goal_tile}
-        placing_agent_tile = {self.empty_tile: self.agent_tile,
-                              self.goal_tile: self.goal_and_agent_tile,
-                              self.potential_goal_tile: self.possible_goal_and_agent_tile,
-                              self.lava_tile: self.lava_tile}
-        agent_neighbours = [(agent_x + 1, agent_y), (agent_x - 1, agent_y),
-                            (agent_x, agent_y + 1), (agent_x, agent_y - 1)]
-        for neighbour in agent_neighbours:
-            if self.is_node_blocked(neighbour, state, [self.block_tile]):
+        # Agent Taking Action
+        agent_i, agent_j = self.get_agent_cords(state)
+        action_locations = [(agent_i - 1, agent_j), (agent_i + 1, agent_j),
+                            (agent_i, agent_j - 1), (agent_i, agent_j + 1)]
+        for action_location in action_locations:
+            i = action_location[0]
+            j = action_location[1]
+            action_possible = True
+            if i < 0 or i >= self.state_shape[0] or j < 0 or j >= self.state_shape[1]:
+                action_possible = False
+            elif state[i, j] == self.block_tile:
+                action_possible = False
+
+            if not action_possible:
                 stationary_actions += 2
+                if safe_from_lava:
+                    stationary_actions -= 1
                 continue
-            # Moving Agent
-            if state[neighbour[1], neighbour[0]] == self.lava_tile:
-                stationary_actions += 1
-            else:
-                successor = state.copy()
-                successor[agent_y, agent_x] = removing_agent_tile[successor[agent_y, agent_x]]
-                successor[neighbour[1], neighbour[0]] = placing_agent_tile[successor[neighbour[1], neighbour[0]]]
-                successors.append(successor)
-                num_successors += 1
-            # Placing Block
+
             successor = state.copy()
-            successor[neighbour[1], neighbour[0]] = self.block_tile
-            successors.append(successor)
-            num_successors += 1
+            successor[agent_i, agent_j] = self.empty_tile
+            if successor[i, j] == self.lava_tile:
+                successor[self.terminal_lookup_cords] = self.is_terminal_tile
+            else:
+                successor[i, j] = self.agent_tile
+            add_successor(successor, 1)
+            if safe_from_lava:
+                continue
+            successor = state.copy()
+            successor[i, j] = self.block_tile
+            add_successor(successor, 1)
 
-        # Adding Weights
-        weights = [1 / len(self.possible_actions)] * num_successors
-
-        # Adding Stationary State
-        if stationary_actions > 0:
-            num_successors += 1
-            successors.append(state.copy())
-            weights += [stationary_actions / len(self.possible_actions)]
 
         # Spreading Lava
-        successors = [self.spread_lava(successors[i]) for i in range(num_successors)]
+        num_successors = 0
+        successors_after_lava = []
+        weights_after_lava = []
+        for k in range(len(successor_states)):
+            successor = successor_states[k]
+            weight = weights[k]
+            successor_after_lava = self.spread_lava(successor)
 
-        # Potentially Placing goal
-        if (goal_x is None) or (goal_y is None):
-            placing_goal_lookup = {self.potential_goal_tile: self.goal_tile,
-                                   self.possible_goal_and_agent_tile: self.goal_and_agent_tile}
+            successor_found = False
+            for l in range(num_successors):
+                if np.arrays_equal(successors_after_lava[l],
+                                   successor_after_lava):
+                    successor_found = True
+                    break
 
-            for i in range(num_successors):
-                successor = successors[i].copy()
-                valid_goals = [potential_goal for potential_goal in self.potential_goal_locations
-                               if successor[potential_goal[1], potential_goal[0]]
-                               in [self.potential_goal_tile, self.possible_goal_and_agent_tile]]
-                num_valid_goals = len(valid_goals)
-                if num_valid_goals > 0:
-                    weights[i] = weights[i] * (1 - self.prob_goal_appearing)
-                for potential_goal in valid_goals:
-                    goal_successor = successor.copy()
-                    goal_successor[potential_goal[1], potential_goal[0]] = placing_goal_lookup[
-                        goal_successor[potential_goal[1], potential_goal[0]]]
-                    successors.append(goal_successor)
-                    num_successors += 1
-                    weights.append(weights[i] * self.prob_goal_appearing * (1 / num_valid_goals))
-
-        # Merging Matching Successors
-        merged_successors = []
-        merged_weights = []
-        found_successors = []
-        num_merged_successors = 0
-        for i in range(num_successors):
-            successor = successors[i]
-            weight = weights[i]
-            successor_bytes = successor.tobytes()
-
-            if successor_bytes in found_successors:
-                index = found_successors.index(successor_bytes)
-                merged_weights[index] += weight
+            if successor_found:
+                weights_after_lava[l] += weight
                 continue
+            successors_after_lava.append(successor)
+            weights_after_lava.append(weight)
+            num_successors += 1
 
-            merged_successors.append(successor)
-            found_successors.append(successor_bytes)
-            merged_weights.append(weight)
-            num_merged_successors += 1
-
-        # Returning Successors
-        if not probability_weights:
-            merged_weights = [1.0] * num_merged_successors
-        return merged_successors, merged_weights
+        if probability_weights:
+            weights = weights_after_lava / len(self.possible_actions)
+            return successors_after_lava, weights
+        weights = [1] * num_successors
+        return successors_after_lava, weights
 
     def has_path_to_lava(self, state: np.ndarray | None=None) -> bool:
         if state is None:
@@ -285,6 +256,27 @@ class LavaFlow(Environment):
 
         self.lava_nodes = self.get_lava_nodes(self.current_state)
         return self.current_state.copy()
+
+    def spread_lava(self, state: np.ndarray | None = None) -> np.ndarray:
+        if state is None:
+            if self.terminal:
+                raise AttributeError("Must provide a state or environment must not be terminal")
+            state = self.current_state
+
+        for i in range(self.state_shape[0]):
+            for j in range(self.state_shape[1]):
+                if state[i, j] == self.lava_tile:
+                    for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
+                        for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
+                            if state[next_i, next_j] == self.agent_tile:
+                                state[self.terminal_lookup_cords] = self.is_terminal_tile
+                                self.terminal = True
+                            state[next_i, next_j] = self.lava_tile
+                            if not self.terminal:
+                                lava_node = self.cord_node_key(next_i, next_j)
+                                if lava_node not in self.lava_nodes:
+                                    self.lava_nodes.append(lava_node)
+        return state
 
     def step(self, action: int) -> (np.ndarray, float, bool, None):
         reward = self.step_reward
@@ -335,18 +327,7 @@ class LavaFlow(Environment):
             self.terminal = True
 
         # Spread Lava;
-        for i in range(self.state_shape[0]):
-            for j in range(self.state_shape[1]):
-                if self.current_state[i, j] == self.lava_tile:
-                    for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
-                        for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
-                            if self.current_state[next_i, next_j] == self.agent_tile:
-                                self.current_state[self.terminal_lookup_cords] = self.is_terminal_tile
-                                self.terminal = True
-                            self.current_state[next_i, next_j] = self.lava_tile
-                            lava_node = self.cord_node_key(next_i, next_j)
-                            if lava_node not in self.lava_nodes:
-                                self.lava_nodes.append(lava_node)
+        self.current_state = self.spread_lava(self.current_state)
 
         # Check if path from agent to lava exists
         if not self.safe_from_lava or self.terminal:
