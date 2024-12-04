@@ -234,80 +234,14 @@ class LavaFlow(Environment):
                 return True
         return False
 
-    # TODO: is_terminal
-    def is_terminal(self, state=None):
-        # Terminal if
-        # Agent is on a goal location
-        # No Agent on the board
-        # Agent cannot reach a goal location or a possible goal location
-        # A block or lava is on a goal location
-
+    def is_terminal(self, state: None | np.ndarray) -> bool:
         if state is None:
-            if self.terminal:
-                return True
             state = self.current_state
 
-        agent_x = agent_y = goal_x = goal_y = None
-        for x in range(self.width):
-            for y in range(self.height):
-                if state[y, x] in [self.agent_tile, self.possible_goal_and_agent_tile]:
-                    agent_x = x
-                    agent_y = y
-                elif state[y, x] == self.goal_tile:
-                    goal_x = x
-                    goal_y = y
-                elif state[y, x] == self.goal_and_agent_tile:
+        for i in range(self.state_shape[0]):
+            for j in range(self.state_shape[1]):
+                if state[i, j] == self.agent_tile:
                     return True
-
-        if goal_y is None:
-            for potential_goal in self.potential_goal_locations:
-                if state[potential_goal[1], potential_goal[0]] not in [self.potential_goal_tile,
-                                                                       self.possible_goal_and_agent_tile]:
-                    return True
-
-        if (agent_x is None) or (agent_y is None):
-            return True
-
-        if (goal_x is None) and (goal_y is None):
-            return False
-
-        return not self.path_exists(agent_x, agent_y, goal_x, goal_y, state)
-
-    def path_exists(self, start_x, start_y, end_x, end_y, state=None):
-        if state is None:
-            if self.terminal:
-                raise AttributeError("To find a path between nodes, provide a state or make the environment"
-                                     "non-terminal")
-            state = self.current_state
-
-        start_node = (start_x, start_y)
-
-        def is_end_node(node):
-            return (node[0] == end_x) and (node[1] == end_y)
-
-        if is_end_node(start_node):
-            return not self.is_node_blocked(start_node, state)
-
-        nodes_to_search = [start_node]
-        searched = []
-        num_to_search = 1
-        while num_to_search > 0:
-            current_node = nodes_to_search.pop()
-            num_to_search -= 1
-            if is_end_node(current_node):
-                return True
-
-            searched.append(current_node)
-
-            x = current_node[0]
-            y = current_node[1]
-            neighbours = [(x + 1, y), (x, y + 1), (x - 1, y), (x, y - 1)]
-            for neighbour in neighbours:
-                if self.is_node_blocked(neighbour, state) or (neighbour in searched):
-                    continue
-                nodes_to_search.append(neighbour)
-                num_to_search += 1
-
         return False
 
     # TODO: add variable state input
@@ -321,19 +255,6 @@ class LavaFlow(Environment):
         self.reset = []
         return self.current_state.copy()
 
-    def spread_lava(self, state):
-        new_state = state.copy()
-        for x in range(self.width):
-            for y in range(self.height):
-                if state[y, x] == self.lava_tile:
-                    next_lava = [(x + 1, y), (x, y + 1), (x - 1, y), (x, y - 1)]
-                    for node in next_lava:
-                        if self.is_node_blocked(node, state):
-                            continue
-                        new_state[node[1], node[0]] = self.lava_tile
-        return new_state
-
-    # TODO: Step
     def step(self, action: int) -> (np.ndarray, float, bool, None):
         reward = self.step_reward
         i, j = self.agent_i, self.agent_j
