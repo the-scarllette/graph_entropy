@@ -200,7 +200,7 @@ class LavaFlow(Environment):
 
         # Adding stationary actions
         if stationary_actions > 0:
-            add_successor(state.copy, stationary_actions)
+            add_successor(state.copy(), stationary_actions)
 
         # Spreading Lava
         num_successors = 0
@@ -240,6 +240,8 @@ class LavaFlow(Environment):
         else:
             state_graph = self.build_state_graph(state)
             i, j = self.get_agent_cords(state)
+            if i is None or j is None:
+                return True
 
         agent_node = self.cord_node_key(i, j)
 
