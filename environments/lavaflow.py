@@ -57,7 +57,7 @@ class LavaFlow(Environment):
 
     failure_reward = -1.0
     invalid_action_reward = -0.1
-    step_reward = 0.0
+    step_reward = -0.01
     success_per_square_reward = 1.0
 
     def __init__(self, board: None | np.ndarray=None, board_name: None | str =None,
