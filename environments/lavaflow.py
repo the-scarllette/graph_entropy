@@ -261,15 +261,17 @@ class LavaFlow(Environment):
                 raise AttributeError("Must provide a state or environment must not be terminal")
             state_graph = self.board_graph
             i, j = self.agent_i, self.agent_j
+            lava_nodes = self.lava_nodes
         else:
-            state_graph = self.build_state_graph(state)
             i, j = self.get_agent_cords(state)
             if i is None or j is None:
                 return True
+            state_graph = self.build_state_graph(state)
+            lava_nodes = self.get_lava_nodes(state)
 
         agent_node = self.cord_node_key(i, j)
 
-        for lava_node in self.lava_nodes:
+        for lava_node in lava_nodes:
             if nx.has_path(state_graph, lava_node, agent_node):
                 return True
         return False
