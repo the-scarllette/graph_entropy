@@ -392,7 +392,7 @@ class LavaFlow(Environment):
             else:
                 self.current_state[self.agent_i, self.agent_j] = self.agent_tile
         #Placing Block
-        elif (action in self.place_block_actions) and action_possible:
+        elif (action in self.block_actions) and action_possible:
             if self.safe_from_lava:
                 reward = self.invalid_action_reward
                 action_possible = False
