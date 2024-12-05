@@ -111,7 +111,7 @@ class LavaFlow(Environment):
 
                 for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
                     for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
-                        if state[next_i, next_j] == self.block_tile:
+                        if (state[next_i, next_j] == self.block_tile) or (next_i == i and next_j == j):
                             continue
                         connected_node = self.cord_node_key(next_i, next_j)
                         state_graph.add_node(connected_node)
@@ -274,9 +274,11 @@ class LavaFlow(Environment):
         return self.current_state.copy()
 
     def spread_lava(self, state: np.ndarray | None = None) -> np.ndarray:
+        environment_running = False
         if state is None:
             if self.terminal:
                 raise AttributeError("Must provide a state or environment must not be terminal")
+            environment_running = True
             state = self.current_state
 
         for i in range(self.state_shape[0]):
@@ -284,11 +286,15 @@ class LavaFlow(Environment):
                 if state[i, j] == self.lava_tile:
                     for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
                         for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
+                            if next_i == i and next_j == j:
+                                continue
+
                             if state[next_i, next_j] == self.agent_tile:
                                 state[self.terminal_lookup_cords] = self.is_terminal_tile
-                                self.terminal = True
+                                if environment_running:
+                                    self.terminal = True
                             state[next_i, next_j] = self.lava_tile
-                            if not self.terminal:
+                            if environment_running:
                                 lava_node = self.cord_node_key(next_i, next_j)
                                 if lava_node not in self.lava_nodes:
                                     self.lava_nodes.append(lava_node)
