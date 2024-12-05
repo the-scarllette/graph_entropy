@@ -261,8 +261,6 @@ class LavaFlow(Environment):
             state_graph = self.board_graph
             i, j = self.agent_i, self.agent_j
             lava_nodes = self.lava_nodes
-            if self.terminal:
-                return True
         else:
             i, j = self.get_agent_cords(state)
             if i is None or j is None:
@@ -290,7 +288,7 @@ class LavaFlow(Environment):
             state_graph = self.build_state_graph(state)
             i, j = self.get_agent_cords(state)
         reachable_nodes = nx.descendants(state_graph, self.cord_node_key(i, j))
-        return len(reachable_nodes)
+        return len(reachable_nodes) + 1
 
     def reset(self, state: np.ndarray | None=None) -> np.ndarray:
         if state is None:
@@ -368,7 +366,6 @@ class LavaFlow(Environment):
             self.current_state[self.agent_i, self.agent_j] = self.empty_tile
             self.agent_i, self.agent_j = i, j
             if next_tile == self.lava_tile:
-                reward += self.failure_reward
                 self.current_state[self.terminal_lookup_cords] = self.is_terminal_tile
                 self.terminal = True
             else:
@@ -396,8 +393,11 @@ class LavaFlow(Environment):
             self.safe_from_lava = not self.has_path_to_lava()
 
         # Finding reward if terminal
-        if self.terminal and self.safe_from_lava:
-            reward += (self.num_reachable_tiles() * self.reward_per_tile)
+        if self.terminal:
+            if self.safe_from_lava:
+                reward += (self.num_reachable_tiles() * self.reward_per_tile)
+            else:
+                reward += self.failure_reward
 
         # Check if terminal
         return self.current_state.copy(), reward, self.terminal, None
