@@ -330,7 +330,7 @@ class LavaFlow(Environment):
     def spread_lava(self, state: np.ndarray | None = None) -> np.ndarray:
         environment_running = False
         if state is None:
-            if self.terminal:
+            if self.current_state is None:
                 raise AttributeError("Must provide a state or environment must not be terminal")
             environment_running = True
             state = self.current_state
