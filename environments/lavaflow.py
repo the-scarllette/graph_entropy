@@ -141,7 +141,8 @@ class LavaFlow(Environment):
 
         for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
             for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
-                if next_i == i and next_j == j:
+                if ((next_i == i and next_j == j) or
+                        (next_i == self.terminal_lookup_cords[0] and next_j == self.terminal_lookup_cords[1])):
                     continue
                 if state[i, j] != self.block_tile:
                     adjacent_cords.append((next_i, next_j))
@@ -301,6 +302,7 @@ class LavaFlow(Environment):
             environment_running = True
             state = self.current_state
 
+        state_after_lava = state.copy()
         for i in range(self.state_shape[0]):
             for j in range(self.state_shape[1]):
                 if state[i, j] == self.lava_tile:
@@ -310,15 +312,15 @@ class LavaFlow(Environment):
                         next_j = adjacent_cord[1]
 
                         if state[next_i, next_j] == self.agent_tile:
-                            state[self.terminal_lookup_cords] = self.is_terminal_tile
+                            state_after_lava[self.terminal_lookup_cords] = self.is_terminal_tile
                             if environment_running:
                                 self.terminal = True
-                        state[next_i, next_j] = self.lava_tile
+                        state_after_lava[next_i, next_j] = self.lava_tile
                         if environment_running:
                             lava_node = self.cord_node_key(next_i, next_j)
                             if lava_node not in self.lava_nodes:
                                 self.lava_nodes.append(lava_node)
-        return state
+        return state_after_lava
 
     def step(self, action: int) -> (np.ndarray, float, bool, None):
         reward = self.step_reward
