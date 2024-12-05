@@ -139,7 +139,6 @@ class LavaFlow(Environment):
     def get_start_states(self):
         return [self.board.copy()]
 
-    # TODO: Fix so accounts for stationary actions
     def get_successor_states(self, state: np.ndarray, probability_weights: bool) -> Tuple[np.ndarray, float]:
         # if terminal:
         #   no successors
@@ -195,7 +194,13 @@ class LavaFlow(Environment):
             successor = state.copy()
             successor[i, j] = self.block_tile
             add_successor(successor, 1)
+        successor = state.copy()
+        successor[self.terminal_lookup_cords] = self.is_terminal_tile
+        add_successor(successor, 1)
 
+        # Adding stationary actions
+        if stationary_actions > 0:
+            add_successor(state.copy, stationary_actions)
 
         # Spreading Lava
         num_successors = 0
