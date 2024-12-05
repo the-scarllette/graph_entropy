@@ -396,7 +396,7 @@ class LavaFlow(Environment):
             self.safe_from_lava = not self.has_path_to_lava()
 
         # Finding reward if terminal
-        if self.terminal:
+        if self.terminal and self.safe_from_lava:
             reward += (self.num_reachable_tiles() * self.reward_per_tile)
 
         # Check if terminal
