@@ -140,12 +140,15 @@ class LavaFlow(Environment):
             state = self.current_state
 
         for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
-            for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
-                if ((next_i == i and next_j == j) or
-                        (next_i == self.terminal_lookup_cords[0] and next_j == self.terminal_lookup_cords[1])):
-                    continue
-                if state[i, j] != self.block_tile:
-                    adjacent_cords.append((next_i, next_j))
+            if (next_i == i) or (state[next_i, j] == self.block_tile) or (
+                (next_i == self.terminal_lookup_cords[0]) and (j == self.terminal_lookup_cords[1])):
+                continue
+            adjacent_cords.append((next_i, j))
+        for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
+            if (next_j == j) or (state[i, next_j] == self.block_tile) or (
+                (i == self.terminal_lookup_cords[0]) and (next_j == self.terminal_lookup_cords[1])):
+                continue
+            adjacent_cords.append((i, next_j))
 
         return adjacent_cords
 
