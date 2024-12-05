@@ -93,7 +93,7 @@ class LavaFlow(Environment):
 
         self.current_state = None
         self.terminal = True
-        self.environment_name += 'lavaflow_' + board_name
+        self.environment_name = 'lavaflow_' + self.board_name
         return
 
     def build_state_graph(self, state: np.ndarray | None) -> nx.Graph:
@@ -131,7 +131,7 @@ class LavaFlow(Environment):
             if self.terminal:
                 raise AttributeError("Environment must not be terminal or a state must be provided")
             state = self.current_state
-        return [self.cord_node_lookup(i, j) for i in range(self.state_shape[0]) for j in range(self.state_shape[1])
+        return [self.cord_node_key(i, j) for i in range(self.state_shape[0]) for j in range(self.state_shape[1])
                 if state[i, j] == self.lava_tile]
 
     def get_start_states(self):
