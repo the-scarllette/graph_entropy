@@ -261,6 +261,8 @@ class LavaFlow(Environment):
             state_graph = self.board_graph
             i, j = self.agent_i, self.agent_j
             lava_nodes = self.lava_nodes
+            if self.terminal:
+                return True
         else:
             i, j = self.get_agent_cords(state)
             if i is None or j is None:
@@ -395,14 +397,17 @@ class LavaFlow(Environment):
                 reward = self.invalid_action_reward
                 action_possible = False
             else:
+                node = self.cord_node_key(i, j)
+                if self.current_state[i, j] == self.lava_tile:
+                    self.lava_nodes.remove(node)
                 self.current_state[i, j] = self.block_tile
-                self.board_graph.remove_node(self.cord_node_key(i, j)) # updating graph
+                self.board_graph.remove_node(node) # updating graph
         elif action_possible and (action == self.terminate_action):
             self.current_state[self.terminal_lookup_cords] = self.is_terminal_tile
             self.terminal = True
 
         # Spread Lava;
-        self.current_state = self.spread_lava(self.current_state)
+        self.current_state = self.spread_lava()
 
         # Check if path from agent to lava exists
         if not self.safe_from_lava or self.terminal:

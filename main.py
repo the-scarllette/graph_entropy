@@ -2139,6 +2139,9 @@ if __name__ == "__main__":
     # with open(filenames['state transition graph values'], 'r') as f:
     #     stg_values = json.load(f)
 
+    run_episode(lavaflow, None)
+    exit()
+
     train_q_learning_agent(lavaflow,
                            training_timesteps, num_agents,
                            continue_training=False,
