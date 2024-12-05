@@ -250,7 +250,7 @@ class LavaFlow(Environment):
             num_successors += 1
 
         if probability_weights:
-            weights = [weight / self.num_possible_actions]
+            weights = [weight / self.num_possible_actions for weight in weights_after_lava]
             return successors_after_lava, weights
         weights = [1] * num_successors
         return successors_after_lava, weights
