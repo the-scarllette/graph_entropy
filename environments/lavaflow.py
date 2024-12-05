@@ -258,8 +258,6 @@ class LavaFlow(Environment):
 
     def has_path_to_lava(self, state: np.ndarray | None=None) -> bool:
         if state is None:
-            if self.terminal:
-                raise AttributeError("Must provide a state or environment must not be terminal")
             state_graph = self.board_graph
             i, j = self.agent_i, self.agent_j
             lava_nodes = self.lava_nodes
