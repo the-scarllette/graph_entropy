@@ -99,7 +99,7 @@ class LavaFlow(Environment):
         self.environment_name = 'lavaflow_' + self.board_name
         return
 
-    def build_state_graph(self, state: np.ndarray | None) -> nx.Graph:
+    def build_state_graph(self, state: np.ndarray | None=None) -> nx.Graph:
         if state is None:
             state = self.board
         state_graph = nx.Graph()
@@ -110,7 +110,7 @@ class LavaFlow(Environment):
                 node = self.cord_node_key(i, j)
                 state_graph.add_node(node)
 
-                adjacent_cords = self.get_adjacent_cords(state, i, j)
+                adjacent_cords = self.get_adjacent_cords(i, j, state)
                 for adjacent_cord in adjacent_cords:
                     next_i = adjacent_cord[0]
                     next_j = adjacent_cord[1]
@@ -129,7 +129,7 @@ class LavaFlow(Environment):
                     return i, j
         return None, None
 
-    def get_adjacent_cords(self, state: None | np.ndarray, i: int, j: int) -> List[Tuple[int, int]]:
+    def get_adjacent_cords(self, i: int, j: int, state: None | np.ndarray=None) -> List[Tuple[int, int]]:
         adjacent_cords = []
 
         if (i < 0 or i >= self.state_shape[0]) or (j < 0 or j >= self.state_shape[1]):
@@ -153,7 +153,7 @@ class LavaFlow(Environment):
 
         return adjacent_cords
 
-    def get_lava_nodes(self, state: None | np.ndarray) -> List[int]:
+    def get_lava_nodes(self, state: None | np.ndarray=None) -> List[int]:
         if state is None:
             if self.terminal:
                 raise AttributeError("Environment must not be terminal or a state must be provided")
@@ -277,22 +277,22 @@ class LavaFlow(Environment):
                 return True
         return False
 
-    def is_terminal(self, state: None | np.ndarray) -> bool:
+    def is_terminal(self, state: None | np.ndarray=None) -> bool:
         if state is None:
             state = self.current_state
 
         return state[self.terminal_lookup_cords] == self.is_terminal_tile
 
-    def reset(self, state: np.ndarray | None) -> np.ndarray:
+    def reset(self, state: np.ndarray | None=None) -> np.ndarray:
         if state is None:
             self.current_state = self.board.copy()
-            self.board_graph = self.build_board_graph()
+            self.board_graph = self.build_state_graph()
             self.agent_i, self.agent_j = self.agent_start_i, self.agent_start_j
             self.safe_from_lava = False
             self.terminal = False
         else:
             self.current_state = state.copy()
-            self.board_graph = self.build_board_graph()
+            self.board_graph = self.build_state_graph()
             self.agent_i, self.agent_j = self.get_agent_cords(self.current_state)
             self.safe_from_lava = not self.has_path_to_lava()
             self.terminal = self.is_terminal(self.current_state)
@@ -300,7 +300,7 @@ class LavaFlow(Environment):
         self.lava_nodes = self.get_lava_nodes(self.current_state)
         return self.current_state.copy()
 
-    def reward_function(self, state: None | np.ndarray) -> float:
+    def reward_function(self, state: None | np.ndarray=None) -> float:
         environment_running = False
         if state is None:
             state = self.current_state
@@ -339,7 +339,7 @@ class LavaFlow(Environment):
         for i in range(self.state_shape[0]):
             for j in range(self.state_shape[1]):
                 if state[i, j] == self.lava_tile:
-                    adjacent_cords = self.get_adjacent_cords(state, i, j)
+                    adjacent_cords = self.get_adjacent_cords(i, j, state)
                     for adjacent_cord in adjacent_cords:
                         next_i = adjacent_cord[0]
                         next_j = adjacent_cord[1]

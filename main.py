@@ -2125,16 +2125,27 @@ if __name__ == "__main__":
     min_num_hops = 1
     max_num_hops = 1
     num_agents = 3
-    total_evaluation_steps = 35  #Taxicab = 100, Simple_wind_gridworld_4x7x7 = 25, tinytown_3x3 = 100, tinytown_2x2=np.inf, tinytown_2x3=35
+    # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
+    total_evaluation_steps = 50
     options_training_timesteps = 50_000 #tinytown 2x2: 25_000, tinytown(choice)2x3=50_000 taxicab arrival-prob 500_000
-    training_timesteps = 50_000 #tinytown_2x2 = 20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
+    #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
+    #lavaflow_room=1_000
+    training_timesteps = 1_000
 
     filenames = get_filenames(lavaflow)
     # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     # preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'r') as f:
-         stg_values = json.load(f)
+    # state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    # with open(filenames['state transition graph values'], 'r') as f:
+    #     stg_values = json.load(f)
+
+    train_q_learning_agent(lavaflow,
+                           training_timesteps, num_agents,
+                           continue_training=False,
+                           progress_bar=True,
+                           all_actions_valid=True,
+                           total_eval_steps=total_evaluation_steps)
+    exit()
 
     #adj_matrix, state_transition_graph, stg_values = lavaflow.get_adjacency_matrix(probability_weights=True,
     #                                                                               compressed_matrix=True,
@@ -2199,14 +2210,6 @@ if __name__ == "__main__":
                                        x_label='Epoch',
                                        y_label='Average Epoch Return',
                                        error_bars='std')
-    exit()
-
-    train_q_learning_agent(tinytown,
-                           training_timesteps, num_agents,
-                           continue_training=True,
-                           progress_bar=True,
-                           all_actions_valid=False,
-                           total_eval_steps=total_evaluation_steps)
     exit()
 
     print(tinytown.environment_name)
