@@ -13,14 +13,7 @@ from typing import Dict, List
 
 import environments.environment
 from environments.environment import Environment
-from environments.fourroom import FourRoom
-from environments.game2048 import Game2048
-from environments.GridworldTron import GridworldTron
-from environments.keycard import KeyCard
-from environments.MasterMind import MasterMind
-from environments.potionmaking import PotionMaking
-from environments.railroad import RailRoad
-from environments.simplewindgridworld import SimpleWindGridWorld
+from environments.lavaflow import LavaFlow
 from environments.taxicab import TaxiCab
 from environments.tinytown import TinyTown
 from environments.waterbucket import WaterBucket
@@ -2120,8 +2113,9 @@ if __name__ == "__main__":
                       [0, 1, 0]])
     board_name = 'room'
 
+    lavaflow = LavaFlow()
     # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
-    tinytown = TinyTown(2, 3, pick_every=1)
+    # tinytown = TinyTown(2, 3, pick_every=1)
 
     beta = 0.5
     graphing_window = 50
@@ -2135,12 +2129,30 @@ if __name__ == "__main__":
     options_training_timesteps = 50_000 #tinytown 2x2: 25_000, tinytown(choice)2x3=50_000 taxicab arrival-prob 500_000
     training_timesteps = 50_000 #tinytown_2x2 = 20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3 = 1_000_000, simple_wind_gridworld_4x7x7 = 50_000
 
-    filenames = get_filenames(tinytown)
-    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
+    filenames = get_filenames(lavaflow)
+    # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    # preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    # state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    # with open(filenames['state transition graph values'], 'r') as f:
+    #     stg_values = json.load(f)
+
+    adj_matrix, state_transition_graph, stg_values = lavaflow.get_adjacency_matrix(probability_weights=True,
+                                                                                   compressed_matrix=True,
+                                                                                   progress_bar=True)
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+    state_transition_graph, preparedness_subgoal_graph, stg_values = (
+        preparedness_aggregate_graph(tinytown, adj_matrix,
+                                     state_transition_graph, stg_values, min_hop=1, max_hop=None))
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
 
     preparedness_agent = PreparednessAgent(tinytown.possible_actions,
                                            0.9, 0.1, 0.9,
@@ -2170,15 +2182,6 @@ if __name__ == "__main__":
             ()
     exit()
 
-    state_transition_graph, preparedness_subgoal_graph, stg_values = (
-        preparedness_aggregate_graph(tinytown, adj_matrix,
-                                     state_transition_graph, stg_values, min_hop=1, max_hop=None))
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
-    exit()
-
     stg_values = preparedness_efficient(adj_matrix, beta=0.5,
                                         min_num_hops=1, max_num_hops=7, compressed_matrix=True,
                                         computed_hops_range=[1, 6],
@@ -2187,15 +2190,6 @@ if __name__ == "__main__":
         json.dump(stg_values, f)
     nx.set_node_attributes(state_transition_graph, stg_values)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    exit()
-
-    adj_matrix, state_transition_graph, stg_values = tinytown.get_adjacency_matrix(probability_weights=True,
-                                                                                   compressed_matrix=True,
-                                                                                   progress_bar=True)
-    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
     exit()
 
     data = graphing.extract_data(filenames['results'])

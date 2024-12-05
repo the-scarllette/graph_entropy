@@ -126,9 +126,13 @@ class LavaFlow(Environment):
                     return i, j
         return None, None
 
-    def get_lava_nodes(self, state: np.ndarray) -> List[int]:
+    def get_lava_nodes(self, state: None | np.ndarray) -> List[int]:
+        if state is None:
+            if self.terminal:
+                raise AttributeError("Environment must not be terminal or a state must be provided")
+            state = self.current_state
         return [self.cord_node_lookup(i, j) for i in range(self.state_shape[0]) for j in range(self.state_shape[1])
-                if self.current_state[i, j] == self.lava_tile]
+                if state[i, j] == self.lava_tile]
 
     def get_start_states(self):
         return [self.board.copy()]
