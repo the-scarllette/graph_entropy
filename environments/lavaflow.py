@@ -58,7 +58,7 @@ class LavaFlow(Environment):
     failure_reward = -1.0
     invalid_action_reward = -0.1
     step_reward = -0.01
-    success_per_square_reward = 1.0
+    reward_per_tile = 1.0
 
     def __init__(self, board: None | np.ndarray=None, board_name: None | str =None,
                  terminal_lookup_cords: None | Tuple[int, int]=None):
@@ -283,6 +283,15 @@ class LavaFlow(Environment):
 
         return state[self.terminal_lookup_cords] == self.is_terminal_tile
 
+    def num_reachable_tiles(self, state: None | np.ndarray=None) -> int:
+        state_graph = self.board_graph
+        i, j = self.agent_i, self.agent_j
+        if state is not None:
+            state_graph = self.build_state_graph(state)
+            i, j = self.get_agent_cords(state)
+        reachable_nodes = nx.descendants(state_graph, self.cord_node_key(i, j))
+        return len(reachable_nodes)
+
     def reset(self, state: np.ndarray | None=None) -> np.ndarray:
         if state is None:
             self.current_state = self.board.copy()
@@ -299,33 +308,6 @@ class LavaFlow(Environment):
 
         self.lava_nodes = self.get_lava_nodes(self.current_state)
         return self.current_state.copy()
-
-    def reward_function(self, state: None | np.ndarray=None) -> float:
-        environment_running = False
-        if state is None:
-            state = self.current_state
-            environment_running = True
-
-        reward = self.step_reward
-
-        if not self.is_terminal(state):
-            return reward
-
-        safe_from_lava = self.safe_from_lava
-        if not environment_running:
-            safe_from_lava = self.has_path_to_lava(state)
-        if not safe_from_lava:
-            return self.failure_reward
-
-        state_graph = self.board_graph
-        i, j = self.agent_i, self.agent_j
-        if not environment_running:
-            state_graph = self.build_state_graph(state)
-            i, j = self.get_agent_cords(state)
-        reachable_nodes = nx.descendants(state_graph, self.cord_node_key(i, j))
-        num_reachable_nodes = len(reachable_nodes)
-        reward = self.success_per_square_reward * num_reachable_nodes
-        return reward
 
     def spread_lava(self, state: np.ndarray | None = None) -> np.ndarray:
         environment_running = False
@@ -371,22 +353,22 @@ class LavaFlow(Environment):
         # Finding out if action possible
         action_possible = True
         if i < 0 or i >= self.state_shape[0]:
-            reward = self.invalid_action_reward
+            reward += self.invalid_action_reward
             action_possible = False
         elif j < 0 or j >= self.state_shape[1]:
-            reward = self.invalid_action_reward
+            reward += self.invalid_action_reward
             action_possible = False
         else:
             next_tile = self.current_state[i, j]
             if next_tile == self.block_tile:
-                reward = self.invalid_action_reward
+                reward += self.invalid_action_reward
                 action_possible = False
         # Moving Agent
         if (action in self.move_actions) and action_possible:
             self.current_state[self.agent_i, self.agent_j] = self.empty_tile
             self.agent_i, self.agent_j = i, j
             if next_tile == self.lava_tile:
-                reward = self.failure_reward
+                reward += self.failure_reward
                 self.current_state[self.terminal_lookup_cords] = self.is_terminal_tile
                 self.terminal = True
             else:
@@ -394,7 +376,7 @@ class LavaFlow(Environment):
         #Placing Block
         elif (action in self.block_actions) and action_possible:
             if self.safe_from_lava:
-                reward = self.invalid_action_reward
+                reward += self.invalid_action_reward
                 action_possible = False
             else:
                 node = self.cord_node_key(i, j)
@@ -415,7 +397,7 @@ class LavaFlow(Environment):
 
         # Finding reward if terminal
         if self.terminal:
-            reward = self.reward_function()
+            reward += (self.num_reachable_tiles() * self.reward_per_tile)
 
         # Check if terminal
         return self.current_state.copy(), reward, self.terminal, None
