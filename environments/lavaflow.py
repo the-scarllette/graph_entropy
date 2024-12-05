@@ -366,7 +366,7 @@ class LavaFlow(Environment):
             i += 1
         elif action in [self.east_action, self.east_block_action]:
             j += 1
-        else:
+        elif action in [self.west_action, self.west_block_action]:
             j -= 1
         # Finding out if action possible
         action_possible = True
