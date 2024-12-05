@@ -30,7 +30,9 @@ class LavaFlow(Environment):
     west_block_action = 7
     terminate_action = 8
     possible_actions = [north_action, south_action, east_action, west_action,
-                        north_block_action, south_block_action, east_block_action, west_block_action]
+                        north_block_action, south_block_action, east_block_action, west_block_action,
+                        terminate_action]
+    num_possible_actions = len(possible_actions)
     move_actions = [north_action, south_action, east_action, west_action]
     block_actions = [north_block_action, south_block_action, east_block_action, west_block_action]
 
@@ -137,6 +139,7 @@ class LavaFlow(Environment):
     def get_start_states(self):
         return [self.board.copy()]
 
+    # TODO: Fix so accounts for stationary actions
     def get_successor_states(self, state: np.ndarray, probability_weights: bool) -> Tuple[np.ndarray, float]:
         # if terminal:
         #   no successors
@@ -205,8 +208,8 @@ class LavaFlow(Environment):
 
             successor_found = False
             for l in range(num_successors):
-                if np.arrays_equal(successors_after_lava[l],
-                                   successor_after_lava):
+                if np.array_equal(successors_after_lava[l],
+                                  successor_after_lava):
                     successor_found = True
                     break
 
@@ -218,7 +221,7 @@ class LavaFlow(Environment):
             num_successors += 1
 
         if probability_weights:
-            weights = weights_after_lava / len(self.possible_actions)
+            weights = [weight / self.num_possible_actions]
             return successors_after_lava, weights
         weights = [1] * num_successors
         return successors_after_lava, weights
