@@ -2132,17 +2132,18 @@ if __name__ == "__main__":
     filenames = get_filenames(lavaflow)
     # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     # preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
-    # state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    # with open(filenames['state transition graph values'], 'r') as f:
-    #     stg_values = json.load(f)
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+         stg_values = json.load(f)
 
-    adj_matrix, state_transition_graph, stg_values = lavaflow.get_adjacency_matrix(probability_weights=True,
-                                                                                   compressed_matrix=True,
-                                                                                   progress_bar=True)
-    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    #adj_matrix, state_transition_graph, stg_values = lavaflow.get_adjacency_matrix(probability_weights=True,
+    #                                                                               compressed_matrix=True,
+    #                                                                               progress_bar=True)
+    #sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.set_node_attributes(state_transition_graph, stg_values)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
+    #with open(filenames['state transition graph values'], 'w') as f:
+    #    json.dump(stg_values, f)
     exit()
 
     state_transition_graph, preparedness_subgoal_graph, stg_values = (

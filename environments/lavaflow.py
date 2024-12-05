@@ -58,6 +58,7 @@ class LavaFlow(Environment):
     failure_reward = -1.0
     invalid_action_reward = -0.1
     step_reward = 0.0
+    success_per_square_reward = 1.0
 
     def __init__(self, board: None | np.ndarray=None, board_name: None | str =None,
                  terminal_lookup_cords: None | Tuple[int, int]=None):
@@ -245,7 +246,7 @@ class LavaFlow(Environment):
             if successor_found:
                 weights_after_lava[l] += weight
                 continue
-            successors_after_lava.append(successor)
+            successors_after_lava.append(successor_after_lava)
             weights_after_lava.append(weight)
             num_successors += 1
 
@@ -298,6 +299,33 @@ class LavaFlow(Environment):
 
         self.lava_nodes = self.get_lava_nodes(self.current_state)
         return self.current_state.copy()
+
+    def reward_function(self, state: None | np.ndarray) -> float:
+        environment_running = False
+        if state is None:
+            state = self.current_state
+            environment_running = True
+
+        reward = self.step_reward
+
+        if not self.is_terminal(state):
+            return reward
+
+        safe_from_lava = self.safe_from_lava
+        if not environment_running:
+            safe_from_lava = self.has_path_to_lava(state)
+        if not safe_from_lava:
+            return self.failure_reward
+
+        state_graph = self.board_graph
+        i, j = self.agent_i, self.agent_j
+        if not environment_running:
+            state_graph = self.build_state_graph(state)
+            i, j = self.get_agent_cords(state)
+        reachable_nodes = nx.descendants(state_graph, self.cord_node_key(i, j))
+        num_reachable_nodes = len(reachable_nodes)
+        reward = self.success_per_square_reward * num_reachable_nodes
+        return reward
 
     def spread_lava(self, state: np.ndarray | None = None) -> np.ndarray:
         environment_running = False
@@ -381,6 +409,10 @@ class LavaFlow(Environment):
         # Check if path from agent to lava exists
         if not self.safe_from_lava or self.terminal:
             self.safe_from_lava = not self.has_path_to_lava()
+
+        # Finding reward if terminal
+        if self.terminal:
+            reward = self.reward_function()
 
         # Check if terminal
         return self.current_state.copy(), reward, self.terminal, None
