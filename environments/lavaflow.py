@@ -109,13 +109,13 @@ class LavaFlow(Environment):
                 node = self.cord_node_key(i, j)
                 state_graph.add_node(node)
 
-                for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
-                    for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
-                        if (state[next_i, next_j] == self.block_tile) or (next_i == i and next_j == j):
-                            continue
-                        connected_node = self.cord_node_key(next_i, next_j)
-                        state_graph.add_node(connected_node)
-                        state_graph.add_edge(connected_node, node)
+                adjacent_cords = self.get_adjacent_cords(state, i, j)
+                for adjacent_cord in adjacent_cords:
+                    next_i = adjacent_cord[0]
+                    next_j = adjacent_cord[1]
+                    connected_node = self.cord_node_key(next_i, next_j)
+                    state_graph.add_node(connected_node)
+                    state_graph.add_edge(connected_node, node)
         return state_graph
 
     def cord_node_key(self, i: int, j: int) -> int:
@@ -127,6 +127,26 @@ class LavaFlow(Environment):
                 if state[i, j] == self.agent_tile:
                     return i, j
         return None, None
+
+    def get_adjacent_cords(self, state: None | np.ndarray, i: int, j: int) -> List[Tuple[int, int]]:
+        adjacent_cords = []
+
+        if (i < 0 or i >= self.state_shape[0]) or (j < 0 or j >= self.state_shape[1]):
+            return adjacent_cords
+
+        if state is None:
+            if self.terminal:
+                raise AttributeError("Environment must not be terminal or state must be provided")
+            state = self.current_state
+
+        for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
+            for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
+                if next_i == i and next_j == j:
+                    continue
+                if state[i, j] != self.block_tile:
+                    adjacent_cords.append((next_i, next_j))
+
+        return adjacent_cords
 
     def get_lava_nodes(self, state: None | np.ndarray) -> List[int]:
         if state is None:
@@ -284,20 +304,20 @@ class LavaFlow(Environment):
         for i in range(self.state_shape[0]):
             for j in range(self.state_shape[1]):
                 if state[i, j] == self.lava_tile:
-                    for next_i in [max(i - 1, 0), min(i + 1, self.state_shape[0] - 1)]:
-                        for next_j in [max(j - 1, 0), min(j + 1, self.state_shape[1] - 1)]:
-                            if next_i == i and next_j == j:
-                                continue
+                    adjacent_cords = self.get_adjacent_cords(state, i, j)
+                    for adjacent_cord in adjacent_cords:
+                        next_i = adjacent_cord[0]
+                        next_j = adjacent_cord[1]
 
-                            if state[next_i, next_j] == self.agent_tile:
-                                state[self.terminal_lookup_cords] = self.is_terminal_tile
-                                if environment_running:
-                                    self.terminal = True
-                            state[next_i, next_j] = self.lava_tile
+                        if state[next_i, next_j] == self.agent_tile:
+                            state[self.terminal_lookup_cords] = self.is_terminal_tile
                             if environment_running:
-                                lava_node = self.cord_node_key(next_i, next_j)
-                                if lava_node not in self.lava_nodes:
-                                    self.lava_nodes.append(lava_node)
+                                self.terminal = True
+                        state[next_i, next_j] = self.lava_tile
+                        if environment_running:
+                            lava_node = self.cord_node_key(next_i, next_j)
+                            if lava_node not in self.lava_nodes:
+                                self.lava_nodes.append(lava_node)
         return state
 
     def step(self, action: int) -> (np.ndarray, float, bool, None):
