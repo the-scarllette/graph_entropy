@@ -47,11 +47,14 @@ class LavaFlow(Environment):
     # 0 0 L #
     # 0 0 0 #
     # # # # #
-    default_board = np.array([[block_tile, block_tile, block_tile, block_tile, block_tile, block_tile],
-                              [block_tile, empty_tile, empty_tile, empty_tile, empty_tile, block_tile],
-                              [block_tile, empty_tile, empty_tile, empty_tile, lava_tile, block_tile],
-                              [block_tile, empty_tile, empty_tile, empty_tile, empty_tile, block_tile],
-                              [block_tile, block_tile, block_tile, block_tile, block_tile, block_tile]])
+    default_board = np.array([[block_tile, block_tile, block_tile, block_tile, block_tile, block_tile, block_tile],
+                              [block_tile, empty_tile, block_tile, empty_tile, empty_tile, empty_tile, block_tile],
+                              [block_tile, empty_tile, block_tile, empty_tile, block_tile, block_tile, block_tile],
+                              [block_tile, empty_tile, block_tile, empty_tile, empty_tile, empty_tile, block_tile],
+                              [block_tile, empty_tile, empty_tile, empty_tile, empty_tile, empty_tile, block_tile],
+                              [block_tile, empty_tile, block_tile, empty_tile, empty_tile, empty_tile, block_tile],
+                              [block_tile, block_tile, block_tile, lava_tile , lava_tile , block_tile, block_tile],
+                              ])
     default_board_name = 'room'
     default_terminal_lookup = (0, 0)
 
