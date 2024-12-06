@@ -2107,18 +2107,45 @@ def train_subgoal_options(environment: Environment, file_name_prefix, training_t
 # TODO: fix run agent for DADS and DIAYN so not learning on evaluation steps
 
 if __name__ == "__main__":
-    board = np.array([[3, 2, 3],
-                      [0, 0, 0],
-                      [4, 0, 4],
-                      [0, 1, 0]])
-    board_name = 'room'
+    '''
+    board = np.array([[3, 3, 3, 3, 3, 3, 3, 3],
+                      [3, 0, 0, 0, 0, 0, 0, 3],
+                      [3, 3, 3, 0, 3, 3, 3, 2],
+                      [3, 3, 3, 0, 0, 0, 0, 0],
+                      [3, 0, 0, 0, 0, 0, 3, 3],
+                      [3, 0, 3, 0, 0, 0, 2, 3],
+                      [3, 0, 3, 3, 1, 3, 3, 3],
+                      [3, 3, 3, 3, 3, 3, 3, 3]])
+    board_name = 'three_corridor'
 
-    lavaflow = LavaFlow()
+    board = np.array([[3, 3, 3, 3, 3, 3, 3, 3],
+                      [3, 0, 0, 0, 2, 3, 2, 3],
+                      [3, 0, 3, 0, 3, 3, 0, 3],
+                      [3, 1, 0, 0, 0, 0, 0, 3],
+                      [3, 0, 3, 0, 3, 0, 3, 3],
+                      [3, 0, 0, 0, 0, 0, 0, 3],
+                      [3, 3, 3, 3, 3, 3, 3, 3]
+                      ])
+    board_name = "pipes"
+    '''
+
+    board = np.array([[3, 3, 3, 3, 3, 3, 3],
+                      [3, 0, 0, 0, 0, 0, 3],
+                      [3, 0, 3, 0, 3, 0, 3],
+                      [3, 0, 1, 0, 0, 2, 3],
+                      [3, 0, 3, 0, 3, 0, 3],
+                      [3, 0, 0, 0, 0, 0, 3],
+                      [3, 3, 3, 3, 3, 3, 3]
+                      ])
+
+    board_name = 'blocks'
+
+    lavaflow = LavaFlow(board, board_name, (0, 0))
     # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     # tinytown = TinyTown(2, 3, pick_every=1)
 
     beta = 0.5
-    graphing_window = 50
+    graphing_window = 1
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
     hops = 5
@@ -2127,46 +2154,78 @@ if __name__ == "__main__":
     num_agents = 3
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
     total_evaluation_steps = 50
-    options_training_timesteps = 50_000 #tinytown 2x2: 25_000, tinytown(choice)2x3=50_000 taxicab arrival-prob 500_000
+    # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000 taxicab arrival-prob 500_000, lavaflow_pipes=2_000
+    options_training_timesteps = 1_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
-    #lavaflow_room=1_000
-    training_timesteps = 1_000
+    #lavaflow_room=1_000, lavaflow_pipes=50_000 taxicab=50_000
+    training_timesteps = 50_000
 
     filenames = get_filenames(lavaflow)
     # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    # preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    # preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate grdata = graphing.extract_data(filenames['results'])
     # state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     # with open(filenames['state transition graph values'], 'r') as f:
     #     stg_values = json.load(f)
 
-    run_episode(lavaflow, None)
-    exit()
-
-    train_q_learning_agent(lavaflow,
-                           training_timesteps, num_agents,
-                           continue_training=False,
-                           progress_bar=True,
-                           all_actions_valid=True,
-                           total_eval_steps=total_evaluation_steps)
-    exit()
-
-    #adj_matrix, state_transition_graph, stg_values = lavaflow.get_adjacency_matrix(probability_weights=True,
-    #                                                                               compressed_matrix=True,
-    #                                                                               progress_bar=True)
-    #sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
-    nx.set_node_attributes(state_transition_graph, stg_values)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    #with open(filenames['state transition graph values'], 'w') as f:
-    #    json.dump(stg_values, f)
+    run_episode(lavaflow)
     exit()
 
     state_transition_graph, preparedness_subgoal_graph, stg_values = (
-        preparedness_aggregate_graph(tinytown, adj_matrix,
+        preparedness_aggregate_graph(lavaflow, adj_matrix,
                                      state_transition_graph, stg_values, min_hop=1, max_hop=None))
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
     with open(filenames['state transition graph values'], 'w') as f:
         json.dump(stg_values, f)
+    exit()
+
+    data = graphing.extract_data(filenames['results'])
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='LavaFlow',
+                                       x_label='Epoch',
+                                       xlim=[-10, 2000],
+                                       y_label='Average Epoch Return',
+                                       error_bars='std')
+    exit()
+
+    train_betweenness_agents('/betweenness_base_agent.json', lavaflow,
+                             training_timesteps, num_agents, evaluate_policy_window,
+                             True, total_evaluation_steps, False,
+                             0.9, 0.1, 0.9, 30, True)
+    exit()
+
+    print("Betweenness Agent " + lavaflow.environment_name + " training options")
+    betweennessagent = BetweennessAgent(lavaflow.possible_actions, 0.9, 0.3, 0.9,
+                                        lavaflow.state_shape, lavaflow.state_dtype,
+                                        state_transition_graph, 30)
+    betweennessagent.find_betweenness_subgoals()
+    betweennessagent.create_options()
+    betweennessagent.load(filenames['agents'] + '/betweenness_base_agent.json')
+    betweennessagent.train_options(lavaflow, options_training_timesteps,
+                                   True, True)
+    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    exit()
+
+    adj_matrix, state_transition_graph, stg_values = lavaflow.get_adjacency_matrix(probability_weights=True,
+                                                                                   compressed_matrix=True,
+                                                                                   progress_bar=True)
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    nx.set_node_attributes(state_transition_graph, stg_values)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    exit()
+
+    train_q_learning_agent(lavaflow,
+                           training_timesteps, num_agents,
+                           continue_training=True,
+                           progress_bar=True,
+                           all_actions_valid=True,
+                           total_eval_steps=total_evaluation_steps)
     exit()
 
     preparedness_agent = PreparednessAgent(tinytown.possible_actions,
@@ -2207,38 +2266,12 @@ if __name__ == "__main__":
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     exit()
 
-    data = graphing.extract_data(filenames['results'])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='Tinytown (2x3)',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='std')
-    exit()
-
     print(tinytown.environment_name)
     train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', 'generic',
                               tinytown, training_timesteps, 3,
                               all_actions_valid=False, total_eval_steps=total_evaluation_steps,
                               alpha=0.9, epsilon=0.1, gamma=0.9,
                               continue_training=False, progress_bar=True)
-    exit()
-
-    train_betweenness_agents('/betweenness_base_agent.json', taxicab,
-                             training_timesteps, num_agents, evaluate_policy_window,
-                             True, total_evaluation_steps, False,
-                             0.9, 0.1, 0.9, 5, True)
-    exit()
-
-    print("Betweenness Agent " + taxicab.environment_name + " training options")
-    betweennessagent = BetweennessAgent(taxicab.possible_actions, 0.9, 0.3, 0.9,
-                                        taxicab.state_shape, taxicab.state_dtype,
-                                        state_transition_graph, 30)
-    betweennessagent.find_betweenness_subgoals()
-    betweennessagent.create_options()
-    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
-    betweennessagent.train_options(taxicab, options_training_timesteps,
-                                   True, True)
-    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
     exit()
 
     preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')

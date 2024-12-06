@@ -47,18 +47,18 @@ class LavaFlow(Environment):
     # 0 0 L #
     # 0 0 0 #
     # # # # #
-    default_board = np.array([[block_tile, block_tile, block_tile, block_tile, block_tile],
-                              [block_tile, empty_tile, empty_tile, empty_tile, block_tile],
-                              [block_tile, agent_tile, empty_tile, lava_tile, block_tile],
-                              [block_tile, empty_tile, empty_tile, empty_tile, block_tile],
-                              [block_tile, block_tile, block_tile, block_tile, block_tile]])
+    default_board = np.array([[block_tile, block_tile, block_tile, block_tile, block_tile, block_tile],
+                              [block_tile, empty_tile, empty_tile, empty_tile, empty_tile, block_tile],
+                              [block_tile, agent_tile, empty_tile, empty_tile, lava_tile, block_tile],
+                              [block_tile, empty_tile, empty_tile, empty_tile, empty_tile, block_tile],
+                              [block_tile, block_tile, block_tile, block_tile, block_tile, block_tile]])
     default_board_name = 'room'
     default_terminal_lookup = (0, 0)
 
     failure_reward = -1.0
     invalid_action_reward = -0.1
     step_reward = -0.01
-    reward_per_tile = 1.0
+    reward_per_tile = 2.0
 
     def __init__(self, board: None | np.ndarray=None, board_name: None | str =None,
                  terminal_lookup_cords: None | Tuple[int, int]=None):
