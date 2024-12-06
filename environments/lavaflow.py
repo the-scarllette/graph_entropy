@@ -18,7 +18,7 @@ from environments.environment import Environment
 #   -1.0 for entering lava or terminating when lava can reach the agent
 #   when terminating and lava can no loner reach agent, +1.0 for each empty square the agent could reach
 
-
+# TODO: Agent appears in random empty square instead of pre-defined location
 class LavaFlow(Environment):
     north_action = 0
     south_action = 1
