@@ -164,9 +164,12 @@ class LavaFlow(Environment):
 
     def get_start_states(self) -> List[np.ndarray]:
         start_states = []
-        empty_tiles = self.get_empty_tiles(self.current_state)
-
-        return [self.board.copy()]
+        empty_tiles = self.get_empty_tiles(self.board)
+        for empty_tile in empty_tiles:
+            start_state = self.board.copy()
+            start_state[empty_tile] = self.agent_tile
+            start_states.append(start_state)
+        return start_states
 
     def get_successor_states(self, state: np.ndarray, probability_weights: bool) -> Tuple[np.ndarray, float]:
         # if terminal:
