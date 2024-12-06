@@ -1,6 +1,6 @@
 import networkx as nx
 import numpy as np
-import random
+import random as rand
 from typing import List, Tuple
 
 from environments.environment import Environment
@@ -301,16 +301,17 @@ class LavaFlow(Environment):
         if state is None:
             self.current_state = self.board.copy()
             self.board_graph = self.build_state_graph()
-            self.agent_i, self.agent_j = self.agent_start_i, self.agent_start_j
-            self.safe_from_lava = False
+            empty_tiles = self.get_empty_tiles(self.board)
+            self.agent_i, self.agent_j = rand.choice(empty_tiles)
+            self.current_state[self.agent_i, self.agent_j] = self.agent_tile
             self.terminal = False
         else:
             self.current_state = state.copy()
             self.board_graph = self.build_state_graph()
             self.agent_i, self.agent_j = self.get_agent_cords(self.current_state)
-            self.safe_from_lava = not self.has_path_to_lava()
             self.terminal = self.is_terminal(self.current_state)
 
+        self.safe_from_lava = not self.has_path_to_lava()
         self.lava_nodes = self.get_lava_nodes(self.current_state)
         return self.current_state.copy()
 
