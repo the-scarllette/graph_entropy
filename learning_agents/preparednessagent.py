@@ -32,13 +32,19 @@ class PreparednessOption(Option):
         self.initiation_func = initiation_func
         self.continuation_func = continuation_func
         self.state_dtype = state_dtype
+        self.primitive_actions = primitive_actions
 
-        if primitive_actions:
+        if self.primitive_actions:
             self.policy = QLearningAgent(actions, alpha, epsilon, gamma)
         else:
             self.policy = PreparednessOptionPolicy(alpha, epsilon, gamma, self.actions,
                                                    self.state_dtype, subgoal_graph, self.end_node)
         return
+
+    def get_option_lookup(self) -> None | Dict[str, List[int]]:
+        if self.primitive_actions:
+            return None
+        return self.policy.option_lookup.copy()
 
     def get_state_values(self) -> Dict[str, Dict[str, float]]:
         if self.hierarchy_level <= 1:
@@ -49,6 +55,12 @@ class PreparednessOption(Option):
         if self.start_node is not None:
             return np.array2string(state.astype(self.state_dtype)) in self.start_state_str
         return self.initiation_func(state)
+
+    def set_option_lookup(self, option_lookup: Dict[str, List[int]]) -> None:
+        if self.primitive_actions:
+           return
+        self.policy.option_lookup = option_lookup.copy()
+        return
 
     def set_state_values(self, state_values: Dict[str, Dict[str, float]]) -> None:
         if self.hierarchy_level <= 1:
@@ -71,11 +83,20 @@ class PreparednessOptionPolicy(OptionsAgent):
         super(PreparednessOptionPolicy, self).__init__(alpha, epsilon, gamma, options, state_dtype=state_dtype)
         self.subgoal_graph = subgoal_graph
         self.end_node = end_node
+        self.option_lookup = {}
         return
 
     def get_available_options(self, state: np.ndarray, possible_actions: None|List[int]=None) -> List[int]:
         available_options = []
         option_index = 0
+        state_str = self.state_to_state_str(state)
+
+        try:
+            available_options = self.option_lookup[state_str]
+            return available_options
+        except KeyError:
+            pass
+
         for option in self.options:
             if (possible_actions is not None) and (not option.has_policy()):
                 if option.actions[0] in possible_actions:
@@ -91,6 +112,9 @@ class PreparednessOptionPolicy(OptionsAgent):
                 except AttributeError:
                     available_options.append(option_index)
             option_index += 1
+
+        self.option_lookup[state_str] = available_options.copy()
+
         return available_options
 
 
@@ -535,10 +559,16 @@ class PreparednessAgent(OptionsAgent):
             option_list = agent_save_file['options between subgoals'][level]
             self.options_between_subgoals[level] = []
             for option_dict in option_list:
+                hierarchy_level = int(option_dict['hierarchy level'])
                 option = self.create_option([option_dict['start node']], option_dict['end node'],
                                             [option_dict['start state str']], option_dict['end state str'],
-                                            int(option_dict['hierarchy level']), options_for_option)
+                                            hierarchy_level, options_for_option)
                 option.set_state_values(option_dict['policy'])
+                if hierarchy_level > 1:
+                    try:
+                        option.set_option_lookup(option_dict['option lookup'])
+                    except KeyError:
+                        pass
                 self.options_between_subgoals[level].append(option)
             options_for_option += self.options_between_subgoals[level]
 
@@ -570,6 +600,10 @@ class PreparednessAgent(OptionsAgent):
                                         max_option_level,
                                         options_for_generic_subgoal_options)
             option.set_state_values(option_dict['policy'])
+            try:
+                option.set_option_lookup(option_dict['option lookup'])
+            except KeyError:
+                pass
             self.generic_onboarding_subgoal_options.append(option)
 
         self.specific_onboarding_subgoal_options = []
@@ -582,6 +616,10 @@ class PreparednessAgent(OptionsAgent):
                                         options_for_specific_subgoal_options,
                                         initiation_func)
             option.set_state_values(option_dict['policy'])
+            try:
+                option.set_option_lookup(option_dict['option lookup'])
+            except KeyError:
+                pass
             self.specific_onboarding_subgoal_options.append(option)
 
         self.generic_onboarding_index = agent_save_file['generic onboarding index']
@@ -640,7 +678,8 @@ class PreparednessAgent(OptionsAgent):
                                                          'start state str': option.start_state_str[0],
                                                          'end state str': option.end_state_str,
                                                          'hierarchy level': option.hierarchy_level,
-                                                         'policy': option.get_state_values()
+                                                         'policy': option.get_state_values(),
+                                                         'option lookup': option.get_option_lookup()
                                                          } for option in self.options_between_subgoals[level]]
                                                         for level in self.options_between_subgoals},
                            'generic onboarding option': {'policy':
@@ -648,15 +687,18 @@ class PreparednessAgent(OptionsAgent):
                            'generic onboarding index': self.generic_onboarding_index,
                            'specific onboarding options': [{'end node': option.end_node,
                                                             'end state str': option.end_state_str,
-                                                            'policy': option.get_state_values()}
+                                                            'policy': option.get_state_values(),
+                                                            'option lookup': option.get_option_lookup()}
                                                            for option in self.specific_onboarding_options],
                            'generic onboarding subgoal options': [{'end node': option.end_node,
                                                                    'end state str': option.end_state_str,
-                                                                   'policy': option.get_state_values()}
+                                                                   'policy': option.get_state_values(),
+                                                                   'option lookup': option.get_option_lookup()}
                                                                   for option in self.generic_onboarding_subgoal_options],
                            'specific onboarding subgoal options': [{'end node': option.end_node,
                                                                     'end state str': option.end_state_str,
-                                                                    'policy': option.get_state_values()}
+                                                                    'policy': option.get_state_values(),
+                                                                    'option lookup': option.get_option_lookup()}
                                                                    for option in self.specific_onboarding_subgoal_options],
                            'state node lookup': self.state_node_lookup,
                            'path lookup': self.path_lookup,
