@@ -49,7 +49,7 @@ class LavaFlow(Environment):
     # # # # #
     default_board = np.array([[block_tile, block_tile, block_tile, block_tile, block_tile, block_tile],
                               [block_tile, empty_tile, empty_tile, empty_tile, empty_tile, block_tile],
-                              [block_tile, agent_tile, empty_tile, empty_tile, lava_tile, block_tile],
+                              [block_tile, empty_tile, empty_tile, empty_tile, lava_tile, block_tile],
                               [block_tile, empty_tile, empty_tile, empty_tile, empty_tile, block_tile],
                               [block_tile, block_tile, block_tile, block_tile, block_tile, block_tile]])
     default_board_name = 'room'
@@ -76,21 +76,8 @@ class LavaFlow(Environment):
         self.board_graph = None
         self.state_shape = self.board.shape
 
-        self.agent_start_i = None
-        self.agent_start_j = None
         self.agent_i = None
         self.agent_j = None
-        for i in range(self.state_shape[0]):
-            for j in range(self.state_shape[1]):
-                if self.board[i, j] == self.agent_tile:
-                    if self.agent_start_i is not None:
-                        raise ValueError("Board must include exactly 1 agent tile")
-                    self.agent_start_i, self.agent_start_j = i, j
-                    break
-            if self.agent_start_i is not None:
-                break
-        if self.agent_start_j is None:
-            raise ValueError("Board must include exactly 1 agent tile")
         self.safe_from_lava = False
         self.lava_nodes = self.get_lava_nodes(self.board)
 
@@ -122,7 +109,10 @@ class LavaFlow(Environment):
     def cord_node_key(self, i: int, j: int) -> int:
         return (self.state_shape[0] * j) + i
 
-    def get_agent_cords(self, state: np.ndarray) -> Tuple[int, int] | Tuple[None, None]:
+    def get_agent_cords(self, state: np.ndarray | None = None) -> Tuple[int, int] | Tuple[None, None]:
+        if state is None:
+            state = self.current_state
+
         for i in range(self.state_shape[0]):
             for j in range(self.state_shape[1]):
                 if state[i, j] == self.agent_tile:
@@ -153,6 +143,17 @@ class LavaFlow(Environment):
 
         return adjacent_cords
 
+    def get_empty_tiles(self, state: np.ndarray | None = None) -> List[Tuple[int, int]]:
+        if state is None:
+            state = self.current_state
+
+        empty_tiles = []
+        for i in range(self.state_shape[0]):
+            for j in range(self.state_shape[1]):
+                if state[i, j] == self.empty_tile:
+                    empty_tiles.append((i, j))
+        return empty_tiles
+
     def get_lava_nodes(self, state: None | np.ndarray=None) -> List[int]:
         if state is None:
             if self.terminal:
@@ -161,7 +162,10 @@ class LavaFlow(Environment):
         return [self.cord_node_key(i, j) for i in range(self.state_shape[0]) for j in range(self.state_shape[1])
                 if state[i, j] == self.lava_tile]
 
-    def get_start_states(self):
+    def get_start_states(self) -> List[np.ndarray]:
+        start_states = []
+        empty_tiles = self.get_empty_tiles(self.current_state)
+
         return [self.board.copy()]
 
     def get_successor_states(self, state: np.ndarray, probability_weights: bool) -> Tuple[np.ndarray, float]:
