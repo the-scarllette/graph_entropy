@@ -71,10 +71,10 @@ class SubgoalAgent(OptionsAgent):
         return
 
     def copy_agent(self, copy_from: 'SubgoalAgent') -> None:
-        self.options = copy.deepcopy(copy_from.options)
-        self.state_node_lookup = copy.deepcopy(copy_from.state_node_lookup)
-        self.option_initiation_lookup = copy.deepcopy(copy_from.option_initiation_lookup)
-        self.state_option_values = copy.deepcopy(copy_from.state_option_values)
+        self.options = copy_from.options.copy()
+        self.state_node_lookup = copy_from.state_node_lookup.copy()
+        self.option_initiation_lookup = copy_from.option_initiation_lookup
+        self.state_option_values = copy_from.state_option_values.copy()
         return
 
     def create_options(self) -> None:
