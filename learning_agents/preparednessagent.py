@@ -792,7 +792,6 @@ class PreparednessAgent(OptionsAgent):
 
         return total_end_states, total_successes
 
-    # TODO: Add output that flags untrained options
     # TODO: Add parameter to only train specific options
     def train_options(self, environment: Environment,
                       training_timesteps: int,
@@ -800,7 +799,8 @@ class PreparednessAgent(OptionsAgent):
                       train_between_options: bool=True,
                       train_onboarding_options: bool=True, train_subgoal_options: bool=True,
                       all_actions_possible: bool=False,
-                      progress_bar: bool=False) -> None:
+                      progress_bar: bool=False,
+                      trained_benchmark: None | float=None) -> None | List[Tuple[str, str]]:
 
         def percentage(x: int, y: int) -> float:
             if y <= 0:
@@ -811,6 +811,7 @@ class PreparednessAgent(OptionsAgent):
             min_level = -np.inf
         if max_level is None:
             max_level = np.inf
+        untrained_options = []
 
         # Options between subgoals
         if train_between_options:
@@ -829,9 +830,14 @@ class PreparednessAgent(OptionsAgent):
                     total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
                                                                           success_states, start_states,
                                                                           all_actions_possible, progress_bar)
+
+                    percentage_hits = percentage(total_successes, total_end_states)
+                    if trained_benchmark is not None:
+                        if percentage_hits < trained_benchmark:
+                            untrained_options.append((option.start_node[0], option.end_node))
+
                     if progress_bar:
                         sys.stdout.flush()
-                        percentage_hits = percentage(total_successes, total_end_states)
                         print("\r         Option: " + option.start_node[0] + " -> " + option.end_node + " "
                               + str(percentage_hits) + "% hits")
 
@@ -859,6 +865,7 @@ class PreparednessAgent(OptionsAgent):
                                                                       [option.end_state_str],
                                                                       None,
                                                                       all_actions_possible, progress_bar)
+
                 if progress_bar:
                     sys.stdout.flush()
                     percentage_hits = percentage(total_successes, total_end_states)
@@ -896,4 +903,13 @@ class PreparednessAgent(OptionsAgent):
                 percentage_hits = percentage(total_successes, total_end_states)
                 print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) + "% hits")
 
-        return
+        if trained_benchmark is None:
+            return
+
+        if not progress_bar:
+            return untrained_options
+
+        print("Untrained Options: ")
+        for untrained_option in untrained_options:
+            print("     " + untrained_option[0] + ' -> ' + untrained_option[1])
+        return untrained_options
