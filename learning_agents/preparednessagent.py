@@ -792,12 +792,12 @@ class PreparednessAgent(OptionsAgent):
 
         return total_end_states, total_successes
 
-    # TODO: Add parameter to only train specific options
     def train_options(self, environment: Environment,
                       training_timesteps: int,
                       min_level: None | int=None, max_level: None | int=None,
                       train_between_options: bool=True,
                       train_onboarding_options: bool=True, train_subgoal_options: bool=True,
+                      options_to_train: None | List[Tuple[str, str]]=None,
                       all_actions_possible: bool=False,
                       progress_bar: bool=False,
                       trained_benchmark: None | float=None) -> None | List[Tuple[str, str]]:
@@ -811,6 +811,8 @@ class PreparednessAgent(OptionsAgent):
             min_level = -np.inf
         if max_level is None:
             max_level = np.inf
+        if options_to_train is None:
+            options_to_train = []
         untrained_options = []
 
         # Options between subgoals
@@ -823,6 +825,9 @@ class PreparednessAgent(OptionsAgent):
                 if progress_bar:
                     print("     Training Options at level: " + level)
                 for option in self.options_between_subgoals[level]:
+                    if (option.start_node[0], option.end_node) not in options_to_train:
+                        continue
+
                     if progress_bar:
                         print("         Option: " + option.start_node[0] + " -> " + option.end_node)
                     start_states = [self.state_str_to_state(option.start_state_str[0])]

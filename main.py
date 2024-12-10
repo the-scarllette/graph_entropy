@@ -2118,7 +2118,7 @@ if __name__ == "__main__":
                       [3, 3, 3, 3, 3, 3, 3, 3]])
     board_name = 'three_corridor'
 
-    board = np.array([[3, 3, 3, 3, 3, 3, 3, 3],
+    board = np.array([[3, 3, 3, 3, 3, 3, 3, 3    # TODO: Add output that flags untrained options],
                       [3, 0, 0, 0, 2, 3, 2, 3],
                       [3, 0, 3, 0, 3, 3, 0, 3],
                       [3, 1, 0, 0, 0, 0, 0, 3],
