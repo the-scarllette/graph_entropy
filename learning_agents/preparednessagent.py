@@ -811,8 +811,6 @@ class PreparednessAgent(OptionsAgent):
             min_level = -np.inf
         if max_level is None:
             max_level = np.inf
-        if options_to_train is None:
-            options_to_train = []
         untrained_options = []
 
         # Options between subgoals
@@ -825,8 +823,9 @@ class PreparednessAgent(OptionsAgent):
                 if progress_bar:
                     print("     Training Options at level: " + level)
                 for option in self.options_between_subgoals[level]:
-                    if (option.start_node[0], option.end_node) not in options_to_train:
-                        continue
+                    if options_to_train is not None:
+                        if (option.start_node[0], option.end_node) not in options_to_train:
+                            continue
 
                     if progress_bar:
                         print("         Option: " + option.start_node[0] + " -> " + option.end_node)
@@ -838,7 +837,7 @@ class PreparednessAgent(OptionsAgent):
 
                     percentage_hits = percentage(total_successes, total_end_states)
                     if trained_benchmark is not None:
-                        if percentage_hits < trained_benchmark:
+                        if percentage_hits < (trained_benchmark * 100):
                             untrained_options.append((option.start_node[0], option.end_node))
 
                     if progress_bar:
@@ -878,35 +877,34 @@ class PreparednessAgent(OptionsAgent):
 
         # Subgoal Options
         # Generic Subgoal Options
-        if not train_subgoal_options:
-            return
-        if progress_bar:
-            print("Training Generic Subgoal Options")
-        for option in self.generic_onboarding_subgoal_options:
+        if train_subgoal_options:
             if progress_bar:
-                print("     Options towards state: " + option.end_node)
-            total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
-                                                                  [option.end_state_str],
-                                                                  None,
-                                                                  all_actions_possible, progress_bar)
+                print("Training Generic Subgoal Options")
+            for option in self.generic_onboarding_subgoal_options:
+                if progress_bar:
+                    print("     Options towards state: " + option.end_node)
+                total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
+                                                                      [option.end_state_str],
+                                                                      None,
+                                                                      all_actions_possible, progress_bar)
+                if progress_bar:
+                    sys.stdout.flush()
+                    percentage_hits = percentage(total_successes, total_end_states)
+                    print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) + "% hits")
+            # Specific Subgoal Options
             if progress_bar:
-                sys.stdout.flush()
-                percentage_hits = percentage(total_successes, total_end_states)
-                print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) + "% hits")
-        # Specific Subgoal Options
-        if progress_bar:
-            print("Training Specific Subgoal Options")
-        for option in self.specific_onboarding_subgoal_options:
-            if progress_bar:
-                print("     Option towards state: " + option.end_node)
-            total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
-                                                                  [option.end_state_str],
-                                                                  None,
-                                                                  all_actions_possible, progress_bar)
-            if progress_bar:
-                sys.stdout.flush()
-                percentage_hits = percentage(total_successes, total_end_states)
-                print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) + "% hits")
+                print("Training Specific Subgoal Options")
+            for option in self.specific_onboarding_subgoal_options:
+                if progress_bar:
+                    print("     Option towards state: " + option.end_node)
+                total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
+                                                                      [option.end_state_str],
+                                                                      None,
+                                                                      all_actions_possible, progress_bar)
+                if progress_bar:
+                    sys.stdout.flush()
+                    percentage_hits = percentage(total_successes, total_end_states)
+                    print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) + "% hits")
 
         if trained_benchmark is None:
             return
