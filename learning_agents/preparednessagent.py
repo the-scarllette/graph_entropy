@@ -792,6 +792,8 @@ class PreparednessAgent(OptionsAgent):
 
         return total_end_states, total_successes
 
+    # TODO: Add output that flags untrained options
+    # TODO: Add parameter to only train specific options
     def train_options(self, environment: Environment,
                       training_timesteps: int,
                       min_level: None | int=None, max_level: None | int=None,
