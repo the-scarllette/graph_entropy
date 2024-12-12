@@ -2141,9 +2141,9 @@ if __name__ == "__main__":
 
     # lavaflow = LavaFlow(None, None, (0, 0))
     # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
-    tinytown = TinyTown(2, 2, pick_every=1)
+    tinytown = TinyTown(2, 3, pick_every=1)
 
-    option_onboarding = 'specific'
+    option_onboarding = 'generic'
     graphing_window = 50
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5

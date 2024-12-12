@@ -478,7 +478,11 @@ class PreparednessAgent(OptionsAgent):
                 has_path = False
             else:
                 has_path = nx.has_path(self.state_transition_graph, state_node, goal_node)
-            self.path_lookup[goal_node][state_str] = str(has_path)
+            try:
+                self.path_lookup[goal_node][state_str] = str(has_path)
+            except KeyError:
+                self.path_lookup[goal_node] = {}
+                self.path_lookup[goal_node][state_str] = str(has_path)
 
         return has_path
 
