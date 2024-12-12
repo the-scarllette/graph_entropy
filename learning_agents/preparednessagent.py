@@ -237,7 +237,7 @@ class PreparednessAgent(OptionsAgent):
         self.options = copy_from.options.copy()
         self.primitive_options = copy_from.primitive_options.copy()
         self.options_between_subgoals = copy_from.options_between_subgoals.copy()
-        self.generic_onboarding_option = copy_from.generic_onboarding_option.copy()
+        self.generic_onboarding_option = copy_from.generic_onboarding_option
         self.generic_onboarding_index = copy_from.generic_onboarding_index
         self.specific_onboarding_options = copy_from.specific_onboarding_options.copy()
         self.generic_onboarding_subgoal_options = copy_from.generic_onboarding_subgoal_options.copy()
