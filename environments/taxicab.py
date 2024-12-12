@@ -468,7 +468,7 @@ class TaxiCab(Environment):
         self.update_state()
         return self.get_current_state()
 
-    def step(self, action):
+    def step(self, action: int):
         if self.terminal:
             raise AttributeError("Environment must be reset before calling step")
 
@@ -553,9 +553,9 @@ class TaxiCab(Environment):
 
             info = None
             if can_putdown:
-                self.passenger_loc = 5
+                self.passenger_loc = self.no_passenger_index
+                self.passenger_destination = self.no_passenger_index
                 reward += self.success_reward
-                self.terminal = True
                 info = {'success': True}
             else:
                 reward += self.illegal_action_reward
