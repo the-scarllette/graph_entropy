@@ -2143,7 +2143,7 @@ if __name__ == "__main__":
     # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     tinytown = TinyTown(2, 3, pick_every=1)
 
-    option_onboarding = 'generic'
+    option_onboarding = 'specific'
     graphing_window = 50
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
@@ -2154,7 +2154,7 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
     total_evaluation_steps = 35
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=1_000, lavaflow_pipes=2_000
-    options_training_timesteps = 100
+    options_training_timesteps = 1_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 50_000
@@ -2166,6 +2166,23 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
            stg_values = json.load(f)
 
+    print(tinytown.environment_name + " preparedness " + option_onboarding + " onboarding")
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', option_onboarding,
+                              tinytown, training_timesteps, 3,
+                              all_actions_valid=False, total_eval_steps=total_evaluation_steps,
+                              alpha=0.9, epsilon=0.1, gamma=0.9,
+                              continue_training=False, progress_bar=True)
+    exit()
+
+    data = graphing.extract_data(filenames['results'])
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='TinyTown (2x3)',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='std',
+                                       labels=os.listdir(filenames['results']))
+    exit()
+
     print(tinytown.environment_name + " preparedness training options")
     preparedness_agent = PreparednessAgent(tinytown.possible_actions,
                                            0.9, 0.1, 0.9,
@@ -2174,27 +2191,11 @@ if __name__ == "__main__":
                                            option_onboarding='none')
     preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
     preparedness_agent.train_options(tinytown, options_training_timesteps,
-                                                         train_between_options=False,
-                                                         train_onboarding_options=True, train_subgoal_options=False,
-                                                         all_actions_possible=False, progress_bar=True)
+                                     train_between_options=False,
+                                     train_onboarding_options=False, train_subgoal_options=True,
+                                     all_actions_possible=False, progress_bar=True)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     print(tinytown.environment_name + " preparedness training options")
-    exit()
-
-    data = graphing.extract_data(filenames['results'])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='TinyTown (2x3)',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='std')
-    exit()
-
-    print(tinytown.environment_name + " preparedness " + option_onboarding + " onboarding")
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json', option_onboarding,
-                              tinytown, training_timesteps, 3,
-                              all_actions_valid=False, total_eval_steps=total_evaluation_steps,
-                              alpha=0.9, epsilon=0.1, gamma=0.9,
-                              continue_training=False, progress_bar=True)
     exit()
 
     print(lavaflow.environment_name + " preparedness hops 4 - 5")
