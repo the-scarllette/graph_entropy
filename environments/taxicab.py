@@ -33,7 +33,7 @@ def code_to_state(code):
 def is_terminal(state):
     return state['passenger_location'] == 5 or state['fuel_level'] < 0
 
-
+# TODO: Make continuous environment
 class TaxiCab(Environment):
 
     possible_actions = [i for i in range(7)]

@@ -2143,7 +2143,7 @@ if __name__ == "__main__":
     # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     tinytown = TinyTown(2, 2, pick_every=1)
 
-    option_onboarding = 'none'
+    option_onboarding = 'specific'
     graphing_window = 50
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
@@ -2157,7 +2157,7 @@ if __name__ == "__main__":
     options_training_timesteps = 100
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 100
+    training_timesteps = 50_000
 
     filenames = get_filenames(tinytown)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
