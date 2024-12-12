@@ -234,19 +234,19 @@ class PreparednessAgent(OptionsAgent):
 
     def copy_agent(self, copy_from: 'PreparednessAgent') -> None:
         self.specific_onboarding_possible = copy_from.specific_onboarding_possible
-        self.options = copy.deepcopy(copy_from.options)
-        self.primitive_options = copy.deepcopy(copy_from.primitive_options)
-        self.options_between_subgoals = copy.deepcopy(copy_from.options_between_subgoals)
-        self.generic_onboarding_option = copy.deepcopy(copy_from.generic_onboarding_option)
+        self.options = copy_from.options.copy()
+        self.primitive_options = copy_from.primitive_options.copy()
+        self.options_between_subgoals = copy_from.options_between_subgoals.copy()
+        self.generic_onboarding_option = copy_from.generic_onboarding_option.copy()
         self.generic_onboarding_index = copy_from.generic_onboarding_index
-        self.specific_onboarding_options = copy.deepcopy(copy_from.specific_onboarding_options)
-        self.generic_onboarding_subgoal_options = copy.deepcopy(copy_from.generic_onboarding_subgoal_options)
-        self.specific_onboarding_subgoal_options = copy.deepcopy(copy_from.specific_onboarding_subgoal_options)
-        self.state_node_lookup = copy.deepcopy(copy_from.state_node_lookup)
-        self.path_lookup = copy.deepcopy(copy_from.path_lookup)
+        self.specific_onboarding_options = copy_from.specific_onboarding_options.copy()
+        self.generic_onboarding_subgoal_options = copy_from.generic_onboarding_subgoal_options.copy()
+        self.specific_onboarding_subgoal_options = copy_from.specific_onboarding_subgoal_options.copy()
+        self.state_node_lookup = copy_from.state_node_lookup
+        self.path_lookup = copy_from.path_lookup
         self.environment_start_states_str = copy_from.environment_start_states_str
         self.environment_start_nodes = copy_from.environment_start_nodes
-        self.state_option_values = copy.deepcopy(copy_from.state_option_values)
+        self.state_option_values = copy_from.state_option_values.copy()
 
         self.current_step = 0
         self.current_option = None
