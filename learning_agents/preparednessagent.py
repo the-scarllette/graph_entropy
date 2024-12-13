@@ -478,11 +478,7 @@ class PreparednessAgent(OptionsAgent):
                 has_path = False
             else:
                 has_path = nx.has_path(self.state_transition_graph, state_node, goal_node)
-            try:
-                self.path_lookup[goal_node][state_str] = str(has_path)
-            except KeyError:
-                self.path_lookup[goal_node] = {}
-                self.path_lookup[goal_node][state_str] = str(has_path)
+            self.path_lookup[goal_node][state_str] = str(has_path)
 
         return has_path
 
@@ -801,7 +797,7 @@ class PreparednessAgent(OptionsAgent):
                       min_level: None | int=None, max_level: None | int=None,
                       train_between_options: bool=True,
                       train_onboarding_options: bool=True, train_subgoal_options: bool=True,
-                      options_to_train: None | List[Tuple[str, str]]=None,
+                      options_to_train: None | List[List[str, str]]=None,
                       all_actions_possible: bool=False,
                       progress_bar: bool=False,
                       trained_benchmark: None | float=None) -> None | List[Tuple[str, str]]:
@@ -828,7 +824,7 @@ class PreparednessAgent(OptionsAgent):
                     print("     Training Options at level: " + level)
                 for option in self.options_between_subgoals[level]:
                     if options_to_train is not None:
-                        if (option.start_node[0], option.end_node) not in options_to_train:
+                        if [option.start_node[0], option.end_node] not in options_to_train:
                             continue
 
                     if progress_bar:
