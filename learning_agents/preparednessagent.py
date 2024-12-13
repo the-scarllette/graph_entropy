@@ -797,7 +797,7 @@ class PreparednessAgent(OptionsAgent):
                       min_level: None | int=None, max_level: None | int=None,
                       train_between_options: bool=True,
                       train_onboarding_options: bool=True, train_subgoal_options: bool=True,
-                      options_to_train: None | List[List[str, str]]=None,
+                      options_to_train: None | List[List[str]]=None,
                       all_actions_possible: bool=False,
                       progress_bar: bool=False,
                       trained_benchmark: None | float=None) -> None | List[Tuple[str, str]]:
