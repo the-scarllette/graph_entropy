@@ -1,5 +1,6 @@
 import numpy as np
 import random as rand
+from typing import List, Tuple
 
 from environments.environment import Environment
 
@@ -200,7 +201,8 @@ class TaxiCab(Environment):
         return [state.tostring() for state in all_states]
 
     # TODO: changed to make continuous domain
-    def get_successor_states(self, state, probability_weights=False):
+    def get_successor_states(self, state: np.ndarray, probability_weights: bool=False) ->(
+            Tuple)[List[np.ndarray], List[float]]:
         successor_states = []
         weights = []
 
@@ -227,7 +229,7 @@ class TaxiCab(Environment):
         if self.use_fuel and fuel_level <= 0:
             return successor_states, weights
 
-        def add_successor_state(index, new_value, weight):
+        def add_successor_state(index: int, new_value: int, weight: float) -> None:
             successor_state = state.copy()
 
             if (index is not None) and (new_value is not None):
@@ -267,19 +269,6 @@ class TaxiCab(Environment):
                         weights.append(successor_weight)
                 return
 
-        def add_multi_index_successor_state(indexes, new_values, weight):
-            successor_state = state.copy()
-            num_indexes = len(indexes)
-
-            for i in range(num_indexes):
-                successor_state[indexes[i]] = new_values[i]
-
-            successor_states.append(successor_state)
-            if not probability_weights:
-                weight = 1.0
-            weights.append(weight)
-            return
-
         # Move successor states
         base_cord = (state[0], state[1])
         if base_cord[1] < 4:
@@ -301,13 +290,32 @@ class TaxiCab(Environment):
 
         # Pickup successor state
         if passenger_location <= 3 and (taxi_x, taxi_y) == self.stops[passenger_location]:
-            add_successor_state(2, 4, 1/total_actions)
+            if self.arrival_probabilities:
+                successor_state = state.copy()
+                successor_state[2] = self.no_passenger_index
+                successor_state[3] = self.no_passenger_index
+                successor_states.append(successor_state)
+                weight = 1.0
+                if probability_weights:
+                    weight = 1/total_actions
+                weights.append(weight)
+            else:
+                for loc in self.possible_passenger_locations:
+                    for des in possible_passenger_destinations:
+                        successor_state = successor_state.copy()
+                        successor_state[2] = loc
+                        successor_state[3] = des
+                        successor_states.append(successor_state)
+                        weight = 1.0
+                        if probability_weights:
+                            weight = 1 / (total_actions * self.num_stops * self.num_stops)
+                        weights.append(weight)
         else:
             stationary_actions += 1
 
         # Putdown successor state
         if passenger_location == 4 and (taxi_x, taxi_y) == self.stops[passenger_destination]:
-            add_successor_state(2, 5, 1/total_actions)
+            add_successor_state(2, 6, 1/total_actions)
         else:
             stationary_actions += 1
 

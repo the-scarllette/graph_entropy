@@ -2143,7 +2143,7 @@ if __name__ == "__main__":
     # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     tinytown = TinyTown(2, 2, pick_every=1)
 
-    option_onboarding = 'none'
+    option_onboarding = 'specific'
     graphing_window = 50
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
@@ -2157,7 +2157,7 @@ if __name__ == "__main__":
     options_training_timesteps = 1_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 100
+    training_timesteps = 20_000
 
     filenames = get_filenames(tinytown)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
@@ -2167,11 +2167,20 @@ if __name__ == "__main__":
            stg_values = json.load(f)
 
     print(tinytown.environment_name + " preparedness " + option_onboarding + " onboarding")
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent_min2.json', option_onboarding,
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent_min1.json', option_onboarding,
                               tinytown, training_timesteps, 3,
                               all_actions_valid=False, total_eval_steps=total_evaluation_steps,
                               alpha=0.9, epsilon=0.1, gamma=0.9,
                               continue_training=False, progress_bar=True)
+    exit()
+
+    state_transition_graph, preparedness_subgoal_graph, stg_values = (
+        preparedness_aggregate_graph(tinytown, adj_matrix,
+                                     state_transition_graph, stg_values, min_hop=1, max_hop=None))
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
     exit()
 
     print(tinytown.environment_name + " preparedness training options")
@@ -2188,15 +2197,6 @@ if __name__ == "__main__":
                                      all_actions_possible=False, progress_bar=True)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent_min2.json')
     print(tinytown.environment_name + " preparedness training options")
-    exit()
-
-    state_transition_graph, preparedness_subgoal_graph, stg_values = (
-        preparedness_aggregate_graph(tinytown, adj_matrix,
-                                     state_transition_graph, stg_values, min_hop=2, max_hop=None))
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
     exit()
 
     state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adj_matrix,
