@@ -200,7 +200,6 @@ class TaxiCab(Environment):
 
         return [state.tostring() for state in all_states]
 
-    # TODO: changed to make continuous domain
     def get_successor_states(self, state: np.ndarray, probability_weights: bool=False) ->(
             Tuple)[List[np.ndarray], List[float]]:
         successor_states = []
@@ -406,7 +405,6 @@ class TaxiCab(Environment):
 
         return self.arrival_probabilities[next_state[2]]
 
-    # TODO: Check is working correctly
     def is_state_terminal(self, state):
         if self.hashable_states:
             try:
