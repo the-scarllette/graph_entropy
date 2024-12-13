@@ -289,6 +289,12 @@ class TaxiCab(Environment):
 
         # Pickup successor state
         if passenger_location <= 3 and (taxi_x, taxi_y) == self.stops[passenger_location]:
+            add_successor_state(2, 4, 1/total_actions)
+        else:
+            stationary_actions += 1
+
+        # Putdown successor state
+        if passenger_location == 4 and (taxi_x, taxi_y) == self.stops[passenger_destination]:
             if self.arrival_probabilities:
                 successor_state = state.copy()
                 successor_state[2] = self.no_passenger_index
@@ -309,12 +315,6 @@ class TaxiCab(Environment):
                         if probability_weights:
                             weight = 1 / (total_actions * self.num_stops * self.num_stops)
                         weights.append(weight)
-        else:
-            stationary_actions += 1
-
-        # Putdown successor state
-        if passenger_location == 4 and (taxi_x, taxi_y) == self.stops[passenger_destination]:
-            add_successor_state(2, 6, 1/total_actions)
         else:
             stationary_actions += 1
 

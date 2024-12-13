@@ -2140,8 +2140,8 @@ if __name__ == "__main__":
     board_name = 'blocks'
 
     # lavaflow = LavaFlow(None, None, (0, 0))
-    # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
-    tinytown = TinyTown(2, 2, pick_every=1)
+    taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
+    # tinytown = TinyTown(2, 2, pick_every=1)
 
     option_onboarding = 'specific'
     graphing_window = 50
@@ -2159,12 +2159,56 @@ if __name__ == "__main__":
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 20_000
 
-    filenames = get_filenames(tinytown)
+    filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    # preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
            stg_values = json.load(f)
+
+    state_transition_graph, preparedness_subgoal_graph, stg_values = (
+        preparedness_aggregate_graph(taxicab, adj_matrix,
+                                     state_transition_graph, stg_values, min_hop=1, max_hop=None))
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adj_matrix,
+                                                                                            state_transition_graph,
+                                                                                            stg_values,
+                                                                                            min_hops=1, max_hop=3)
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    exit()
+
+    print(taxicab.environment_name + " preparedness hops 1 - 3")
+    stg_values = preparedness_efficient(adj_matrix, beta=0.5,
+                                        min_num_hops=1, max_num_hops=3, compressed_matrix=True,
+                                        computed_hops_range=None,
+                                        existing_stg_values=stg_values)
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    nx.set_node_attributes(state_transition_graph, stg_values)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    print(taxicab.environment_name + " preparedness hops 1 - 3")
+    exit()
+
+    adj_matrix, state_transition_graph, stg_values = taxicab.get_adjacency_matrix(probability_weights=True,
+                                                                                  compressed_matrix=True,
+                                                                                  progress_bar=True)
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    nx.set_node_attributes(state_transition_graph, stg_values)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    exit()
 
     print(tinytown.environment_name + " preparedness " + option_onboarding + " onboarding")
     train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent_min1.json', option_onboarding,
@@ -2172,15 +2216,6 @@ if __name__ == "__main__":
                               all_actions_valid=False, total_eval_steps=total_evaluation_steps,
                               alpha=0.9, epsilon=0.1, gamma=0.9,
                               continue_training=False, progress_bar=True)
-    exit()
-
-    state_transition_graph, preparedness_subgoal_graph, stg_values = (
-        preparedness_aggregate_graph(tinytown, adj_matrix,
-                                     state_transition_graph, stg_values, min_hop=1, max_hop=None))
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
     exit()
 
     print(tinytown.environment_name + " preparedness training options")
@@ -2199,15 +2234,6 @@ if __name__ == "__main__":
     print(tinytown.environment_name + " preparedness training options")
     exit()
 
-    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adj_matrix,
-                                                                                            state_transition_graph,
-                                                                                            stg_values,
-                                                                                            min_hops=2, max_hop=6)
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    exit()
-
     data = graphing.extract_data(filenames['results'])
     graphing.graph_reward_per_timestep(data, graphing_window,
                                        name='TinyTown (2x3)',
@@ -2215,18 +2241,6 @@ if __name__ == "__main__":
                                        y_label='Average Epoch Return',
                                        error_bars='std',
                                        labels=os.listdir(filenames['results']))
-    exit()
-
-    print(lavaflow.environment_name + " preparedness hops 4 - 5")
-    stg_values = preparedness_efficient(adj_matrix, beta=0.5,
-                                        min_num_hops=4, max_num_hops=5, compressed_matrix=True,
-                                        computed_hops_range=[1, 3],
-                                        existing_stg_values=stg_values)
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
-    nx.set_node_attributes(state_transition_graph, stg_values)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    print(lavaflow.environment_name + " preparedness hops 4 - 5")
     exit()
 
     train_betweenness_agents('/betweenness_base_agent.json', tinytown,
@@ -2244,20 +2258,6 @@ if __name__ == "__main__":
     betweennessagent.train_options(tinytown, options_training_timesteps,
                                    False, True)
     betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
-    exit()
-
-    adj_matrix, state_transition_graph, stg_values = lavaflow.get_adjacency_matrix(probability_weights=True,
-                                                                                   compressed_matrix=True,
-                                                                                   progress_bar=True)
-    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
-    with open(filenames['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    nx.set_node_attributes(state_transition_graph, stg_values)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     exit()
 
     train_q_learning_agent(lavaflow,
