@@ -189,8 +189,8 @@ class PreparednessAgent(OptionsAgent):
     def choose_action(self, state, optimal_choice=False, possible_actions=None):
         if self.current_option is None:
             self.current_option = self.choose_option(state, optimal_choice, possible_actions)
-            while self.current_option is not None:
-                self.current_option = self.choose_option(state, False, possible_actions)
+            if self.current_option is None:
+                return None
 
         try:
             if self.current_option.policy.current_option.terminated(state):
