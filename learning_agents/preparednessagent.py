@@ -792,6 +792,18 @@ class PreparednessAgent(OptionsAgent):
 
         return total_end_states, total_successes
 
+    def train_option_value_iteration(self, option: Option, environment: Environment,
+                                     min_delta: float) -> None:
+        def v(s: np.ndarray) -> float:
+            state_option_values = option.policy.get_state_option_values(s)
+            return max(state_option_values.values())
+
+        delta = np.inf
+        while delta > min_delta:
+            delta = 0
+            for state in option.
+        return
+
     def train_options(self, environment: Environment,
                       training_timesteps: int,
                       min_level: None | int=None, max_level: None | int=None,
