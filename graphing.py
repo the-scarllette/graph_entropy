@@ -108,6 +108,17 @@ def get_standard_dev(data, average=None):
         std_dev.append(np.sqrt(square_sum / num_sets))
     return std_dev
 
+def get_standard_error(data, average=None):
+    standard_deviation = get_standard_dev(data, average)
+    standard_error = []
+
+    n = min(len(elm) for elm in data)
+    num_sets = len(data)
+
+    for i in range(n):
+        standard_error.append(standard_deviation[i] / np.sqrt(num_sets))
+    return standard_error
+
 
 def graph(y, name=None, label=None):
     x = list(range(len(y)))
@@ -145,14 +156,17 @@ def graph_reward_per_timestep(data, window=10, name=None, labels=None, x_label=N
     reward_per_timestep_data_trimmed = list(map(lambda x: x[:n], reward_per_timestep_data))
 
     fill_data = None
-    if error_bars == 'std':
-        std = [get_standard_dev(data[i], averaged_data[i]) for i in range(num_sets)]
-        windowed_std = list(map(lambda x: get_reward_per_timestep(x, window), std))
-        windowed_std_trimmed = list(map(lambda x: x[:n], windowed_std))
+    if error_bars is not None:
+        if error_bars == 'std':
+            error_values = [get_standard_dev(data[i], averaged_data[i]) for i in range(num_sets)]
+        elif error_bars == 'st_error':
+            error_values = [get_standard_error(data[i], averaged_data[i]) for i in range(num_sets)]
+        windowed_error = list(map(lambda x: get_reward_per_timestep(x, window), error_values))
+        windowed_error_trimmed = list(map(lambda x: x[:n], windowed_error))
         fill_data = []
         for i in range(num_sets):
-            bottom_std = [reward_per_timestep_data_trimmed[i][j] - windowed_std_trimmed[i][j] for j in range(n)]
-            top_std = [reward_per_timestep_data_trimmed[i][j] + windowed_std_trimmed[i][j] for j in range(n)]
+            bottom_std = [reward_per_timestep_data_trimmed[i][j] - windowed_error_trimmed[i][j] for j in range(n)]
+            top_std = [reward_per_timestep_data_trimmed[i][j] + windowed_error_trimmed[i][j] for j in range(n)]
             fill_data.append([bottom_std, top_std])
 
     x = [i * window for i in range(1, n + 1)]
