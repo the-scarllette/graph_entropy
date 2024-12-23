@@ -728,6 +728,19 @@ class PreparednessAgent(OptionsAgent):
         self.options += self.specific_onboarding_options + self.specific_onboarding_subgoal_options
         return
 
+    def set_option_policy(self, option: PreparednessOption) -> None:
+        for node, values in self.aggregate_graph.nodes(data=True):
+            state = self.state_str_to_state(values['state'])
+            if option.terminated(state):
+                continue
+            if (node != option.start_node[0]) and (not nx.has_path(self.aggregate_graph, node, option.start_node[0])):
+                continue
+            path = nx.dijkstra_path(self.aggregate_graph, node, option.end_node)
+
+
+
+        return
+
     def train_option(self, option: Option, environment: Environment,
                      training_timesteps: int,
                      option_success_states: List[str],
@@ -792,6 +805,7 @@ class PreparednessAgent(OptionsAgent):
 
         return total_end_states, total_successes
 
+    # TODO: Finish value iteration training
     def train_option_value_iteration(self, training_option: PreparednessOption, environment: Environment,
                                      min_delta: float, option_runs: int) -> None:
         def run_option(start_state: np.ndarray, option: Option) -> Tuple[np.ndarray, float]:

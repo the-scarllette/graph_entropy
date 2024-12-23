@@ -4,7 +4,7 @@ import typing
 import networkx as nx
 import numpy as np
 from scipy import sparse
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 from environments.environment import Environment
 from learning_agents.qlearningagent import QLearningAgent
@@ -460,6 +460,12 @@ class OptionsAgent:
 
         with open(save_path, 'w') as f:
             json.dump(data, f)
+        return
+
+    def set_state_option_values(self, values: Dict[int, float], state: np.ndarray) -> None:
+        state_str = self.state_to_state_str(state)
+        self.state_option_values[state_str] = {str(option): values[option]
+                                               for option in values}
         return
 
     def state_str_to_state(self, state_str):
