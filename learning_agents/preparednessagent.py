@@ -728,7 +728,7 @@ class PreparednessAgent(OptionsAgent):
         self.options += self.specific_onboarding_options + self.specific_onboarding_subgoal_options
         return
 
-    def set_option_policy(self, option: PreparednessOption) -> None:
+    def set_options_by_pathing(self, option: PreparednessOption) -> None:
         for node, values in self.aggregate_graph.nodes(data=True):
             start_state = self.state_str_to_state(values['state'])
             if option.terminated(start_state):
@@ -742,10 +742,17 @@ class PreparednessAgent(OptionsAgent):
                 first_node = path[i]
                 next_node = path[i + 1]
                 current_state = self.node_to_state(first_node)
+
                 possible_options = option.policy.get_available_options(current_state)
-                # Determine option that starts at first node and ends at next node
-                # set this value to 1.0
-                # set option values as these vaLues
+
+                values = {int(option_index): 0.0 for option_index in possible_options}
+                for option_index in possible_options:
+                    current_option = option.policy.options[int(option_index)]
+                    if current_option.end_node == next_node and current_option.start_nodes[0] == first_node:
+                        values[int(option_index)] = 1.0
+                        break
+
+                option.policy.set_state_option_values(values, current_state)
 
         return
 
