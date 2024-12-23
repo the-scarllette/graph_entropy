@@ -728,7 +728,7 @@ class PreparednessAgent(OptionsAgent):
         self.options += self.specific_onboarding_options + self.specific_onboarding_subgoal_options
         return
 
-    def set_options_by_pathing(self, option: PreparednessOption) -> None:
+    def set_option_by_pathing(self, option: PreparednessOption) -> None:
         for node, values in self.aggregate_graph.nodes(data=True):
             start_state = self.state_str_to_state(values['state'])
             if option.terminated(start_state):
