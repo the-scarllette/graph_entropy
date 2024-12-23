@@ -792,8 +792,26 @@ class PreparednessAgent(OptionsAgent):
 
         return total_end_states, total_successes
 
-    def train_option_value_iteration(self, option: Option, environment: Environment,
-                                     min_delta: float) -> None:
+    def train_option_value_iteration(self, training_option: PreparednessOption, environment: Environment,
+                                     min_delta: float, option_runs: int) -> None:
+        def run_option(start_state: np.ndarray, option: Option) -> Tuple[np.ndarray, float]:
+            terminal = False
+            current_state = environment.reset(start_state)
+            total_reward = 0
+            while not terminal:
+                possible_actions = environment.get_possible_actions(current_state)
+                action = option.choose_action(current_state, possible_actions)
+                current_state, _, terminal, _ = environment.step(action)
+                total_reward += self.option_step_reward
+                if not terminal:
+                    terminal = option.terminated(current_state)
+
+            if self.get_state_node(current_state) == training_option.end_node:
+                total_reward += self.option_success_reward
+            elif training_option.terminated(current_state):
+                total_reward += self.option_failure_reward
+            return current_state, total_reward
+
         def v(s: np.ndarray) -> float:
             state_option_values = option.policy.get_state_option_values(s)
             return max(state_option_values.values())
@@ -801,7 +819,15 @@ class PreparednessAgent(OptionsAgent):
         delta = np.inf
         while delta > min_delta:
             delta = 0
-            for state in option.
+            for node, values in self.aggregate_graph.nodes(data=True):
+                state_str = values['state']
+                state = self.state_str_to_state(state_str)
+                if option.terminated(state):
+                    continue
+
+                for i in range(option_runs):
+                    state = environment.reset(state)
+
         return
 
     def train_options(self, environment: Environment,
