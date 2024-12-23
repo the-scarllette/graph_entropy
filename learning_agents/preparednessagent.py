@@ -730,14 +730,22 @@ class PreparednessAgent(OptionsAgent):
 
     def set_option_policy(self, option: PreparednessOption) -> None:
         for node, values in self.aggregate_graph.nodes(data=True):
-            state = self.state_str_to_state(values['state'])
-            if option.terminated(state):
+            start_state = self.state_str_to_state(values['state'])
+            if option.terminated(start_state):
                 continue
             if (node != option.start_node[0]) and (not nx.has_path(self.aggregate_graph, node, option.start_node[0])):
                 continue
+
             path = nx.dijkstra_path(self.aggregate_graph, node, option.end_node)
 
-
+            for i in range(len(path) - 1):
+                first_node = path[i]
+                next_node = path[i + 1]
+                current_state = self.node_to_state(first_node)
+                possible_options = option.policy.get_available_options(current_state)
+                # Determine option that starts at first node and ends at next node
+                # set this value to 1.0
+                # set option values as these vaLues
 
         return
 
