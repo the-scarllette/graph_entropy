@@ -813,7 +813,7 @@ class PreparednessAgent(OptionsAgent):
             return current_state, total_reward
 
         def v(s: np.ndarray) -> float:
-            state_option_values = option.policy.get_state_option_values(s)
+            state_option_values = training_option.policy.get_state_option_values(s)
             return max(state_option_values.values())
 
         delta = np.inf
@@ -822,11 +822,14 @@ class PreparednessAgent(OptionsAgent):
             for node, values in self.aggregate_graph.nodes(data=True):
                 state_str = values['state']
                 state = self.state_str_to_state(state_str)
-                if option.terminated(state):
+                if training_option.terminated(state):
                     continue
 
                 for i in range(option_runs):
-                    state = environment.reset(state)
+                    possible_actions = environment.get_possible_actions(state)
+                    possible_options = training_option.policy.get_available_options(state, possible_actions)
+                    for possible_option in possible_options:
+                        state_after_option, reward = run_option(state, training_option)
 
         return
 
