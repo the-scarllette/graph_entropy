@@ -756,6 +756,11 @@ class PreparednessAgent(OptionsAgent):
 
         return
 
+    def set_options_by_pathing(self, levels_to_set: None | List[int]) -> None:
+        if levels_to_set is None:
+            levels_to_set =
+        return
+
     def train_option(self, option: Option, environment: Environment,
                      training_timesteps: int,
                      option_success_states: List[str],
