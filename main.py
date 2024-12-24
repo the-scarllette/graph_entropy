@@ -1336,14 +1336,14 @@ def run_epoch(env: Environment,
                 break
             state = env.reset()
             if not all_actions_valid:
-                current_possible_actions = env.get_possible_actions()
+                current_possible_actions = env.get_possible_actions(state)
 
         action = agent.choose_action(state, True, current_possible_actions)
 
         next_state, reward, done, _ = env.step(action)
 
         if not all_actions_valid:
-            current_possible_actions = env.get_possible_actions()
+            current_possible_actions = env.get_possible_actions(state)
 
         agent.learn(state, action, reward, next_state, done,
                     current_possible_actions)
