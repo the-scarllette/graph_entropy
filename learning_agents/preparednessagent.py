@@ -728,6 +728,47 @@ class PreparednessAgent(OptionsAgent):
         self.options += self.specific_onboarding_options + self.specific_onboarding_subgoal_options
         return
 
+    def set_option_by_pathing(self, option: PreparednessOption) -> None:
+        for node, values in self.aggregate_graph.nodes(data=True):
+            start_state = self.state_str_to_state(values['state'])
+            if option.terminated(start_state):
+                continue
+            if (node != option.start_node[0]) and (not nx.has_path(self.aggregate_graph, node, option.start_node[0])):
+                continue
+
+            path = nx.dijkstra_path(self.aggregate_graph, node, option.end_node)
+
+            for i in range(len(path) - 1):
+                first_node = path[i]
+                next_node = path[i + 1]
+                current_state = self.node_to_state(first_node)
+
+                possible_options = option.policy.get_available_options(current_state)
+
+                values = {int(option_index): 0.0 for option_index in possible_options}
+                for option_index in possible_options:
+                    current_option = option.policy.options[int(option_index)]
+                    if current_option.end_node == next_node and current_option.start_nodes[0] == first_node:
+                        values[int(option_index)] = 1.0
+                        break
+
+                option.policy.set_state_option_values(values, current_state)
+
+        return
+
+    def set_options_by_pathing(self, levels_to_set: None | List[int]=None,
+                               options_to_set: None | List[Tuple[str, str]]=None) -> None:
+        if levels_to_set is None:
+            levels_to_set = [level for level in range(self.min_subgoal_level, self.max_subgoal_level + 1)]
+        levels_to_set = [str(level) for level in levels_to_set]
+
+        for level in levels_to_set:
+            for option in self.options_between_subgoals[level]:
+                if (options_to_set is None) or ((option.start_node[0], option.end_node) in options_to_set):
+                    self.set_option_by_pathing(option)
+
+        return
+
     def train_option(self, option: Option, environment: Environment,
                      training_timesteps: int,
                      option_success_states: List[str],
@@ -791,6 +832,48 @@ class PreparednessAgent(OptionsAgent):
             state = next_state
 
         return total_end_states, total_successes
+
+    # TODO: Finish value iteration training
+    def train_option_value_iteration(self, training_option: PreparednessOption, environment: Environment,
+                                     min_delta: float, option_runs: int) -> None:
+        def run_option(start_state: np.ndarray, option: Option) -> Tuple[np.ndarray, float]:
+            terminal = False
+            current_state = environment.reset(start_state)
+            total_reward = 0
+            while not terminal:
+                possible_actions = environment.get_possible_actions(current_state)
+                action = option.choose_action(current_state, possible_actions)
+                current_state, _, terminal, _ = environment.step(action)
+                total_reward += self.option_step_reward
+                if not terminal:
+                    terminal = option.terminated(current_state)
+
+            if self.get_state_node(current_state) == training_option.end_node:
+                total_reward += self.option_success_reward
+            elif training_option.terminated(current_state):
+                total_reward += self.option_failure_reward
+            return current_state, total_reward
+
+        def v(s: np.ndarray) -> float:
+            state_option_values = training_option.policy.get_state_option_values(s)
+            return max(state_option_values.values())
+
+        delta = np.inf
+        while delta > min_delta:
+            delta = 0
+            for node, values in self.aggregate_graph.nodes(data=True):
+                state_str = values['state']
+                state = self.state_str_to_state(state_str)
+                if training_option.terminated(state):
+                    continue
+
+                for i in range(option_runs):
+                    possible_actions = environment.get_possible_actions(state)
+                    possible_options = training_option.policy.get_available_options(state, possible_actions)
+                    for possible_option in possible_options:
+                        state_after_option, reward = run_option(state, training_option)
+
+        return
 
     def train_options(self, environment: Environment,
                       training_timesteps: int,
