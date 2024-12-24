@@ -1328,7 +1328,7 @@ def run_epoch(env: Environment,
     state = env.reset()
     done = False
     if not all_actions_valid:
-        current_possible_actions = env.get_possible_actions()
+        current_possible_actions = env.get_possible_actions(state)
 
     while total_steps < num_steps:
         if done:
@@ -2145,7 +2145,7 @@ if __name__ == "__main__":
     taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     # tinytown = TinyTown(2, 2, pick_every=1)
 
-    option_onboarding = 'specific'
+    option_onboarding = 'none'
     graphing_window = 10
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
@@ -2154,22 +2154,26 @@ if __name__ == "__main__":
     max_num_hops = 1
     num_agents = 3
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
-    total_evaluation_steps = np.inf
+    total_evaluation_steps = 100
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=1_000, lavaflow_pipes=2_000
-    options_training_timesteps = 10_000
+    options_training_timesteps = 1_000_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 5_000
-
+    training_timesteps = 100
 
     filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
-           stg_values = json.load(f)
-    with open(taxicab.environment_name + "_preparedness_untrained_options.json", 'r') as f:
-         untrained_options = json.load(f)
+        stg_values = json.load(f)
+
+    train_preparedness_agents(filenames['agents'] + "/preparedness_base_agent.json",
+                              option_onboarding, taxicab,
+                              training_timesteps, num_agents, evaluate_policy_window,
+                              False, total_evaluation_steps,
+                              continue_training=False, progress_bar=True)
+    exit()
 
     print(taxicab.environment_name + " preparedness training options")
     preparedness_agent = PreparednessAgent(taxicab.possible_actions,
@@ -2179,19 +2183,16 @@ if __name__ == "__main__":
                                            option_onboarding='none')
     preparedness_agent.create_options(taxicab)
     preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent.set_options_by_pathing(options_to_set=untrained_options)
+
+    preparedness_agent.train_options(taxicab, options_training_timesteps,
+                                     train_between_options=False,
+                                     train_onboarding_options=False, train_subgoal_options=True,
+                                     all_actions_possible=False, progress_bar=True)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     print(taxicab.environment_name + " preparedness training options")
     exit()
 
-    untrained_options = preparedness_agent.train_options(taxicab, options_training_timesteps,
-                                                         train_between_options=True, min_level=2, max_level=2,
-                                                         train_onboarding_options=False, train_subgoal_options=False,
-                                                         options_to_train=untrained_options,
-                                                         all_actions_possible=False, progress_bar=True,
-                                                         trained_benchmark=0.95)
-    with open(taxicab.environment_name + "_preparedness_untrained_options.json", 'w') as f:
-        json.dump(untrained_options, f)
+    preparedness_agent.set_options_by_pathing(levels_to_set=[1, 2], options_to_set=untrained_options)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     print(taxicab.environment_name + " preparedness training options")
     exit()
@@ -2211,13 +2212,6 @@ if __name__ == "__main__":
                                                'Louvain',
                                                'Preparedness (Generic)'
                                                ])
-    exit()
-
-    train_preparedness_agents(filenames['agents'] + "/preparedness_base_agent_min1.json",
-                              option_onboarding, tinytown,
-                              training_timesteps, num_agents, evaluate_policy_window,
-                              False, total_evaluation_steps,
-                              continue_training=True, progress_bar=True)
     exit()
 
     state_transition_graph, preparedness_subgoal_graph, stg_values = (
