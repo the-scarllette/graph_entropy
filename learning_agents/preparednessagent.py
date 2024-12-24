@@ -763,7 +763,7 @@ class PreparednessAgent(OptionsAgent):
 
         for level in levels_to_set:
             for option in self.options_between_subgoals[level]:
-                if (options_to_set is None) or ((option.start_nodes[0], option.end_nodes[0]) in options_to_set):
+                if (options_to_set is None) or ((option.start_node[0], option.end_node) in options_to_set):
                     self.set_option_by_pathing(option)
 
         return
