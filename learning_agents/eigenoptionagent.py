@@ -1,7 +1,8 @@
 import random
 
-from learning_agents.optionsagent import Option, OptionsAgent
+from learning_agents.optionsagent import Option
 from learning_agents.qlearningagent import QLearningAgent
+from learning_agents.subgoalagent import SubgoalAgent
 from progressbar import print_progress_bar
 
 import json
@@ -42,7 +43,7 @@ class EigenOption(Option):
         return
 
 
-class EigenOptionAgent(OptionsAgent):
+class EigenOptionAgent(SubgoalAgent):
 
     def __init__(self, adjacency_matrix: sparse.csr_matrix,
                  all_states: np.matrix,

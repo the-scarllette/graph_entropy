@@ -86,7 +86,7 @@ class SubgoalAgent(OptionsAgent):
         for subgoal in self.subgoals:
             distances = nx.shortest_path_length(self.state_transition_graph, target=subgoal)
             initiation_set = [self.node_to_state(node) for node in list(distances.keys())
-                                if (node != subgoal) and (distances[node] <= self.subgoal_distance)]
+                                if (node != subgoal) and (distances[node] < (self.subgoal_distance + 1))]
             option = SubgoalOption(self.actions, self.alpha, self.epsilon, self.gamma, subgoal, initiation_set)
             self.options.append(option)
         return
