@@ -756,9 +756,16 @@ class PreparednessAgent(OptionsAgent):
 
         return
 
-    def set_options_by_pathing(self, levels_to_set: None | List[int]) -> None:
+    def set_options_by_pathing(self, levels_to_set: None | List[int]=None,
+                               options_to_set: None | List[Tuple[str, str]]=None) -> None:
         if levels_to_set is None:
-            levels_to_set =
+            levels_to_set = list(range(self.min_subgoal_level, self.max_subgoal_level + 1))
+
+        for level in levels_to_set:
+            for option in self.options_between_subgoals[level]:
+                if (options_to_set is None) or ((option.start_nodes[0], option.end_nodes[0]) in options_to_set):
+                    self.set_option_by_pathing(option)
+
         return
 
     def train_option(self, option: Option, environment: Environment,
