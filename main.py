@@ -1254,7 +1254,7 @@ def train_agent(env: Environment, agent, num_steps,
             if all_actions_valid:
                 agent.learn(state, action, reward, next_state, done)
             else:
-                current_possible_actions = env.get_possible_actions()
+                current_possible_actions = env.get_possible_actions(next_state)
                 agent.learn(state, action, reward, next_state, terminal=done,
                             next_state_possible_actions=current_possible_actions)
 
@@ -2146,7 +2146,7 @@ if __name__ == "__main__":
     # tinytown = TinyTown(2, 2, pick_every=1)
 
     option_onboarding = 'none'
-    graphing_window = 10
+    graphing_window = 100
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
     hops = 5
@@ -2159,7 +2159,7 @@ if __name__ == "__main__":
     options_training_timesteps = 1_000_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 100
+    training_timesteps = 10_000
 
     filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
@@ -2167,6 +2167,23 @@ if __name__ == "__main__":
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    data = graphing.extract_data(filenames['results'])
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='Modified Taxicab',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='sterror',
+                                       labels=os.listdir(filenames['results']))
+    exit()
+
+    train_q_learning_agent(taxicab,
+                           training_timesteps, num_agents,
+                           continue_training=True,
+                           progress_bar=True,
+                           all_actions_valid=False,
+                           total_eval_steps=total_evaluation_steps)
+    exit()
 
     train_preparedness_agents(filenames['agents'] + "/preparedness_base_agent.json",
                               option_onboarding, taxicab,
@@ -2195,23 +2212,6 @@ if __name__ == "__main__":
     preparedness_agent.set_options_by_pathing(levels_to_set=[1, 2], options_to_set=untrained_options)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     print(taxicab.environment_name + " preparedness training options")
-    exit()
-
-    data = graphing.extract_data(filenames['results'])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='TinyTown (2x2)',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='st_error',
-                                       xlim=[0, 1250],
-                                       labels=['Betweenness',
-                                               'Preparedness (None)',
-                                               'Preparedness (Specific)',
-                                               'Eigenoptions',
-                                               'Primitives',
-                                               'Louvain',
-                                               'Preparedness (Generic)'
-                                               ])
     exit()
 
     state_transition_graph, preparedness_subgoal_graph, stg_values = (
@@ -2273,14 +2273,6 @@ if __name__ == "__main__":
     betweennessagent.train_options(tinytown, options_training_timesteps,
                                    False, True)
     betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
-    exit()
-
-    train_q_learning_agent(lavaflow,
-                           training_timesteps, num_agents,
-                           continue_training=False,
-                           progress_bar=True,
-                           all_actions_valid=True,
-                           total_eval_steps=total_evaluation_steps)
     exit()
 
     agent = BetweennessAgent(simple_wind_gridworld.possible_actions,
