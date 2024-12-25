@@ -1,9 +1,10 @@
 import json
 import numpy as np
+import networkx as nx
 import os
 import random
 from scipy import sparse
-from typing import Callable, List, Type
+from typing import Callable, List, Tuple, Type
 
 from environments.environment import Environment
 from learning_agents.optionsagent import Option, OptionsAgent
@@ -46,14 +47,14 @@ class EigenOption(Option):
 class EigenOptionAgent(OptionsAgent):
 
     def __init__(self, adjacency_matrix: sparse.csr_matrix,
-                 all_states: np.matrix,
-                 alpha: float, epsilon: float, gamma: float, actions: List[int], state_dtype: Type,
+                 state_transition_graph: nx.MultiDiGraph,
+                 alpha: float, epsilon: float, gamma: float, actions: List[int], state_dtype: Type, state_shape: Tuple[int, int],
                  num_options: int=64):
         self.adjacency_matrix = adjacency_matrix
         self.adjacency_matrix[adjacency_matrix.nonzero()] = 1.0
 
         self.num_states = self.adjacency_matrix.shape[0]
-        self.all_states = all_states
+        self.state_transition_graph = state_transition_graph
 
         self.alpha = alpha
         self.epsilon = epsilon
@@ -61,6 +62,7 @@ class EigenOptionAgent(OptionsAgent):
 
         self.intra_option = False
         self.state_dtype = state_dtype
+        self.state_shape = state_shape
 
         self.current_option = None
         self.current_option_index = None
@@ -82,9 +84,7 @@ class EigenOptionAgent(OptionsAgent):
         self.options = []
         self.num_options = num_options
 
-        self.state_to_index_lookup = {self.all_states[i].astype(self.state_dtype).tobytes():
-                                      i for i in range(self.num_states)}
-        self.index_to_state_lookup = {i: self.all_states[i] for i in range(self.num_states)}
+        self.state_to_index_lookup = {}
 
         self.initiation_lookup = {}
         return
@@ -163,7 +163,16 @@ class EigenOptionAgent(OptionsAgent):
         return available_options
 
     def get_state_index(self, state: np.ndarray) -> int:
-        return self.state_to_index_lookup[state.astype(self.state_dtype).tobytes()]
+        state_str = self.state_to_state_str(state)
+        try:
+            index = self.state_to_index_lookup[state_str]
+        except KeyError:
+            for index, values in self.state_transition_graph.nodes(data=True):
+                if values['state'] == state_str:
+                    break
+            index = int(index)
+            self.state_to_index_lookup[state_str] = index
+        return index
 
     def learn(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray,
               terminal: None | bool=None, next_state_possible_actions: None | List[int]=None):

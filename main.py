@@ -2163,10 +2163,21 @@ if __name__ == "__main__":
 
     filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    all_states = np.load(filenames['all states'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    eigenoptions_agent = EigenOptionAgent(adj_matrix, all_states,
+                                         0.9, 0.1, 0.9,
+                                         taxicab.possible_actions,
+                                         taxicab.state_dtype, 64)
+    eigenoptions_agent.load(filenames['agents'] + '/eigenoptions_base_agent')
+    eigenoptions_agent.train_options(taxicab, options_training_timesteps,
+                                     False, True)
+    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent')
+    exit()
 
     data = graphing.extract_data(filenames['results'])
     graphing.graph_reward_per_timestep(data, graphing_window,
@@ -2313,31 +2324,6 @@ if __name__ == "__main__":
                              total_eval_steps=total_evaluation_steps,
                              continue_training=False,
                              progress_bar=True)
-    exit()
-
-    eigenoptions_agent = EigenOptionAgent(adj_matrix, all_states,
-                                          0.9, 0.1, 0.9,
-                                          simple_wind_gridworld.possible_actions)
-    eigenoptions_agent.load(filenames[4] + '/eigenoptions_options_trained_agent.json')
-
-    preparedness_values, hierarchy = preparedness_efficient(adj_matrix, 0.5, min_num_hops=1, max_num_hops=2,
-                                                            compressed_matrix=True,
-                                                            existing_stg_values=stg_values, computed_hops_range=None)
-
-    eigenoptions_agent.train_options(simple_wind_gridworld, options_training_timesteps,
-                                     True, True)
-    eigenoptions_agent.save(filenames[4] + '/eigenoptions_options_trained_agent')
-    exit()
-    add_eigenoptions_to_stg(eigenoptions_agent, simple_wind_gridworld)
-    exit()
-
-    print("Creating Agent")
-    eignoptions_agent = EigenOptionAgent(adj_matrix, all_states,
-                                         0.9, 0.1, 0.9,
-                                         simple_wind_gridworld.possible_actions)
-    print("Finding Eigenoptions")
-    eignoptions_agent.find_options(True)
-    eignoptions_agent.save(filenames[4] + '/eigenoptions_base_agent')
     exit()
 
     louvain_agent = LouvainAgent(tiny_town_env.possible_actions,
