@@ -112,12 +112,6 @@ class EigenOptionAgent(OptionsAgent):
 
         return chosen_action
 
-    def choose_option(self, state: np.ndarray, no_random: bool,
-                      possible_actions: None | List[int]=None) -> Option:
-        self.current_option_index = super().choose_option(state, no_random, possible_actions)
-        option = self.options[int(self.current_option_index)]
-        return option
-
     def copy_agent(self, copy_from: 'EigenOptionAgent'):
         self.state_option_values = copy_from.state_option_values.copy()
         self.current_option = None
@@ -185,7 +179,7 @@ class EigenOptionAgent(OptionsAgent):
         except AttributeError:
             ()
 
-        option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
+        option_value = self.get_state_option_values(self.option_start_state)[int(self.current_option_index)]
         all_next_options = []
         if not terminal:
             all_next_options = self.get_state_option_values(next_state)
@@ -197,12 +191,12 @@ class EigenOptionAgent(OptionsAgent):
         if (not next_options) or (not all_next_options):
             next_option_values = [0.0]
         else:
-            next_option_values = [all_next_options[option] for option in next_options]
+            next_option_values = [all_next_options[int(option)] for option in next_options]
         max_next_option = max(next_option_values)
 
         state_str = np.array2string(np.ndarray.astype(self.option_start_state, dtype=self.state_dtype))
 
-        self.state_option_values[state_str][self.current_option_index] += self.alpha * \
+        self.state_option_values[state_str][int(self.current_option_index)] += self.alpha * \
                                                                     (self.total_option_reward +
                                                                      (self.gamma ** self.current_option_step) *
                                                                      max_next_option

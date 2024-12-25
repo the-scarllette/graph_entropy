@@ -1555,7 +1555,7 @@ def train_eigenoption_agents(base_agent_save_path,
     filenames = get_filenames(environment)
     adjacency_matrix_filename = filenames['adjacency matrix']
     agent_directory = filenames['agents']
-    state_transition_graph = filenames['state transition graph']
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     results_directory = filenames['results']
     agent_training_results_file = 'eigenoptions_training_returns.json'
     agent_results_file = 'eigenoptions_epoch_returns.json'
