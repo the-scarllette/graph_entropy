@@ -1,15 +1,14 @@
-import random
-
-from learning_agents.optionsagent import Option
-from learning_agents.qlearningagent import QLearningAgent
-from learning_agents.subgoalagent import SubgoalAgent
-from progressbar import print_progress_bar
-
 import json
-import networkx as nx
 import numpy as np
 import os
+import random
 from scipy import sparse
+from typing import Callable, List, Type
+
+from environments.environment import Environment
+from learning_agents.optionsagent import Option, OptionsAgent
+from learning_agents.qlearningagent import QLearningAgent
+from progressbar import print_progress_bar
 
 # EigenOptions Method
 # Get adjacency matrix A
@@ -28,8 +27,9 @@ from scipy import sparse
 
 class EigenOption(Option):
 
-    def __init__(self, actions, eigenvector, goal_index, terminate_action, initiation_func,
-                 alpha=0.9, epsilon=0.1, gamma=0.9):
+    def __init__(self, actions: List[int], eigenvector: np.ndarray, goal_index: int,
+                 terminate_action: int, initiation_func: Callable[[np.ndarray], bool],
+                 alpha: float=0.9, epsilon: float=0.1, gamma: float=0.9):
         self.actions = None
         self.eigenvector = eigenvector
         self.terminate_action = terminate_action
@@ -43,12 +43,12 @@ class EigenOption(Option):
         return
 
 
-class EigenOptionAgent(SubgoalAgent):
+class EigenOptionAgent(OptionsAgent):
 
     def __init__(self, adjacency_matrix: sparse.csr_matrix,
                  all_states: np.matrix,
-                 alpha, epsilon, gamma, actions, state_dtype=int,
-                 num_options=64):
+                 alpha: float, epsilon: float, gamma: float, actions: List[int], state_dtype: Type,
+                 num_options: int=64):
         self.adjacency_matrix = adjacency_matrix
         self.adjacency_matrix[adjacency_matrix.nonzero()] = 1.0
 
@@ -89,7 +89,8 @@ class EigenOptionAgent(SubgoalAgent):
         self.initiation_lookup = {}
         return
 
-    def choose_action(self, state, optimal_choice=False, possible_actions=None):
+    def choose_action(self, state: np.ndarray, optimal_choice: bool=False,
+                      possible_actions: None | List[int]=None) -> int:
         if self.options is None:
             raise AttributeError("Options have not been found yet, run the 'find options' method first")
 
@@ -111,18 +112,19 @@ class EigenOptionAgent(SubgoalAgent):
 
         return chosen_action
 
-    def choose_option(self, state, no_random, possible_actions=None):
+    def choose_option(self, state: np.ndarray, no_random: bool,
+                      possible_actions: None | List[int]=None) -> Option:
         self.current_option_index = super().choose_option(state, no_random, possible_actions)
         option = self.options[int(self.current_option_index)]
         return option
 
-    def copy_agent(self, copy_from):
+    def copy_agent(self, copy_from: 'EigenOptionAgent'):
         self.state_option_values = copy_from.state_option_values.copy()
         self.current_option = None
         self.current_option_index = None
         return
 
-    def find_options(self, progress_bar=False):
+    def find_options(self, progress_bar: bool=False):
         laplacian = sparse.csgraph.laplacian(self.adjacency_matrix, True)
         _, eigenvectors = sparse.linalg.eigs(laplacian, self.num_options, which='SR')
         goal_indexes = np.argmax(eigenvectors, axis=0)
@@ -147,7 +149,7 @@ class EigenOptionAgent(SubgoalAgent):
 
         return
 
-    def get_available_options(self, state, possible_actions=None):
+    def get_available_options(self, state: np.ndarray, possible_actions: None | List[int]=None) -> List[int]:
         available_options = [str(i) for i in range(self.num_options)
                              if self.options[i].initiated(state)]
 
@@ -160,11 +162,11 @@ class EigenOptionAgent(SubgoalAgent):
         
         return available_options
 
-    def get_state_index(self, state):
+    def get_state_index(self, state: np.ndarray) -> int:
         return self.state_to_index_lookup[state.astype(self.state_dtype).tobytes()]
 
-    def learn(self, state, action, reward, next_state,
-              terminal=None, next_state_possible_actions=None):
+    def learn(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray,
+              terminal: None | bool=None, next_state_possible_actions: None | List[int]=None):
         self.total_option_reward += reward
         if not (terminal or self.current_option.terminated(next_state)):
             return
@@ -202,7 +204,7 @@ class EigenOptionAgent(SubgoalAgent):
         self.total_option_reward = 0
         return
 
-    def load(self, save_path):
+    def load(self, save_path: str):
         with open(save_path, 'r') as f:
             data = json.load(f)
 
@@ -223,12 +225,13 @@ class EigenOptionAgent(SubgoalAgent):
         self.state_option_values = data['option values'].copy()
         return
 
-    def option_initiation_function(self, state, goal_state_index):
+    def option_initiation_function(self, state: np.ndarray, goal_state_index: int) -> bool:
         state_index = self.get_state_index(state)
         return self.initiation_lookup[str(state_index)][str(goal_state_index)] == 'True'
 
-    def train_option(self, environment, option: EigenOption, training_steps, possible_start_states=None,
-                     all_actions_valid=False, progress_bar=False):
+    def train_option(self, environment: Environment, option: EigenOption, training_steps: int,
+                     possible_start_states: None | List[np.ndarray]=None,
+                     all_actions_valid: bool=False, progress_bar: bool=False):
         terminal = True
         possible_actions = environment.possible_actions
         start_states = []
@@ -268,7 +271,8 @@ class EigenOptionAgent(SubgoalAgent):
 
         return
 
-    def train_options(self, environment, training_steps, all_actions_valid=True, progress_bar=False):
+    def train_options(self, environment: Environment, training_steps: int,
+                      all_actions_valid: bool=True, progress_bar: bool=False):
         possible_start_states = environment.get_start_states()
         for i in range(self.num_options):
             if progress_bar:
@@ -279,7 +283,7 @@ class EigenOptionAgent(SubgoalAgent):
 
         return
 
-    def save(self, save_path):
+    def save(self, save_path: str):
         try:
             f = open(save_path, 'x')
             f.close()

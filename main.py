@@ -2168,13 +2168,6 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    train_preparedness_agents(filenames['agents'] + "/preparedness_base_agent.json",
-                              option_onboarding, taxicab,
-                              training_timesteps, num_agents, evaluate_policy_window,
-                              False, total_evaluation_steps,
-                              continue_training=True, progress_bar=True)
-    exit()
-
     data = graphing.extract_data(filenames['results'])
     graphing.graph_reward_per_timestep(data, graphing_window,
                                        name='Modified Taxicab',
@@ -2182,6 +2175,13 @@ if __name__ == "__main__":
                                        y_label='Average Epoch Return',
                                        error_bars='st_error',
                                        labels=os.listdir(filenames['results']))
+    exit()
+
+    train_preparedness_agents(filenames['agents'] + "/preparedness_base_agent.json",
+                              option_onboarding, taxicab,
+                              training_timesteps, num_agents, evaluate_policy_window,
+                              False, total_evaluation_steps,
+                              continue_training=True, progress_bar=True)
     exit()
 
     print(taxicab.environment_name + " preparedness training options")
