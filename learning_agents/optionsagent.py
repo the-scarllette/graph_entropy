@@ -262,7 +262,7 @@ class OptionsAgent:
             return None
 
         if not no_random and rand.uniform(0, 1) < self.epsilon:
-            self.current_option_index = int(rand.choice(available_options))
+            self.current_option_index = rand.choice(available_options)
             return self.options[self.current_option_index]
 
         option_values = self.get_state_option_values(state, available_options)
@@ -271,12 +271,12 @@ class OptionsAgent:
         max_value = option_values[int(available_options[0])]
         for i in range(1, len(available_options)):
             op = available_options[i]
-            value = option_values[int(op)]
+            value = option_values[op]
             if value > max_value:
                 max_value = value
-                ops = [int(op)]
+                ops = [op]
             elif value == max_value:
-                ops.append(int(op))
+                ops.append(op)
 
         self.current_option_index = rand.choice(ops)
         return self.options[int(self.current_option_index)]

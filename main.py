@@ -2158,7 +2158,7 @@ if __name__ == "__main__":
     options_training_timesteps = 50_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 100
+    training_timesteps = 50_000
 
     filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
@@ -2175,7 +2175,7 @@ if __name__ == "__main__":
     train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent', taxicab,
                              training_timesteps, num_agents, evaluate_policy_window,
                              False, total_evaluation_steps,
-                             continue_training=False,
+                             continue_training=True,
                              progress_bar=True)
     exit()
 

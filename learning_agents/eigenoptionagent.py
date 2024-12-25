@@ -179,7 +179,7 @@ class EigenOptionAgent(OptionsAgent):
         except AttributeError:
             ()
 
-        option_value = self.get_state_option_values(self.option_start_state)[int(self.current_option_index)]
+        option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
         all_next_options = []
         if not terminal:
             all_next_options = self.get_state_option_values(next_state)
@@ -196,7 +196,7 @@ class EigenOptionAgent(OptionsAgent):
 
         state_str = np.array2string(np.ndarray.astype(self.option_start_state, dtype=self.state_dtype))
 
-        self.state_option_values[state_str][int(self.current_option_index)] += self.alpha * \
+        self.state_option_values[state_str][self.current_option_index] += self.alpha * \
                                                                     (self.total_option_reward +
                                                                      (self.gamma ** self.current_option_step) *
                                                                      max_next_option
@@ -254,7 +254,7 @@ class EigenOptionAgent(OptionsAgent):
                 state = environment.reset(random.choice(start_states))
                 state_index = self.get_state_index(state)
                 if not all_actions_valid:
-                    possible_actions = environment.get_possible_actions(state)
+                    possible_actions = environment.get_possible_actions()
 
             action = option.policy.choose_action(state, possible_actions=possible_actions)
 
@@ -268,7 +268,7 @@ class EigenOptionAgent(OptionsAgent):
             reward = option.eigenvector[next_state_index] - option.eigenvector[state_index]
 
             if not all_actions_valid:
-                possible_actions = environment.get_possible_actions(next_state)
+                possible_actions = environment.get_possible_actions()
             option.policy.learn(state, action, reward, next_state, terminal, possible_actions)
             state = next_state
 
