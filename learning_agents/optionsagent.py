@@ -263,12 +263,12 @@ class OptionsAgent:
 
         if not no_random and rand.uniform(0, 1) < self.epsilon:
             self.current_option_index = rand.choice(available_options)
-            return self.options[self.current_option_index]
+            return self.options[int(self.current_option_index)]
 
         option_values = self.get_state_option_values(state, available_options)
 
         ops = [available_options[0]]
-        max_value = option_values[int(available_options[0])]
+        max_value = option_values[available_options[0]]
         for i in range(1, len(available_options)):
             op = available_options[i]
             value = option_values[op]
@@ -317,12 +317,12 @@ class OptionsAgent:
         state_str = np.array2string(np.ndarray.astype(state, dtype=self.state_dtype))
 
         try:
-            option_values = {int(option): self.state_option_values[state_str][option]
+            option_values = {option: self.state_option_values[state_str][option]
                              for option in self.state_option_values[state_str]}
         except KeyError:
             if available_options is None:
                 available_options = self.get_available_options(state)
-            option_values = {int(option): 0.0 for option in available_options}
+            option_values = {option: 0.0 for option in available_options}
             self.state_option_values[state_str] = option_values
         return option_values
 

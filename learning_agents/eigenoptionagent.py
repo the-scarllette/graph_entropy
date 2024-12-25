@@ -191,7 +191,7 @@ class EigenOptionAgent(OptionsAgent):
         if (not next_options) or (not all_next_options):
             next_option_values = [0.0]
         else:
-            next_option_values = [all_next_options[int(option)] for option in next_options]
+            next_option_values = [all_next_options[option] for option in next_options]
         max_next_option = max(next_option_values)
 
         state_str = np.array2string(np.ndarray.astype(self.option_start_state, dtype=self.state_dtype))
