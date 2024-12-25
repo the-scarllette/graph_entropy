@@ -1553,10 +1553,10 @@ def train_eigenoption_agents(base_agent_save_path,
     all_agent_training_returns = {}
     all_agent_returns = {}
     filenames = get_filenames(environment)
-    adjacency_matrix_filename = filenames[0]
-    all_states_filename = filenames[1]
-    agent_directory = filenames[4]
-    results_directory = filenames[5]
+    adjacency_matrix_filename = filenames['adjacency matrix']
+    agent_directory = filenames['agents']
+    state_transition_graph = filenames['state transition graph']
+    results_directory = filenames['results']
     agent_training_results_file = 'eigenoptions_training_returns.json'
     agent_results_file = 'eigenoptions_epoch_returns.json'
 
@@ -1574,7 +1574,6 @@ def train_eigenoption_agents(base_agent_save_path,
             all_agent_training_returns = json.load(f)
 
     adjacency_matrix = sparse.load_npz(adjacency_matrix_filename)
-    all_states = np.load(all_states_filename)
 
     # Training Agent
     for i in range(num_agents):
@@ -1582,7 +1581,7 @@ def train_eigenoption_agents(base_agent_save_path,
             print("Training eigenoptions agent " + str(i))
 
         # Load agent
-        agent = EigenOptionAgent(adjacency_matrix, all_states,
+        agent = EigenOptionAgent(adjacency_matrix, state_transition_graph,
                                  alpha, epsilon, gamma,
                                  environment.possible_actions,
                                  environment.state_dtype,
@@ -1590,7 +1589,7 @@ def train_eigenoption_agents(base_agent_save_path,
         if continue_training:
             agent.load(agent_directory + '/eigenoption_agent_' + str(i) + '.json')
         else:
-            agent.load(agent_directory + '/' + base_agent_save_path)
+            agent.load(base_agent_save_path)
 
         # Train Agent
         agent, agent_training_returns, agent_returns = train_agent(environment, agent, training_timesteps,
@@ -2156,10 +2155,10 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
     total_evaluation_steps = 100
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=1_000, lavaflow_pipes=2_000
-    options_training_timesteps = 100
+    options_training_timesteps = 50_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 50_000
+    training_timesteps = 100
 
     filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
@@ -2173,10 +2172,11 @@ if __name__ == "__main__":
                                          taxicab.possible_actions,
                                          taxicab.state_dtype, taxicab.state_shape,
                                          64)
-    eigenoptions_agent.load(filenames['agents'] + '/eigenoptions_base_agent')
-    eigenoptions_agent.train_options(taxicab, options_training_timesteps,
-                                     False, True)
-    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent')
+    train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent', taxicab,
+                             training_timesteps, num_agents, evaluate_policy_window,
+                             False, total_evaluation_steps,
+                             continue_training=False,
+                             progress_bar=True)
     exit()
 
     data = graphing.extract_data(filenames['results'])
@@ -2305,17 +2305,6 @@ if __name__ == "__main__":
                              True, 'options_trained.json',
                              total_evaluation_steps, False,
                              progress_bar=True)
-    exit()
-
-    print("Tiny Town 3x3: Eigenoptions Training Agent")
-    eigenoptions_agent = EigenOptionAgent(adj_matrix, all_states, 0.9, 0.1, 0.9,
-                                          tinytown.possible_actions)
-    train_eigenoption_agents('eigenoptions_options_trained_agent.json', tinytown,
-                             training_timesteps, num_agents, evaluate_policy_window,
-                             False, total_evaluation_steps,
-                             continue_training=True,
-                             progress_bar=True)
-    eigenoptions_agent.save(filenames[4] + '/eigenoptions_options_trained_agent.json')
     exit()
 
     train_eigenoption_agents('eigenoptions_options_trained_agent.json', simple_wind_gridworld,
