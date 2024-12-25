@@ -268,7 +268,11 @@ class OptionsAgent:
         option_values = self.get_state_option_values(state, available_options)
 
         ops = [available_options[0]]
-        max_value = option_values[available_options[0]]
+        try:
+            max_value = option_values[available_options[0]]
+        except KeyError:
+            option_values = {int(option_index): option_values[option_index] for option_index in option_values}
+            max_value = option_values[available_options[0]]
         for i in range(1, len(available_options)):
             op = available_options[i]
             value = option_values[op]
@@ -319,6 +323,8 @@ class OptionsAgent:
         try:
             option_values = {option: self.state_option_values[state_str][option]
                              for option in self.state_option_values[state_str]}
+            if option_values == {}:
+                raise KeyError
         except KeyError:
             if available_options is None:
                 available_options = self.get_available_options(state)

@@ -2144,7 +2144,7 @@ if __name__ == "__main__":
     taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     # tinytown = TinyTown(2, 2, pick_every=1)
 
-    option_onboarding = 'none'
+    option_onboarding = 'generic'
     graphing_window = 10
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
@@ -2158,7 +2158,7 @@ if __name__ == "__main__":
     options_training_timesteps = 50_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 100
+    training_timesteps = 50_000
 
     filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
@@ -2168,15 +2168,22 @@ if __name__ == "__main__":
         stg_values = json.load(f)
 
     eigenoptions_agent = EigenOptionAgent(adj_matrix, state_transition_graph,
-                                         0.9, 0.1, 0.9,
-                                         taxicab.possible_actions,
-                                         taxicab.state_dtype, taxicab.state_shape,
-                                         64)
+                                          0.9, 0.1, 0.9,
+                                          taxicab.possible_actions,
+                                          taxicab.state_dtype, taxicab.state_shape,
+                                          64)
     train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent', taxicab,
                              training_timesteps, num_agents, evaluate_policy_window,
                              False, total_evaluation_steps,
                              continue_training=True,
                              progress_bar=True)
+    exit()
+
+    train_preparedness_agents(filenames['agents'] + "/preparedness_base_agent.json",
+                              option_onboarding, taxicab,
+                              training_timesteps, num_agents, evaluate_policy_window,
+                              False, total_evaluation_steps,
+                              continue_training=True, progress_bar=True)
     exit()
 
     data = graphing.extract_data(filenames['results'])
@@ -2186,13 +2193,6 @@ if __name__ == "__main__":
                                        y_label='Average Epoch Return',
                                        error_bars='st_error',
                                        labels=os.listdir(filenames['results']))
-    exit()
-
-    train_preparedness_agents(filenames['agents'] + "/preparedness_base_agent.json",
-                              option_onboarding, taxicab,
-                              training_timesteps, num_agents, evaluate_policy_window,
-                              False, total_evaluation_steps,
-                              continue_training=True, progress_bar=True)
     exit()
 
     print(taxicab.environment_name + " preparedness training options")
