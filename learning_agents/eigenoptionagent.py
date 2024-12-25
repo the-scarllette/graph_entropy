@@ -260,7 +260,7 @@ class EigenOptionAgent(OptionsAgent):
                 state = environment.reset(random.choice(start_states))
                 state_index = self.get_state_index(state)
                 if not all_actions_valid:
-                    possible_actions = environment.get_possible_actions()
+                    possible_actions = environment.get_possible_actions(state)
 
             action = option.policy.choose_action(state, possible_actions=possible_actions)
 
@@ -274,7 +274,7 @@ class EigenOptionAgent(OptionsAgent):
             reward = option.eigenvector[next_state_index] - option.eigenvector[state_index]
 
             if not all_actions_valid:
-                possible_actions = environment.get_possible_actions()
+                possible_actions = environment.get_possible_actions(next_state)
             option.policy.learn(state, action, reward, next_state, terminal, possible_actions)
             state = next_state
 

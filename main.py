@@ -2163,16 +2163,16 @@ if __name__ == "__main__":
 
     filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    all_states = np.load(filenames['all states'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    eigenoptions_agent = EigenOptionAgent(adj_matrix, all_states,
+    eigenoptions_agent = EigenOptionAgent(adj_matrix, state_transition_graph,
                                          0.9, 0.1, 0.9,
                                          taxicab.possible_actions,
-                                         taxicab.state_dtype, 64)
+                                         taxicab.state_dtype, taxicab.state_shape,
+                                         64)
     eigenoptions_agent.load(filenames['agents'] + '/eigenoptions_base_agent')
     eigenoptions_agent.train_options(taxicab, options_training_timesteps,
                                      False, True)
