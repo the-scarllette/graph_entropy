@@ -137,7 +137,11 @@ class LouvainAgent(MultiLevelGoalAgent):
         except KeyError:
             nodes_in_source_cluster = self.get_nodes_in_cluster(hierarchy_level, source_cluster)
             if node not in nodes_in_source_cluster:
-                self.option_state_initiation_lookup[hierarchy_level][source_cluster][target_cluster][node] = False
+                try:
+                    self.option_state_initiation_lookup[hierarchy_level][source_cluster][target_cluster][node] = False
+                except KeyError:
+                    self.option_state_initiation_lookup[str(hierarchy_level)][str(source_cluster)][str(target_cluster)][
+                        node] = False
                 return False
 
             nodes_in_target_cluster = self.get_nodes_in_cluster(hierarchy_level, target_cluster)
@@ -146,7 +150,12 @@ class LouvainAgent(MultiLevelGoalAgent):
                 if nx.has_path(self.stg_nx, str(node), str(target_node)):
                     can_initiate = True
                     break
-            self.option_state_initiation_lookup[hierarchy_level][source_cluster][target_cluster][node] = can_initiate
+            try:
+                self.option_state_initiation_lookup[hierarchy_level][source_cluster][target_cluster][
+                    node] = can_initiate
+            except KeyError:
+                self.option_state_initiation_lookup[str(hierarchy_level)][str(source_cluster)][str(target_cluster)][
+                    node] = can_initiate
 
         return can_initiate
 
