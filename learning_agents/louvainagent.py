@@ -234,7 +234,10 @@ class LouvainAgent(MultiLevelGoalAgent):
         except KeyError:
             nodes_in_cluster = [node.index for node in self.stg.vs
                                 if self.stg.vs[f"cluster-{hierarchy_level}"][node.index] == cluster]
-            self.nodes_in_cluster[hierarchy_level][cluster] = nodes_in_cluster
+            try:
+                self.nodes_in_cluster[hierarchy_level][cluster] = nodes_in_cluster
+            except KeyError:
+                self.nodes_in_cluster[str(hierarchy_level)][str(cluster)] = nodes_in_cluster
         return nodes_in_cluster
 
     def get_state_index(self, state):

@@ -2170,10 +2170,9 @@ if __name__ == "__main__":
     louvain_agent = LouvainAgent(taxicab.possible_actions,
                                  state_transition_graph,
                                  taxicab.state_dtype, taxicab.state_shape)
-    louvain_agent.apply_louvain(first_levels_to_skip=1, graph_save_path=filenames['state transition graph'])
     louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
     louvain_agent.train_options(options_training_timesteps, taxicab, True, True)
-    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
     exit()
 
     data = graphing.extract_data(filenames['results'])
