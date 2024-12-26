@@ -359,7 +359,10 @@ class OptionsAgent:
         next_state_option_values_list = [0.0]
         next_state_option_values = self.get_state_option_values(next_state, next_available_options)
         if next_available_options:
-            next_state_option_values_list = [next_state_option_values[option] for option in next_available_options]
+            try:
+                next_state_option_values_list = [next_state_option_values[option] for option in next_available_options]
+            except KeyError:
+                next_state_option_values_list = [next_state_option_values[str(option)] for option in next_available_options]
         max_next_state_option_value = max(next_state_option_values_list)
 
         for option_index in available_options:
@@ -392,13 +395,16 @@ class OptionsAgent:
                 except KeyError:
                     self.state_option_values[state_str][str(option_index)] += self.alpha * (reward -
                                                                                        state_option_values[
-                                                                                           option_index] +
+                                                                                           str(option_index)] +
                                                                                        self.gamma * gamma_product)
 
         if not (terminal or self.current_option.terminated(next_state)):
             return
 
-        option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
+        try:
+            option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
+        except KeyError:
+            option_value = self.get_state_option_values(self.option_start_state)[str(self.current_option_index)]
         option_start_state_str = self.state_to_state_str(self.option_start_state)
         try:
             self.state_option_values[option_start_state_str][self.current_option_index] \
