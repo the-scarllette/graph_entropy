@@ -253,7 +253,8 @@ class LouvainAgent(MultiLevelGoalAgent):
         return index
 
     def load(self, load_path):
-        data = json.load(load_path)
+        with open(load_path, 'r') as f:
+            data = json.load(f)
 
         # Getting Agent Data
         self.state_option_values = data['agent']['policy']
