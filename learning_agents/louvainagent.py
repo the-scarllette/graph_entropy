@@ -252,7 +252,7 @@ class LouvainAgent(MultiLevelGoalAgent):
                     break
         return index
 
-    def load_policy(self, load_path):
+    def load(self, load_path):
         data = json.load(load_path)
 
         # Getting Agent Data

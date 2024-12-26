@@ -2155,7 +2155,7 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
     total_evaluation_steps = 100
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=1_000, lavaflow_pipes=2_000
-    options_training_timesteps = 1_000_000
+    options_training_timesteps = 100
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 50_000
@@ -2166,6 +2166,36 @@ if __name__ == "__main__":
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    louvain_agent = LouvainAgent(taxicab.possible_actions,
+                                 state_transition_graph,
+                                 taxicab.state_dtype, taxicab.state_shape)
+    louvain_agent.apply_louvain(first_levels_to_skip=1, graph_save_path=filenames['state transition graph'])
+    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
+    louvain_agent.train_options(options_training_timesteps, taxicab, True, True)
+    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
+    exit()
+
+    data = graphing.extract_data(filenames['results'])
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='Modified Taxicab',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='st_error',
+                                       labels=os.listdir(filenames['results']))
+    exit()
+
+    eigenoptions_agent = EigenOptionAgent(adj_matrix, state_transition_graph,
+                                          0.9, 0.1, 0.9,
+                                          taxicab.possible_actions,
+                                          taxicab.state_dtype, taxicab.state_shape,
+                                          64)
+    train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent', taxicab,
+                             training_timesteps, num_agents, evaluate_policy_window,
+                             False, total_evaluation_steps,
+                             continue_training=True,
+                             progress_bar=True)
+    exit()
 
     print(taxicab.environment_name + " preparedness training options")
     preparedness_agent = PreparednessAgent(taxicab.possible_actions,
@@ -2196,27 +2226,6 @@ if __name__ == "__main__":
                              False, total_evaluation_steps, True,
                              0.9, 0.1, 0.9, 30, True)
     print("Betweenness agent " + taxicab.environment_name + " agent training")
-    exit()
-
-    data = graphing.extract_data(filenames['results'])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='Modified Taxicab',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='st_error',
-                                       labels=os.listdir(filenames['results']))
-    exit()
-
-    eigenoptions_agent = EigenOptionAgent(adj_matrix, state_transition_graph,
-                                          0.9, 0.1, 0.9,
-                                          taxicab.possible_actions,
-                                          taxicab.state_dtype, taxicab.state_shape,
-                                          64)
-    train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent', taxicab,
-                             training_timesteps, num_agents, evaluate_policy_window,
-                             False, total_evaluation_steps,
-                             continue_training=True,
-                             progress_bar=True)
     exit()
 
     train_q_learning_agent(taxicab,
@@ -2313,22 +2322,6 @@ if __name__ == "__main__":
                              total_eval_steps=total_evaluation_steps,
                              continue_training=False,
                              progress_bar=True)
-    exit()
-
-    louvain_agent = LouvainAgent(tiny_town_env.possible_actions,
-                                 state_transition_graph, int,
-                                 (3, 3))
-    louvain_agent.apply_louvain()
-    louvain_agent.create_options()
-    louvain_agent.train_options_value_iteration(0.001, 100,
-                                                tiny_town_env, False)
-    exit()
-
-    state_transition_graph, stg_values = betweenness(state_transition_graph, stg_values)
-
-    nx.write_gexf(state_transition_graph, stg_filename)
-    with open(stg_values_filename, 'w') as f:
-        json.dump(stg_values, f)
     exit()
 
     louvain_agent = LouvainAgent(tiny_town_env.possible_actions, stg, tiny_town_env.state_dtype, (5, 1),
