@@ -785,7 +785,7 @@ class PreparednessAgent(OptionsAgent):
         for current_timesteps in range(training_timesteps):
             if progress_bar:
                 print_progress_bar(current_timesteps, training_timesteps,
-                                   '            >')]
+                                   '            >')
 
             if terminated:
                 option_initiated = False
