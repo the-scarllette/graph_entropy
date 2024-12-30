@@ -785,7 +785,7 @@ class PreparednessAgent(OptionsAgent):
         for current_timesteps in range(training_timesteps):
             if progress_bar:
                 print_progress_bar(current_timesteps, training_timesteps,
-                                   '            >')
+                                   '            >')]
 
             if terminated:
                 option_initiated = False
@@ -795,6 +795,8 @@ class PreparednessAgent(OptionsAgent):
                     else:
                         state_node = rand.choice(list(self.path_lookup.keys()))
                         state = self.node_to_state(state_node)
+                    if environment.is_terminal(state):
+                        continue
                     state = environment.reset(state)
                     option_initiated = option.initiated(state)
                 if not all_actions_possible:
