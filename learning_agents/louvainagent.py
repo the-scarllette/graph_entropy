@@ -6,6 +6,7 @@ import leidenalg as la
 import networkx as nx
 import numpy as np
 import random as rand
+from typing import Dict
 
 from environments.environment import Environment
 from learning_agents.optionsagent import OptionsAgent, Option
@@ -408,37 +409,36 @@ class LouvainAgent(MultiLevelGoalAgent):
                                      option_rollouts: int=50, all_actions_valid: bool=False):
         primitive_option = option.hierarchy_level <= 0
 
-        def t(start_state: np.ndarray, o: LouvainOption | int, end_state: np.ndarray) -> float:
+        def t(start_state: np.ndarray, o: LouvainOption | int) -> Dict[str, float]:
             start_state_str = self.state_to_state_str(start_state)
-            end_state_str = self.state_to_state_str(end_state)
             if primitive_option:
                 try:
-                    probability = self.action_transition_probs[(start_state_str, o, end_state_str)]
-                    return probability
+                    probabilities = self.action_transition_probs[(start_state_str, o)]
+                    return probabilities
                 except KeyError:
+                    self.action_transition_probs[(start_state_str, o)] = {}
                     for _ in range(option_rollouts):
                         _ = environment.reset(start_state)
                         next_state, _, done, _ = environment.step(o)
                         next_state_str = self.state_to_state_str(next_state)
                         try:
-                            self.action_transition_probs[(start_state_str, o, next_state_str)] += (1 / option_rollouts)
+                            self.action_transition_probs[(start_state_str, o)][next_state_str] += (1 / option_rollouts)
                         except KeyError:
-                            self.action_transition_probs[(start_state_str, o, next_state_str)] = (1 / option_rollouts)
-                    try:
-                        probability = self.action_transition_probs[(start_state_str, o, end_state_str)]
-                        return probability
-                    except KeyError:
-                        self.action_transition_probs[(start_state_str, o, end_state_str)] = 0.0
-                        return 0.0
+                            self.action_transition_probs[(start_state_str, o)][next_state_str] = (1 / option_rollouts)
+                    probabilities = self.action_transition_probs[(start_state_str, o)]
+                    return probabilities
 
             try:
-                probability = self.option_transition_probs[(start_state_str,
+                probabilities = self.option_transition_probs[(start_state_str,
                                                             o.hierarchy_level,
                                                             o.source_cluster,
-                                                            o.target_cluster,
-                                                            end_state_str)]
-                return probability
+                                                            o.target_cluster)]
+                return probabilities
             except KeyError:
+                self.option_transition_probs[(start_state_str,
+                                              o.hierarchy_level,
+                                              o.source_cluster,
+                                              o.target_cluster)] = {}
                 for _ in range(option_rollouts):
                     next_state = environment.reset(start_state)
                     option_terminal =  False
@@ -451,28 +451,17 @@ class LouvainAgent(MultiLevelGoalAgent):
                         self.option_transition_probs[(start_state_str,
                                                       o.hierarchy_level,
                                                       o.source_cluster,
-                                                      o.target_cluster,
-                                                      next_state_str)] += (1 / option_rollouts)
+                                                      o.target_cluster)][next_state_str] += (1 / option_rollouts)
                     except KeyError:
                         self.option_transition_probs[(start_state_str,
                                                       o.hierarchy_level,
                                                       o.source_cluster,
-                                                      o.target_cluster,
-                                                      next_state_str)] = (1 / option_rollouts)
-                try:
-                    probability = self.option_transition_probs[(start_state_str,
-                                                            o.hierarchy_level,
-                                                            o.source_cluster,
-                                                            o.target_cluster,
-                                                            end_state_str)]
-                    return probability
-                except KeyError:
-                    self.option_transition_probs[(start_state_str,
-                                                 o.hierarchy_level,
-                                                 o.source_cluster,
-                                                 o.target_cluster,
-                                                 end_state_str)] = 0.0
-                    return 0.0
+                                                      o.target_cluster)][next_state_str] = (1 / option_rollouts)
+                probabilities = self.option_transition_probs[(start_state_str,
+                                                        o.hierarchy_level,
+                                                        o.source_cluster,
+                                                        o.target_cluster)]
+                return probabilities
 
         def v(s: np.ndarray) -> float:
             if primitive_option:
@@ -508,23 +497,28 @@ class LouvainAgent(MultiLevelGoalAgent):
 
                 option_values = {possible_option: 0.0 for possible_option in possible_options}
                 for possible_option in possible_options:
+                    if primitive_option:
+                        transition_probabilities = t(state, possible_option)
+                    else:
+                        transition_probabilities = t(state, option.policy.options[possible_options])
                     option_value = 0.0
-                    for next_node in nodes:
-                        state_tilda = self.state_index_to_state(next_node)
+                    for tilde_state_str in list(transition_probabilities.keys()):
+                        tilde_state = self.state_str_to_state(tilde_state_str)
+                        tilde_node = self.get_state_index(tilde_state)
 
-                        if primitive_option:
-                            transition_prob = t(state, possible_option, state_tilda)
-                        else:
-                            transition_prob = t(state, option.policy.options[possible_options], next_node)
+                        transition_prob = transition_probabilities[tilde_state_str]
+                        if transition_prob <= 0.0:
+                            continue
 
-                        reward = self.option_training_step_reward
-                        if option.terminated(state_tilda) or environment.is_terminal(state_tilda):
-                            reward = self.option_training_failure_reward
-                            if self.stg.vs[f"cluster-{option.hierarchy_level}"][next_node] == \
+                        reward = self.option_training_failure_reward
+                        if self.stg.vs[f"cluster-{option.hierarchy_level}"][tilde_node] == \
+                                option.source_cluster:
+                            reward = self.option_training_step_reward
+                        elif self.stg.vs[f"cluster-{option.hierarchy_level}"][tilde_node] == \
                                 option.target_cluster:
-                                reward = self.option_training_success_reward
+                            reward = self.option_training_success_reward
 
-                        option_value += transition_prob * (reward + self.gamma * v(state_tilda))
+                        option_value += transition_prob * (reward + (self.gamma * v(tilde_state)))
 
                     option_values[possible_option] = option_value
                 if primitive_option:
@@ -564,9 +558,10 @@ class LouvainAgent(MultiLevelGoalAgent):
                 level = option.hierarchy_level
                 if progress_bar:
                     print("Training Options for Level " + str(level))
-                    print_progress_bar(i, total_options,
-                                       '    ',
-                                       "Complete")
+            if progress_bar:
+                print_progress_bar(i, total_options,
+                                   '    ',
+                                   "Complete")
             self.train_option_value_iteration(option, environment,
                                               final_delta, option_rollouts,
                                               all_actions_valid)
