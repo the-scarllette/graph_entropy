@@ -73,6 +73,9 @@ class LouvainAgent(MultiLevelGoalAgent):
 
         self.state_option_values = {}
 
+        self.action_transition_probs = {}
+        self.option_transition_probs = {}
+
         self.nodes_in_cluster = {}
         self.available_options = {}
         return
@@ -350,111 +353,6 @@ class LouvainAgent(MultiLevelGoalAgent):
             json.dump(data, f)
         return
 
-    def train_higher_level_option_value_iteration(self, option: LouvainOption, environment: Environment,
-                                                  max_iterations: int, theta: float,
-                                                  all_actions_valid: bool = False,
-                                                  progress_bar: bool = False):
-        # Getting States to act in
-        states = self.get_nodes_in_cluster(option.hierarchy_level, option.source_cluster)
-
-        # Getting States to act towards
-        adjacent_clusters = self.aggregate_graphs[option.hierarchy_level + 1].neighbors(option.source_cluster, 'out')
-        target_states = states
-        for adjacent_cluster in adjacent_clusters:
-            target_states += self.get_nodes_in_cluster(option.hierarchy_level, adjacent_cluster)
-
-        # Setting transition probabilities
-        transition_probabilities = {state: {target_state: {}
-                                            for target_state in target_states}
-                                    for state in states}
-
-        def p(s_dash, o: LouvainOption, s):
-            s_dash_index = self.get_state_index(s_dash)
-            s_index = self.get_state_index(s)
-            if s_dash_index == s_index:
-                if o.terminated(s_dash):
-                    return 1.0
-                else:
-                    return 0.0
-            if o.terminated(s):
-                return 0.0
-
-            try:
-                prob = transition_probabilities[s_index][s_dash_index][o]
-                return prob
-            except KeyError:
-                ()
-
-            if not nx.has_path(self.stg_nx, str(s_index), str(s_dash_index)):
-                transition_probabilities[s_index][s_dash_index][o] = 0
-                return 0
-
-            neighbourhood = self.stg.neighbors(s_index, 'out')
-            option_action = o.get_action(s)
-            prob = 0
-            for neighbour_state_node in neighbourhood:
-                neighbour_state = self.state_index_to_state(neighbour_state_node)
-                t_prob = environment.get_transition_probability(s, option_action, neighbour_state)
-                if t_prob <= 0:
-                    continue
-                prob += t_prob * p(s_dash, o, neighbour_state)
-
-            transition_probabilities[s_index][s_dash_index][o] = prob
-            return prob
-
-        def v(s):
-            option_values = option.policy.get_state_option_values(s)
-            return max(option_values.values())
-
-        delta = np.inf
-        possible_actions = environment.possible_actions
-        possible_options = option.policy.options
-        current_iterations = 0
-        while (theta <= delta) and (current_iterations < max_iterations):
-            if progress_bar:
-                print_progress_bar(current_iterations, max_iterations,
-                                   prefix='Training Option from cluster '
-                                          + str(option.source_cluster) + ' to cluster ' + str(option.target_cluster),
-                                   suffix='Complete')
-
-            delta = 0
-            for state_index in states:
-                state = self.state_index_to_state(state_index)
-                if not all_actions_valid:
-                    possible_actions = environment.get_possible_actions(state)
-                possible_options = option.policy.get_available_options(state, possible_actions)
-
-                v_value = v(state)
-                state_str = np.array2string(np.ndarray.astype(state, dtype=self.state_dtype))
-
-                for option_taken in possible_options:
-                    state_option_value = 0
-                    for next_state_node in target_states:
-                        next_state = self.state_index_to_state(next_state_node)
-                        transition_prob = p(next_state, option_taken, state)
-                        if transition_prob <= 0:
-                            continue
-
-                        reward = self.option_training_step_reward
-                        next_state_cluster = \
-                            self.stg.vs[f"cluster-{option.hierarchy_level}"][next_state_node]
-                        next_state_value = 0
-                        if next_state_cluster == option.target_cluster:
-                            reward = self.option_training_success_reward
-                        elif next_state_cluster != option.source_cluster:
-                            reward = self.option_training_failure_reward
-                        else:
-                            next_state_value = v(next_state)
-
-                        state_option_value += transition_prob * (reward + next_state_value)
-
-                    option.policy.state_option_values[state_str][option_taken] = state_option_value
-
-                delta = max(delta, abs(v_value - v(state)))
-                current_iterations += 1
-
-        return
-
     def train_option(self, option: LouvainOption, num_training_steps: int, environment: Environment,
                      all_actions_valid=True,
                      progress_bar=False):
@@ -464,7 +362,7 @@ class LouvainAgent(MultiLevelGoalAgent):
         for node in nodes_in_source_cluster:
             start_state = self.stg.vs['state'][node]
             start_state = self.state_str_to_state(start_state)
-            if environment.is_state_terminal(start_state):
+            if environment.is_terminal(start_state):
                 continue
             if option.initiation_func(start_state):
                 start_states.append(copy.deepcopy(start_state))
@@ -506,9 +404,153 @@ class LouvainAgent(MultiLevelGoalAgent):
 
         return
 
+    def train_option_value_iteration(self, option: LouvainOption, environment: Environment, final_delta: float,
+                                     option_rollouts: int=50, all_actions_valid: bool=False, progress_bar: bool=False):
+        primitive_option = option.hierarchy_level <= 0
+
+        def t(start_state: np.ndarray, o: LouvainOption | int, end_state: np.ndarray) -> float:
+            start_state_str = self.state_to_state_str(start_state)
+            end_state_str = self.state_to_state_str(end_state)
+            if primitive_option:
+                try:
+                    probability = self.action_transition_probs[(start_state_str, o, end_state_str)]
+                    return probability
+                except KeyError:
+                    for _ in range(option_rollouts):
+                        _ = environment.reset(start_state)
+                        next_state, _, done, _ = environment.step(o)
+                        next_state_str = self.state_to_state_str(next_state)
+                        try:
+                            self.action_transition_probs[(start_state_str, o, next_state_str)] += (1 / option_rollouts)
+                        except KeyError:
+                            self.action_transition_probs[(start_state_str, o, next_state_str)] = (1 / option_rollouts)
+                    try:
+                        probability = self.action_transition_probs[(start_state_str, o, end_state_str)]
+                        return probability
+                    except KeyError:
+                        self.action_transition_probs[(start_state_str, o, end_state_str)] = 0.0
+                        return 0.0
+
+            try:
+                probability = self.option_transition_probs[(start_state_str,
+                                                            o.hierarchy_level,
+                                                            o.source_cluster,
+                                                            o.target_cluster,
+                                                            end_state_str)]
+                return probability
+            except KeyError:
+                for _ in range(option_rollouts):
+                    next_state = environment.reset(start_state)
+                    option_terminal =  False
+                    while not option_terminal:
+                        action = o.choose_action(next_state, environment.get_possible_actions(next_state))
+                        next_state, _, done, _ = environment.step(action)
+                        option_terminal = done or o.terminated(next_state)
+                    next_state_str = self.state_to_state_str(next_state)
+                    try:
+                        self.option_transition_probs[(start_state_str,
+                                                      o.hierarchy_level,
+                                                      o.source_cluster,
+                                                      o.target_cluster,
+                                                      next_state_str)] += (1 / option_rollouts)
+                    except KeyError:
+                        self.option_transition_probs[(start_state_str,
+                                                      o.hierarchy_level,
+                                                      o.source_cluster,
+                                                      o.target_cluster,
+                                                      next_state_str)] = (1 / option_rollouts)
+                try:
+                    probability = self.option_transition_probs[(start_state_str,
+                                                            o.hierarchy_level,
+                                                            o.source_cluster,
+                                                            o.target_cluster,
+                                                            end_state_str)]
+                    return probability
+                except KeyError:
+                    self.option_transition_probs[(start_state_str,
+                                                 o.hierarchy_level,
+                                                 o.source_cluster,
+                                                 o.target_cluster,
+                                                 end_state_str)] = 0.0
+                    return 0.0
+
+        def v(s: np.ndarray) -> float:
+            if primitive_option:
+                state_values = option.policy.get_state_action_values(s)
+            else:
+                state_values = option.policy.get_state_option_values(s)
+            return max(state_values.values())
+
+        delta = np.inf
+        possible_actions = environment.possible_actions
+
+        nodes = []
+        clusters = (list(self.aggregate_graphs[option.hierarchy_level].neihbours(option.source_cluster)) +
+                    [option.source_cluster])
+        for cluster in clusters:
+            nodes += self.get_nodes_in_cluster(option.hierarchy_level, cluster)
+
+        if progress_bar:
+            print_progress_bar(0, 1000,
+                               'Training option from ' + str(option.source_cluster) +
+                               ' to ' + str(option.target_cluster),
+                               'Complete')
+
+        while delta >= final_delta:
+            delta = 0
+            for node in nodes:
+                state = self.state_index_to_state(node)
+                if option.terminated(state):
+                    continue
+
+                temp = v(state)
+
+                if not all_actions_valid:
+                    possible_actions = environment.get_possible_actions(state)
+                if primitive_option:
+                    possible_options = option.policy.get_possible_actions(state, possible_actions)
+                else:
+                    possible_options = option.policy.get_available_options(state, possible_actions)
+
+                option_values = {possible_option: 0.0 for possible_option in possible_options}
+                for possible_option in possible_options:
+                    option_value = 0.0
+                    for next_node in nodes:
+                        state_tilda = self.state_index_to_state(next_node)
+
+                        if primitive_option:
+                            transition_prob = t(state, possible_option, state_tilda)
+                        else:
+                            transition_prob = t(state, option.policy.options[possible_options], next_node)
+
+                        reward = self.option_training_step_reward
+                        if option.terminated(state_tilda) or environment.is_terminal(state_tilda):
+                            reward = self.option_training_failure_reward
+                            if self.stg.vs[f"cluster-{option.hierarchy_level}"][next_node] == \
+                                option.target_cluster:
+                                reward = self.option_training_success_reward
+
+                        option_value += transition_prob * (reward + self.gamma * v(state_tilda))
+
+                    option_values[possible_option] = option_value
+                if primitive_option:
+                    option.policy.q_values[self.state_to_state_str(state)] = option_values[possible_option]
+                else:
+                    option.policy.set_state_option_values(option_values, state)
+
+                delta = max(delta, abs(temp - v(state)))
+            if print_progress_bar:
+                iteration = 1_000 * (delta / final_delta)
+                print_progress_bar(iteration, 1000,
+                                   'Training option from ' + str(option.source_cluster) +
+                                   ' to ' + str(option.target_cluster),
+                                   'Complete')
+
+        return
+
     def train_options(self, num_training_steps: int, environment: Environment,
-                      all_actions_valid=True,
-                      progress_bar=False):
+                      all_actions_valid: bool=True,
+                      progress_bar: bool=False):
         if progress_bar:
             print("Training Louvain Options")
 
@@ -522,13 +564,10 @@ class LouvainAgent(MultiLevelGoalAgent):
 
         return
 
-    def train_options_value_iteration(self, theta: float, max_iterations: int,
-                                      environment: Environment,
-                                      all_actions_valid: bool = False,
-                                      progress_bar: bool = True):
-        if progress_bar:
-            print("Training Louvain Options")
-
+    def train_options_value_iteration(self, final_delta: float, environment: Environment,
+                                      option_rollouts: int=50,
+                                      all_actions_valid: bool=True,
+                                      progress_bar: bool=False):
         level = -1
         for option in self.options:
             if not option.hierarchy_level == level:
@@ -536,73 +575,7 @@ class LouvainAgent(MultiLevelGoalAgent):
                 if progress_bar:
                     print("Training Options for Level " + str(level))
             self.train_option_value_iteration(option, environment,
-                                              max_iterations, theta,
-                                              all_actions_valid,
-                                              progress_bar)
-
-        return
-
-    def train_option_value_iteration(self, option: LouvainOption, environment: Environment,
-                                     max_iterations: int, theta: float,
-                                     all_actions_valid: bool = False,
-                                     progress_bar: bool = False):
-        if option.hierarchy_level > self.min_hierarchy_level:
-            return self.train_higher_level_option_value_iteration(option, environment,
-                                                                  max_iterations, theta,
-                                                                  all_actions_valid,
-                                                                  progress_bar)
-
-        def v(s):
-            state_values = option.policy.get_action_values(s)
-            return max(state_values.values())
-
-        # Getting States to act in
-        states = self.get_nodes_in_cluster(option.hierarchy_level, option.source_cluster)
-
-        delta = np.inf
-        possible_actions = environment.possible_actions
-        current_iterations = 0
-
-        while (theta <= delta) and (current_iterations < max_iterations):
-            if progress_bar:
-                print_progress_bar(current_iterations, max_iterations,
-                                   prefix='Training Option from cluster '
-                                          + str(option.source_cluster) + ' to cluster ' + str(option.target_cluster),
-                                   suffix='Complete')
-
-            delta = 0
-            for state_index in states:
-                state = self.state_index_to_state(state_index)
-                successor_nodes = self.stg.neighbors(state_index, 'out')
-                if not all_actions_valid:
-                    possible_actions = environment.get_possible_actions(state)
-
-                v_value = v(state)
-                state_str = np.array2string(np.ndarray.astype(state, dtype=self.state_dtype))
-
-                for action in possible_actions:
-                    state_action_value = 0
-                    for successor_node in successor_nodes:
-                        successor_state = self.state_index_to_state(successor_node)
-                        transition_prob = environment.get_transition_probability(state, action, successor_state)
-                        if transition_prob == 0:
-                            continue
-
-                        reward = self.option_training_step_reward
-                        successor_state_cluster =\
-                            self.stg.vs[f"cluster-{option.hierarchy_level}"][successor_node]
-                        if successor_state_cluster == option.target_cluster:
-                            reward = self.option_training_success_reward
-                        elif successor_state_cluster != option.source_cluster:
-                            reward = self.option_training_failure_reward
-
-                        successor_state_value = v(successor_state)
-
-                        state_action_value += transition_prob * (reward + successor_state_value)
-
-                    option.policy.q_values[state_str][action] = state_action_value
-
-                delta = max(delta, abs(v_value - v(state)))
-            current_iterations += 1
+                                              final_delta, option_rollouts,
+                                              all_actions_valid, progress_bar)
 
         return

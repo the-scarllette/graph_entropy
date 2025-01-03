@@ -2144,7 +2144,7 @@ if __name__ == "__main__":
     # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     # tinytown = TinyTown(2, 2, pick_every=1)
 
-    option_onboarding = 'none'
+    option_onboarding = 'specific'
     graphing_window = 10
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
@@ -2167,6 +2167,37 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
+                              option_onboarding, lavaflow, training_timesteps,
+                              num_agents, evaluate_policy_window, False,
+                              total_evaluation_steps,
+                              continue_training=False, progress_bar=True)
+    exit()
+
+    louvain_agent = LouvainAgent(lavaflow.possible_actions,
+                                 state_transition_graph,
+                                 lavaflow.state_dtype, lavaflow.state_shape)
+    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
+    louvain_agent.train_options(options_training_timesteps, lavaflow, True, True)
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+    exit()
+
+    data = graphing.extract_data(filenames['results'])
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='LavaFlow',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='st_error',
+                                       labels=os.listdir(filenames['results']))
+    exit()
+
+    train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent.json', lavaflow,
+                             training_timesteps, num_agents, evaluate_policy_window,
+                             True, total_evaluation_steps,
+                             continue_training=False,
+                             progress_bar=True)
+    exit()
+
     print(lavaflow.environment_name + " preparedness training options")
     preparedness_agent = PreparednessAgent(lavaflow.possible_actions,
                                            0.9, 0.15, 0.9,
@@ -2178,19 +2209,10 @@ if __name__ == "__main__":
 
     preparedness_agent.train_options(lavaflow, options_training_timesteps,
                                      train_between_options=False,
-                                     train_onboarding_options=True, train_subgoal_options=False,
+                                     train_onboarding_options=False, train_subgoal_options=True,
                                      all_actions_possible=False, progress_bar=True)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     print(lavaflow.environment_name + " preparedness training options")
-    exit()
-
-    data = graphing.extract_data(filenames['results'])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='LavaFlow',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='st_error',
-                                       labels=os.listdir(filenames['results']))
     exit()
 
     train_q_learning_agent(lavaflow,
@@ -2218,26 +2240,6 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'w') as f:
         json.dump(stg_values, f)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    exit()
-
-    louvain_agent = LouvainAgent(taxicab.possible_actions,
-                                 state_transition_graph,
-                                 taxicab.state_dtype, taxicab.state_shape)
-    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
-    louvain_agent.train_options(options_training_timesteps, taxicab, True, True)
-    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
-    exit()
-
-    eigenoptions_agent = EigenOptionAgent(adj_matrix, state_transition_graph,
-                                          0.9, 0.1, 0.9,
-                                          taxicab.possible_actions,
-                                          taxicab.state_dtype, taxicab.state_shape,
-                                          64)
-    train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent', taxicab,
-                             training_timesteps, num_agents, evaluate_policy_window,
-                             False, total_evaluation_steps,
-                             continue_training=True,
-                             progress_bar=True)
     exit()
 
     train_preparedness_agents(filenames['agents'] + "/preparedness_base_agent.json",
