@@ -163,6 +163,38 @@ class LouvainAgent(MultiLevelGoalAgent):
 
         return can_initiate
 
+    def choose_option(self, state, no_random, possible_actions=None):
+        self.current_option_step = 0
+        self.option_start_state = state
+
+        available_options = self.get_available_options(state, possible_actions=possible_actions)
+        if len(available_options) == 0:
+            return None
+
+        if not no_random and rand.uniform(0, 1) < self.epsilon:
+            self.current_option_index = rand.choice(available_options)
+            return self.options[int(self.current_option_index)]
+
+        option_values = self.get_state_option_values(state, available_options)
+
+        ops = [available_options[0]]
+        try:
+            max_value = option_values[available_options[0]]
+        except KeyError:
+            option_values = {int(option_index): option_values[option_index] for option_index in option_values}
+            max_value = option_values[available_options[0]]
+        for i in range(1, len(available_options)):
+            op = available_options[i]
+            value = option_values[op]
+            if value > max_value:
+                max_value = value
+                ops = [op]
+            elif value == max_value:
+                ops.append(op)
+
+        self.current_option = rand.choice(ops)
+        return self.current_option
+
     def create_option(self, hierarchy_level, source_cluster, target_cluster):
         def create_initiation_function():
             def initiation_func(state):
@@ -467,6 +499,8 @@ class LouvainAgent(MultiLevelGoalAgent):
                 state_values = option.policy.get_action_values(s)
             else:
                 state_values = option.policy.get_state_option_values(s)
+            if not state_values.values():
+                return 0.0
             return max(state_values.values())
 
         delta = np.inf

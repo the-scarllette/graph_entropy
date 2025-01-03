@@ -269,7 +269,8 @@ class MultiLevelGoalAgent(OptionsAgent):
         return
 
     def load_policy(self, load_path):
-        data = json.load(load_path)
+        with open(load_path, "r") as f:
+            data = json.load(f)
 
         # Getting agent policy
         self.state_option_values = data['agent_policy']

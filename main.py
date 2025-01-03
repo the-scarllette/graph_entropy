@@ -1654,7 +1654,7 @@ def train_louvain_agents(environment: Environment, file_name_prefix,
             print("Training Louvain Agent " + str(i))
         agent = copy.deepcopy(initial_agent)
         if agent_load_file is not None:
-            agent.load_policy(agent_load_file)
+            agent.load(agent_load_file)
         agent, agent_training_returns, agent_returns = train_agent(environment, agent,
                                                                    training_timesteps, evaluate_policy_window,
                                                                    all_actions_valid,
@@ -2170,6 +2170,21 @@ if __name__ == "__main__":
     louvain_agent = LouvainAgent(lavaflow.possible_actions,
                                  state_transition_graph,
                                  lavaflow.state_dtype, lavaflow.state_shape)
+    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
+    train_louvain_agents(lavaflow, lavaflow.environment_name,
+                         filenames['agents'], filenames['results'],
+                         training_timesteps, num_agents, evaluate_policy_window,
+                         filenames['agents'] + '/louvain_base_agent.json',
+                         initial_agent=louvain_agent,
+                         all_actions_valid=True,
+                         total_eval_steps=total_evaluation_steps,
+                         state_dtype=lavaflow.state_dtype, state_shape=lavaflow.state_shape, progress_bar=True)
+
+    exit()
+
+    louvain_agent = LouvainAgent(lavaflow.possible_actions,
+                                 state_transition_graph,
+                                 lavaflow.state_dtype, lavaflow.state_shape)
     print("Applying Louvain")
     louvain_agent.apply_louvain(first_levels_to_skip=1)
     print("Creating Options")
@@ -2320,35 +2335,6 @@ if __name__ == "__main__":
                              True, 'options_trained.json',
                              total_evaluation_steps, False,
                              progress_bar=True)
-    exit()
-
-    train_eigenoption_agents('eigenoptions_options_trained_agent.json', simple_wind_gridworld,
-                             training_timesteps, num_agents,
-                             evaluate_policy_window,
-                             total_eval_steps=total_evaluation_steps,
-                             continue_training=False,
-                             progress_bar=True)
-    exit()
-
-    louvain_agent = LouvainAgent(tiny_town_env.possible_actions, stg, tiny_town_env.state_dtype, (5, 1),
-                                 min_hierarchy_level=0)
-    louvain_agent.apply_louvain(graph_save_path=stg_filename)
-    louvain_agent.create_options()
-    louvain_agent.print_options()
-
-    # Training Louvain Subgoals
-    louvain_agent.train_options(options_training_timesteps, tiny_town_env,
-                                True, True)
-
-    # Training Louvain Agent
-    train_louvain_agents(tiny_town_env, tiny_town_env.environment_name,
-                         agent_directory, results_directory,
-                         training_timesteps, num_agents, evaluate_policy_window,
-                         initial_agent=louvain_agent,
-                         all_actions_valid=True,
-                         total_eval_steps=total_evaluation_steps,
-                         progress_bar=True)
-
     exit()
 
     print("Training Eigenoptions")
