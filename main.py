@@ -2175,7 +2175,7 @@ if __name__ == "__main__":
     print("Creating Options")
     louvain_agent.create_options()
     louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
-    louvain_agent.train_options_value_iteration(0.001, lavaflow, 50, True, True)
+    louvain_agent.train_options_value_iteration(0.001, lavaflow, 1, True, True)
     louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
     exit()
 

@@ -314,7 +314,7 @@ class LavaFlow(Environment):
             self.agent_i, self.agent_j = self.get_agent_cords(self.current_state)
             self.terminal = self.is_terminal(self.current_state)
 
-        self.safe_from_lava = not self.has_path_to_lava()
+        self.safe_from_lava = not self.has_path_to_lava(self.current_state)
         self.lava_nodes = self.get_lava_nodes(self.current_state)
         return self.current_state.copy()
 

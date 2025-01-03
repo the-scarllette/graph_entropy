@@ -254,8 +254,7 @@ class LouvainAgent(MultiLevelGoalAgent):
         return nodes_in_cluster
 
     def get_state_index(self, state):
-        state_str = np.array2string(np.ndarray.astype(state,
-                                                      dtype=self.state_dtype))
+        state_str = self.state_to_state_str(state)
         index = None
         try:
             index = self.state_indexer[state_str]
@@ -497,18 +496,22 @@ class LouvainAgent(MultiLevelGoalAgent):
 
                 option_values = {possible_option: 0.0 for possible_option in possible_options}
                 for possible_option in possible_options:
+                    # if node == 822 and possible_option == 4:
+                    #     pass
+
                     if primitive_option:
                         transition_probabilities = t(state, possible_option)
                     else:
-                        transition_probabilities = t(state, option.policy.options[possible_options])
+                        transition_probabilities = t(state, option.policy.options[possible_option])
                     option_value = 0.0
                     for tilde_state_str in list(transition_probabilities.keys()):
                         tilde_state = self.state_str_to_state(tilde_state_str)
-                        tilde_node = self.get_state_index(tilde_state)
 
                         transition_prob = transition_probabilities[tilde_state_str]
                         if transition_prob <= 0.0:
                             continue
+
+                        tilde_node = self.get_state_index(tilde_state)
 
                         reward = self.option_training_failure_reward
                         if self.stg.vs[f"cluster-{option.hierarchy_level}"][tilde_node] == \
