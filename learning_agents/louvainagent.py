@@ -405,7 +405,7 @@ class LouvainAgent(MultiLevelGoalAgent):
         return
 
     def train_option_value_iteration(self, option: LouvainOption, environment: Environment, final_delta: float,
-                                     option_rollouts: int=50, all_actions_valid: bool=False, progress_bar: bool=False):
+                                     option_rollouts: int=50, all_actions_valid: bool=False):
         primitive_option = option.hierarchy_level <= 0
 
         def t(start_state: np.ndarray, o: LouvainOption | int, end_state: np.ndarray) -> float:
@@ -476,7 +476,7 @@ class LouvainAgent(MultiLevelGoalAgent):
 
         def v(s: np.ndarray) -> float:
             if primitive_option:
-                state_values = option.policy.get_state_action_values(s)
+                state_values = option.policy.get_action_values(s)
             else:
                 state_values = option.policy.get_state_option_values(s)
             return max(state_values.values())
@@ -485,16 +485,10 @@ class LouvainAgent(MultiLevelGoalAgent):
         possible_actions = environment.possible_actions
 
         nodes = []
-        clusters = (list(self.aggregate_graphs[option.hierarchy_level].neihbours(option.source_cluster)) +
+        clusters = (list(self.aggregate_graphs[option.hierarchy_level].neighbors(option.source_cluster)) +
                     [option.source_cluster])
         for cluster in clusters:
             nodes += self.get_nodes_in_cluster(option.hierarchy_level, cluster)
-
-        if progress_bar:
-            print_progress_bar(0, 1000,
-                               'Training option from ' + str(option.source_cluster) +
-                               ' to ' + str(option.target_cluster),
-                               'Complete')
 
         while delta >= final_delta:
             delta = 0
@@ -508,7 +502,7 @@ class LouvainAgent(MultiLevelGoalAgent):
                 if not all_actions_valid:
                     possible_actions = environment.get_possible_actions(state)
                 if primitive_option:
-                    possible_options = option.policy.get_possible_actions(state, possible_actions)
+                    possible_options = possible_actions
                 else:
                     possible_options = option.policy.get_available_options(state, possible_actions)
 
@@ -534,17 +528,11 @@ class LouvainAgent(MultiLevelGoalAgent):
 
                     option_values[possible_option] = option_value
                 if primitive_option:
-                    option.policy.q_values[self.state_to_state_str(state)] = option_values[possible_option]
+                    option.policy.q_values[self.state_to_state_str(state)] = option_values
                 else:
                     option.policy.set_state_option_values(option_values, state)
 
                 delta = max(delta, abs(temp - v(state)))
-            if print_progress_bar:
-                iteration = 1_000 * (delta / final_delta)
-                print_progress_bar(iteration, 1000,
-                                   'Training option from ' + str(option.source_cluster) +
-                                   ' to ' + str(option.target_cluster),
-                                   'Complete')
 
         return
 
@@ -569,13 +557,19 @@ class LouvainAgent(MultiLevelGoalAgent):
                                       all_actions_valid: bool=True,
                                       progress_bar: bool=False):
         level = -1
+        total_options = len(self.options)
+        i = 0
         for option in self.options:
             if not option.hierarchy_level == level:
                 level = option.hierarchy_level
                 if progress_bar:
                     print("Training Options for Level " + str(level))
+                    print_progress_bar(i, total_options,
+                                       '    ',
+                                       "Complete")
             self.train_option_value_iteration(option, environment,
                                               final_delta, option_rollouts,
-                                              all_actions_valid, progress_bar)
+                                              all_actions_valid)
+            i += 1
 
         return

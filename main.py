@@ -2167,19 +2167,23 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
+    louvain_agent = LouvainAgent(lavaflow.possible_actions,
+                                 state_transition_graph,
+                                 lavaflow.state_dtype, lavaflow.state_shape)
+    print("Applying Louvain")
+    louvain_agent.apply_louvain(first_levels_to_skip=1)
+    print("Creating Options")
+    louvain_agent.create_options()
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+    louvain_agent.train_options_value_iteration(0.001, lavaflow, 50, True, True)
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+    exit()
+
     train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
                               option_onboarding, lavaflow, training_timesteps,
                               num_agents, evaluate_policy_window, False,
                               total_evaluation_steps,
                               continue_training=False, progress_bar=True)
-    exit()
-
-    louvain_agent = LouvainAgent(lavaflow.possible_actions,
-                                 state_transition_graph,
-                                 lavaflow.state_dtype, lavaflow.state_shape)
-    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
-    louvain_agent.train_options(options_training_timesteps, lavaflow, True, True)
-    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
     exit()
 
     data = graphing.extract_data(filenames['results'])
