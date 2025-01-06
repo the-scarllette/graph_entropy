@@ -181,7 +181,7 @@ class LouvainAgent(MultiLevelGoalAgent):
         try:
             max_value = option_values[available_options[0]]
         except KeyError:
-            option_values = {int(option_index): option_values[option_index] for option_index in option_values}
+            option_values = {str(option_index): option_values[option_index] for option_index in option_values}
             max_value = option_values[available_options[0]]
         for i in range(1, len(available_options)):
             op = available_options[i]

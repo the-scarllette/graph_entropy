@@ -2145,7 +2145,7 @@ if __name__ == "__main__":
     # tinytown = TinyTown(2, 2, pick_every=1)
 
     option_onboarding = 'specific'
-    graphing_window = 10
+    graphing_window = 100
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
     hops = 5
@@ -2182,6 +2182,15 @@ if __name__ == "__main__":
 
     exit()
 
+    data = graphing.extract_data(filenames['results'])
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='LavaFlow',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='st_error',
+                                       labels=os.listdir(filenames['results']))
+    exit()
+
     louvain_agent = LouvainAgent(lavaflow.possible_actions,
                                  state_transition_graph,
                                  lavaflow.state_dtype, lavaflow.state_shape)
@@ -2199,15 +2208,6 @@ if __name__ == "__main__":
                               num_agents, evaluate_policy_window, False,
                               total_evaluation_steps,
                               continue_training=False, progress_bar=True)
-    exit()
-
-    data = graphing.extract_data(filenames['results'])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='LavaFlow',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='st_error',
-                                       labels=os.listdir(filenames['results']))
     exit()
 
     train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent.json', lavaflow,
