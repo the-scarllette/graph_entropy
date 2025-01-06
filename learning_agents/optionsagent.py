@@ -275,7 +275,7 @@ class OptionsAgent:
             option_values = {}
             for i in range(len(available_options)):
                 option_values[available_options[i]] = option_data[i]
-            max_value = option_data[0]
+            max_value = option_values[0]
         for i in range(1, len(available_options)):
             op = available_options[i]
             value = option_values[op]
