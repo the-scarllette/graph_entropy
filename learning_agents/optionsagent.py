@@ -271,7 +271,7 @@ class OptionsAgent:
         try:
             max_value = option_values[available_options[0]]
         except KeyError:
-            option_data = list(option_values.items())
+            option_values = list(option_values.values())
             option_values = {}
             for i in range(len(available_options)):
                 option_values[available_options[i]] = option_data[i]
