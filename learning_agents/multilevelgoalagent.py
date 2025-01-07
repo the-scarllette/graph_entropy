@@ -178,24 +178,12 @@ class MultiLevelGoalAgent(OptionsAgent):
         option = Option(policy=policy, initiation_func=create_initiation_func(), terminating_func=termination_func)
         return option
 
-    def get_available_options(self, state, possible_actions=None):
-        available_options = []
-
-        if possible_actions is None:
-            available_options = [primitive_option for primitive_option in self.primitive_options]
-        else:
-            for primitive_option in self.primitive_options:
-                action = primitive_option.actions[0]
-                if action in possible_actions:
-                    available_options.append(primitive_option)
-
-        for level in range(self.num_option_levels):
-            for option_dict in self.options[level]:
-                option = option_dict['option']
-                if option.initiation_func(state):
-                    available_options.append(option)
-
-        return available_options
+    def get_option_from_index(self, index: str) -> Option:
+        index = int(index)
+        if index < self.num_primitive_options:
+            return self.primitive_options[index]
+        index -= self.num_primitive_options
+        return self.options[index]
 
     def get_state_index(self, state):
         for node in self.stg.nodes:
@@ -229,7 +217,8 @@ class MultiLevelGoalAgent(OptionsAgent):
 
         max_next_state_option_value = max(next_state_option_values_list)
 
-        for option in available_options:
+        for option_index in available_options:
+            option = self.get_option_from_index(option_index)
             if option.has_policy():
                 train_option = option.choose_action(state, self.last_possible_actions) == action
                 try:
@@ -251,15 +240,15 @@ class MultiLevelGoalAgent(OptionsAgent):
                     except KeyError:
                         gamma_product = max_next_state_option_value
 
-                self.state_option_values[state_str][option] += self.alpha * (reward - state_option_values[option] +
-                                                                             self.gamma * gamma_product)
+                self.state_option_values[state_str][option_index] += self.alpha * (reward -state_option_values[option_index]
+                                                                                   + self.gamma * gamma_product)
 
         if not (terminal or self.current_option.terminated(next_state)):
             return
 
-        option_value = self.get_state_option_values(self.option_start_state)[self.current_option]
+        option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
         option_start_state_str = np.array2string(np.ndarray.astype(self.option_start_state, dtype=self.state_dtype))
-        self.state_option_values[option_start_state_str][self.current_option] \
+        self.state_option_values[option_start_state_str][self.current_option_index] \
             += self.alpha * (self.total_option_reward + (self.gamma ** self.current_option_step) *
                              max_next_state_option_value
                              - option_value)

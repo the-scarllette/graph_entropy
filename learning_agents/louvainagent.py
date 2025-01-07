@@ -79,6 +79,8 @@ class LouvainAgent(MultiLevelGoalAgent):
 
         self.nodes_in_cluster = {}
         self.available_options = {}
+
+        self.num_primitive_options = len(self.primitive_actions)
         return
 
     def apply_louvain(self,
@@ -173,7 +175,7 @@ class LouvainAgent(MultiLevelGoalAgent):
 
         if not no_random and rand.uniform(0, 1) < self.epsilon:
             self.current_option_index = rand.choice(available_options)
-            return self.options[int(self.current_option_index)]
+            return self.get_option_from_index(self.current_option_index)
 
         option_values = self.get_state_option_values(state, available_options)
 
@@ -192,8 +194,8 @@ class LouvainAgent(MultiLevelGoalAgent):
             elif value == max_value:
                 ops.append(op)
 
-        self.current_option = rand.choice(ops)
-        return self.current_option
+        self.current_option_index = rand.choice(ops)
+        return self.get_option_from_index(self.current_option_index)
 
     def create_option(self, hierarchy_level, source_cluster, target_cluster):
         def create_initiation_function():
@@ -258,16 +260,20 @@ class LouvainAgent(MultiLevelGoalAgent):
             available_options = []
 
             if possible_actions is None:
-                available_options = [primitive_option for primitive_option in self.primitive_options]
+                available_options = [str(option_index) for option_index in range(self.num_primitive_options)]
+                option_index = self.num_primitive_options
             else:
+                option_index = 0
                 for primitive_option in self.primitive_options:
                     action = primitive_option.actions[0]
                     if action in possible_actions:
-                        available_options.append(primitive_option)
+                        available_options.append(str(option_index))
+                    option_index += 1
 
             for option in self.options:
                 if option.initiation_func(state):
-                    available_options.append(option)
+                    available_options.append(str(option_index))
+                option_index += 1
 
             self.available_options[state_str] = available_options
 
@@ -277,8 +283,11 @@ class LouvainAgent(MultiLevelGoalAgent):
         try:
             nodes_in_cluster = self.nodes_in_cluster[hierarchy_level][cluster]
         except KeyError:
-            nodes_in_cluster = [node.index for node in self.stg.vs
-                                if self.stg.vs[f"cluster-{hierarchy_level}"][node.index] == cluster]
+            try:
+                nodes_in_cluster = self.nodes_in_cluster[str(hierarchy_level)][str(cluster)]
+            except KeyError:
+                nodes_in_cluster = [node.index for node in self.stg.vs
+                                    if self.stg.vs[f"cluster-{hierarchy_level}"][node.index] == cluster]
             try:
                 self.nodes_in_cluster[hierarchy_level][cluster] = nodes_in_cluster
             except KeyError:

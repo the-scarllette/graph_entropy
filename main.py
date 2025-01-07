@@ -1239,9 +1239,13 @@ def train_agent(env: Environment, agent, num_steps,
                 print_progress_bar(total_steps, num_steps,
                                    prefix='Agent Training: ', suffix='Complete')
             if window_steps <= 0:
-                evaluate_agent.copy_agent(agent)
+                if agent_save_path is not None:
+                    agent.save(agent_save_path)
+                    evaluate_agent.load(agent_save_path)
+                else:
+                    evaluate_agent.copy(agent)
                 epoch_return = run_epoch(evaluate_env, evaluate_agent, total_eval_steps,
-                                         all_actions_valid)
+                                         all_actions_valid, progress_bar)
                 epoch_returns.append(epoch_return)
                 window_steps = evaluate_policy_window
 
@@ -1320,7 +1324,8 @@ def run_episode(env: Environment,
 def run_epoch(env: Environment,
               agent: LearningAgent,
               num_steps: int,
-              all_actions_valid: bool = True):
+              all_actions_valid: bool=True,
+              progress_bar: bool=False):
     current_possible_actions = env.possible_actions
     epoch_return = 0
     total_steps = 0
@@ -1331,6 +1336,8 @@ def run_epoch(env: Environment,
         current_possible_actions = env.get_possible_actions(state)
 
     while total_steps < num_steps:
+        if progress_bar:
+            print_progress_bar(total_steps, num_steps, '    Running Epoch:')
         if done:
             if num_steps >= np.inf:
                 break
@@ -1620,7 +1627,7 @@ def train_louvain_agents(environment: Environment, file_name_prefix,
                          agent_directory, results_directory,
                          training_timesteps, num_agents, evaluate_policy_window=10,
                          agent_load_file=None,
-                         initial_agent=None,
+                         initial_load_path: str | None = None,
                          all_actions_valid=False,
                          total_eval_steps=np.inf,
                          alpha=0.9, epsilon=0.1, gamma=0.9,
@@ -1643,21 +1650,27 @@ def train_louvain_agents(environment: Environment, file_name_prefix,
 
     all_agent_training_returns = {}
     all_agent_returns = {}
-    if initial_agent is None:
+    if initial_load_path is None:
         initial_agent = LouvainAgent(environment.possible_actions, stg,
                                      state_dtype, state_shape,
                                      alpha, epsilon, gamma)
         initial_agent.apply_louvain()
+        initial_load_path = environment.environment_name + "_agents/initial_louvain_agent.json"
+        initial_agent.save(initial_load_path)
+
+    agent = LouvainAgent(environment.possible_actions, stg, state_dtype, state_shape,
+                         alpha, epsilon, gamma)
 
     for i in range(num_agents):
         if progress_bar:
             print("Training Louvain Agent " + str(i))
-        agent = copy.deepcopy(initial_agent)
-        if agent_load_file is not None:
-            agent.load(agent_load_file)
+        agent.load(initial_load_path)
         agent, agent_training_returns, agent_returns = train_agent(environment, agent,
                                                                    training_timesteps, evaluate_policy_window,
                                                                    all_actions_valid,
+                                                                   agent_save_path=(
+                                                                           agent_directory
+                                                                           +'/louvain_agent_' + str(i) + '.json'),
                                                                    total_eval_steps=total_eval_steps,
                                                                    progress_bar=progress_bar)
 
@@ -2158,7 +2171,7 @@ if __name__ == "__main__":
     options_training_timesteps = 1_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 50_000
+    training_timesteps = 5
 
     filenames = get_filenames(lavaflow)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
@@ -2167,15 +2180,11 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    louvain_agent = LouvainAgent(lavaflow.possible_actions,
-                                 state_transition_graph,
-                                 lavaflow.state_dtype, lavaflow.state_shape)
-    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
     train_louvain_agents(lavaflow, lavaflow.environment_name,
                          filenames['agents'], filenames['results'],
                          training_timesteps, num_agents, evaluate_policy_window,
                          filenames['agents'] + '/louvain_base_agent.json',
-                         initial_agent=louvain_agent,
+                         initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
                          all_actions_valid=True,
                          total_eval_steps=total_evaluation_steps,
                          state_dtype=lavaflow.state_dtype, state_shape=lavaflow.state_shape, progress_bar=True)

@@ -258,7 +258,8 @@ class OptionsAgent:
         self.option_start_state = state
 
         available_options = self.get_available_options(state, possible_actions=possible_actions)
-        if len(available_options) == 0:
+        num_available_options = len(available_options)
+        if num_available_options == 0:
             return None
 
         if not no_random and rand.uniform(0, 1) < self.epsilon:
@@ -266,6 +267,7 @@ class OptionsAgent:
             return self.options[int(self.current_option_index)]
 
         option_values = self.get_state_option_values(state, available_options)
+        total_values = min(len(option_values), num_available_options)
 
         ops = [available_options[0]]
         try:
@@ -273,10 +275,10 @@ class OptionsAgent:
         except KeyError:
             option_data = list(option_values.values())
             option_values = {}
-            for i in range(len(available_options)):
+            for i in range(total_values):
                 option_values[available_options[i]] = option_data[i]
             max_value = option_data[0]
-        for i in range(1, len(available_options)):
+        for i in range(1, total_values):
             op = available_options[i]
             value = option_values[op]
             if value > max_value:
