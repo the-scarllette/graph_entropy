@@ -907,13 +907,17 @@ class PreparednessAgent(OptionsAgent):
                     continue
                 if progress_bar:
                     print("     Training Options at level: " + level)
+                    num_options = str(len(self.options_between_subgoals[level]))
+                    option_count = 0
                 for option in self.options_between_subgoals[level]:
                     if options_to_train is not None:
                         if [option.start_node[0], option.end_node] not in options_to_train:
                             continue
 
                     if progress_bar:
-                        print("         Option: " + option.start_node[0] + " -> " + option.end_node)
+                        option_count += 1
+                        print("         Option: " + option.start_node[0] + " -> " + option.end_node +
+                              " - " + str(option_count) + "/" + num_options)
                     start_states = [self.state_str_to_state(option.start_state_str[0])]
                     success_states = [option.end_state_str]
                     total_end_states, total_successes = self.train_option(option, environment, training_timesteps,

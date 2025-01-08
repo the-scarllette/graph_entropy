@@ -405,7 +405,7 @@ class TaxiCab(Environment):
 
         return self.arrival_probabilities[next_state[2]]
 
-    def is_state_terminal(self, state):
+    def is_terminal(self, state):
         if self.hashable_states:
             try:
                 state = np.frombuffer(state, dtype=self.state_dtype)

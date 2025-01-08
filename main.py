@@ -1236,7 +1236,7 @@ def train_agent(env: Environment, agent, num_steps,
 
         while not done:
             if progress_bar:
-                print_progress_bar(total_steps, num_steps,
+                print_progress_bar(total_steps, num_steps, decimals=3,
                                    prefix='Agent Training: ', suffix='Complete')
             if window_steps <= 0:
                 if agent_save_path is not None:
@@ -2153,12 +2153,12 @@ if __name__ == "__main__":
                       ])
     board_name = 'blocks'
 
-    lavaflow = LavaFlow(None, None, (0, 0))
-    # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
+    # lavaflow = LavaFlow(None, None, (0, 0))
+    taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     # tinytown = TinyTown(2, 2, pick_every=1)
 
     option_onboarding = 'specific'
-    graphing_window = 100
+    graphing_window = 10
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
     hops = 5
@@ -2168,17 +2168,34 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
     total_evaluation_steps = 50
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 1_000
+    options_training_timesteps = 500_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 5
+    training_timesteps = 25_000
 
-    filenames = get_filenames(lavaflow)
+    filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    print(taxicab.environment_name + " preparedness training options")
+    preparedness_agent = PreparednessAgent(taxicab.possible_actions,
+                                           0.9, 0.15, 0.9,
+                                           taxicab.state_dtype, taxicab.state_shape,
+                                           state_transition_graph, preparednesss_subgoal_graph,
+                                           option_onboarding='none')
+    preparedness_agent.create_options(taxicab)
+    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
+
+    preparedness_agent.train_options(taxicab, options_training_timesteps,
+                                     train_between_options=True, min_level=2, max_level=2,
+                                     train_onboarding_options=False, train_subgoal_options=False,
+                                     all_actions_possible=False, progress_bar=True)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    print(taxicab.environment_name + " preparedness training options")
+    exit()
 
     train_louvain_agents(lavaflow, lavaflow.environment_name,
                          filenames['agents'], filenames['results'],
@@ -2224,23 +2241,6 @@ if __name__ == "__main__":
                              True, total_evaluation_steps,
                              continue_training=False,
                              progress_bar=True)
-    exit()
-
-    print(lavaflow.environment_name + " preparedness training options")
-    preparedness_agent = PreparednessAgent(lavaflow.possible_actions,
-                                           0.9, 0.15, 0.9,
-                                           lavaflow.state_dtype, lavaflow.state_shape,
-                                           state_transition_graph, preparednesss_subgoal_graph,
-                                           option_onboarding='none')
-    preparedness_agent.create_options(lavaflow)
-    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
-
-    preparedness_agent.train_options(lavaflow, options_training_timesteps,
-                                     train_between_options=False,
-                                     train_onboarding_options=False, train_subgoal_options=True,
-                                     all_actions_possible=False, progress_bar=True)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
-    print(lavaflow.environment_name + " preparedness training options")
     exit()
 
     train_q_learning_agent(lavaflow,
