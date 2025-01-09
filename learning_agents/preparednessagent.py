@@ -130,7 +130,8 @@ class PreparednessAgent(OptionsAgent):
                  state_shape: Tuple[int, int],
                  state_transition_graph: nx.MultiDiGraph,
                  aggregate_graph: nx.MultiDiGraph,
-                 option_onboarding: str):
+                 option_onboarding: str,
+                 max_option_length: int=np.inf):
         assert actions is not None
         assert option_onboarding == 'none' or option_onboarding == 'specific' or option_onboarding == 'generic'
 
@@ -143,6 +144,7 @@ class PreparednessAgent(OptionsAgent):
         self.state_transition_graph = state_transition_graph
         self.aggregate_graph = aggregate_graph
         self.option_onboarding = option_onboarding
+        self.max_option_length = max_option_length
 
         self.min_subgoal_level = np.inf
         self.max_subgoal_level = -np.inf
@@ -270,7 +272,7 @@ class PreparednessAgent(OptionsAgent):
         if primitive_actions:
             options = self.actions
 
-        continuation_func = lambda s: self.get_state_node != end_node and self.has_path_to_node(s, end_node)
+        continuation_func = lambda s: self.get_state_node(s) != end_node and self.has_path_to_node(s, end_node)
         if initiation_func is None:
             initiation_func = continuation_func
         option = PreparednessOption(options.copy(), start_node, end_node,
@@ -484,7 +486,14 @@ class PreparednessAgent(OptionsAgent):
             if state_node == goal_node:
                 has_path = False
             else:
-                has_path = nx.has_path(self.state_transition_graph, state_node, goal_node)
+                if self.max_option_length >= np.inf:
+                    has_path = nx.has_path(self.state_transition_graph, state_node, goal_node)
+                else:
+                    try:
+                        path_length = nx.shortest_path_length(self.state_transition_graph, state_node, goal_node)
+                        has_path = path_length <= self.max_option_length
+                    except nx.NetworkXError:
+                        has_path = False
             self.path_lookup[goal_node][state_str] = str(has_path)
 
         return has_path
@@ -635,6 +644,7 @@ class PreparednessAgent(OptionsAgent):
         self.state_node_lookup = agent_save_file['state node lookup']
         self.path_lookup = agent_save_file['path lookup']
         self.state_option_values = agent_save_file['state option values']
+        self.max_option_length = int(agent_save_file['max option length'])
         return
 
     def node_to_state(self, node: str) -> np.ndarray:
@@ -711,7 +721,8 @@ class PreparednessAgent(OptionsAgent):
                            'path lookup': self.path_lookup,
                            'environment start states str': self.environment_start_states_str,
                            'environment start nodes': self.environment_start_nodes,
-                           'state option values': self.state_option_values}
+                           'state option values': self.state_option_values,
+                           'max option length': int(self.max_option_length)}
 
         with open(save_path, 'w') as f:
             json.dump(agent_save_file, f)
