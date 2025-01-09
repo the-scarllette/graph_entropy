@@ -213,15 +213,22 @@ class PreparednessAgent(OptionsAgent):
         available_options = self.get_available_options(state, possible_actions)
 
         if (not no_random) and (rand.uniform(0, 1) < self.epsilon):
-            self.current_option_index = rand.choice(available_options)
+            self.current_option_index = int(rand.choice(available_options))
             return self.option_index_lookup(self.current_option_index)
 
         option_values = self.get_state_option_values(state, available_options)
 
         ops = [available_options[0]]
-        max_value = option_values[available_options[0]]
+        str_options = False
+        try:
+            max_value = option_values[available_options[0]]
+        except KeyError:
+            max_value = option_values[str(available_options[0])]
+            str_options = True
         for i in range(1, len(available_options)):
             op = available_options[i]
+            if str_options:
+                op = str(op)
             value = option_values[op]
             if value > max_value:
                 max_value = value
@@ -229,7 +236,7 @@ class PreparednessAgent(OptionsAgent):
             elif value == max_value:
                 ops.append(op)
 
-        self.current_option_index = rand.choice(ops)
+        self.current_option_index = int(rand.choice(ops))
         return self.option_index_lookup(self.current_option_index)
 
     def copy_agent(self, copy_from: 'PreparednessAgent') -> None:
@@ -411,7 +418,7 @@ class PreparednessAgent(OptionsAgent):
             self.state_node_lookup[state_str] = node
         return node
 
-    def get_available_options(self, state: np.ndarray, possible_actions: None | List[int]=None) -> List[int]:
+    def get_available_options(self, state: np.ndarray, possible_actions: None | List[int]=None) -> List[str]:
         state_str = np.array2string(state.astype(self.state_dtype))
         available_options = []
         option_index = 0
@@ -419,14 +426,14 @@ class PreparednessAgent(OptionsAgent):
         # Primitive Options
         for primitive_option in self.primitive_options:
             if (possible_actions is None) or (primitive_option.actions[0] in possible_actions):
-                available_options.append(option_index)
+                available_options.append(str(option_index))
             option_index += 1
 
         # Options Between Subgoals
         for option_level in self.options_between_subgoals:
             for option in self.options_between_subgoals[option_level]:
                 if option.start_state_str[0] == state_str:
-                    available_options.append(option_index)
+                    available_options.append(str(option_index))
                 option_index += 1
 
         # Onboarding Options
@@ -434,27 +441,27 @@ class PreparednessAgent(OptionsAgent):
             return available_options
         if self.option_onboarding == 'generic':
             if self.generic_onboarding_option.initiated(state):
-                available_options.append(option_index)
+                available_options.append(str(option_index))
             self.generic_onboarding_index = option_index
             option_index += 1
             subgoal_options = self.generic_onboarding_subgoal_options
         elif self.option_onboarding == 'specific':
             for option in self.specific_onboarding_options:
                 if option.initiated(state):
-                    available_options.append(option_index)
+                    available_options.append(str(option_index))
                 option_index += 1
             subgoal_options = self.specific_onboarding_subgoal_options
 
         # Subgoal Options
         for option in subgoal_options:
             if option.initiated(state):
-                available_options.append(option_index)
+                available_options.append(str(option_index))
             option_index += 1
 
 
         return available_options
 
-    def get_state_option_values(self, state: np.ndarray, available_options: None | List[Option]=None) -> Dict[int, float]:
+    def get_state_option_values(self, state: np.ndarray, available_options: None | List[Option]=None) -> Dict[str, float]:
         state_str = np.array2string(state.astype(self.state_dtype))
 
         try:
@@ -508,7 +515,7 @@ class PreparednessAgent(OptionsAgent):
         max_next_state_option_value = max(next_state_option_values_list)
 
         for option_index in available_options:
-            option = self.options[option_index]
+            option = self.option_index_lookup(int(option_index))
             if option.has_policy():
                 train_option = option.choose_action(state, self.last_possible_actions) == action
                 try:
@@ -537,9 +544,9 @@ class PreparednessAgent(OptionsAgent):
         if not (terminal or self.current_option.terminated(next_state)):
             return
 
-        option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
+        option_value = self.get_state_option_values(self.option_start_state)[str(self.current_option_index)]
         option_start_state_str = self.state_to_state_str(self.option_start_state)
-        self.state_option_values[self.option_onboarding][option_start_state_str][self.current_option_index] \
+        self.state_option_values[self.option_onboarding][option_start_state_str][str(self.current_option_index)] \
             += self.alpha * (self.total_option_reward + (self.gamma ** self.current_option_step) *
                              max_next_state_option_value
                              - option_value)
@@ -932,7 +939,7 @@ class PreparednessAgent(OptionsAgent):
                     if progress_bar:
                         sys.stdout.flush()
                         print("\r         Option: " + option.start_node[0] + " -> " + option.end_node + " "
-                              + str(percentage_hits) + "% hits")
+                              + str(percentage_hits) + "% hits, " + str(total_successes) + " total hits")
 
         # Onboarding Options
         # Generic Onboarding Options
@@ -947,7 +954,7 @@ class PreparednessAgent(OptionsAgent):
                                                                   all_actions_possible, progress_bar)
             if progress_bar:
                 percentage_hits = percentage(total_successes, total_end_states)
-                print(" Onboarding Option " + str(percentage_hits) + "% hits")
+                print(" Onboarding Option " + str(percentage_hits) + "% hits, " + str(total_successes) + " total hits")
             if progress_bar:
                 print("Training Specific Onboarding Options")
             # Specific onboarding options
@@ -962,7 +969,8 @@ class PreparednessAgent(OptionsAgent):
                 if progress_bar:
                     sys.stdout.flush()
                     percentage_hits = percentage(total_successes, total_end_states)
-                    print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) + "% hits")
+                    print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) +
+                          "% hits, " + str(total_successes) + " total hits")
 
         # Subgoal Options
         # Generic Subgoal Options
@@ -979,7 +987,8 @@ class PreparednessAgent(OptionsAgent):
                 if progress_bar:
                     sys.stdout.flush()
                     percentage_hits = percentage(total_successes, total_end_states)
-                    print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) + "% hits")
+                    print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) +
+                          "% hits, " + str(total_successes) + " total hits")
             # Specific Subgoal Options
             if progress_bar:
                 print("Training Specific Subgoal Options")
@@ -993,7 +1002,8 @@ class PreparednessAgent(OptionsAgent):
                 if progress_bar:
                     sys.stdout.flush()
                     percentage_hits = percentage(total_successes, total_end_states)
-                    print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) + "% hits")
+                    print("\r     Option towards state: " + option.end_node + " " + str(percentage_hits) +
+                          "% hits, " + str(total_successes) + " total hits")
 
         if trained_benchmark is None:
             return
