@@ -273,6 +273,16 @@ class PreparednessAgent(OptionsAgent):
             options = self.actions
 
         continuation_func = lambda s: self.get_state_node(s) != end_node and self.has_path_to_node(s, end_node)
+        if self.max_option_length != np.inf:
+            def continuation_func(s: np.ndarray) -> bool:
+                s_node = self.get_state_node(s)
+                if s_node == end_node:
+                    return False
+                if not self.has_path_to_node(s, end_node):
+                    return False
+                start_state = self.state_str_to_state(start_state_str[0])
+                return self.has_path_to_node(start_state, s_node)
+
         if initiation_func is None:
             initiation_func = continuation_func
         option = PreparednessOption(options.copy(), start_node, end_node,

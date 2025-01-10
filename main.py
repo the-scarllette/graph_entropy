@@ -2176,7 +2176,7 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
     total_evaluation_steps = 50
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 50_000
+    options_training_timesteps = 1_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 50_000
@@ -2187,6 +2187,34 @@ if __name__ == "__main__":
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    print(taxicab.environment_name + " preparedness training options")
+    preparedness_agent = PreparednessAgent(taxicab.possible_actions,
+                                           0.9, 0.15, 0.9,
+                                           taxicab.state_dtype, taxicab.state_shape,
+                                           state_transition_graph, preparednesss_subgoal_graph,
+                                           option_onboarding='none',
+                                           max_option_length=30)
+    preparedness_agent.create_options(taxicab)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+
+    preparedness_agent.train_options(taxicab, options_training_timesteps,
+                                     train_between_options=True, min_level=1, max_level=1,
+                                     train_onboarding_options=False, train_subgoal_options=False,
+                                     all_actions_possible=False, progress_bar=True)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    print(taxicab.environment_name + " preparedness training options")
+    exit()
+
+    state_transition_graph, preparedness_subgoal_graph, stg_values = (
+        preparedness_aggregate_graph(taxicab, adj_matrix,
+                                     state_transition_graph, stg_values, min_hop=1, max_hop=None,
+                                     max_distance=30))
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
 
     data = graphing.extract_data(filenames['results'])
     graphing.graph_reward_per_timestep(data, graphing_window,
@@ -2202,23 +2230,6 @@ if __name__ == "__main__":
                               num_agents, evaluate_policy_window, False,
                               total_evaluation_steps,
                               continue_training=False, progress_bar=True)
-    exit()
-
-    print(taxicab.environment_name + " preparedness training options")
-    preparedness_agent = PreparednessAgent(taxicab.possible_actions,
-                                           0.9, 0.15, 0.9,
-                                           taxicab.state_dtype, taxicab.state_shape,
-                                           state_transition_graph, preparednesss_subgoal_graph,
-                                           option_onboarding='none')
-    preparedness_agent.create_options(taxicab)
-    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
-
-    preparedness_agent.train_options(taxicab, options_training_timesteps,
-                                     train_between_options=True, min_level=2, max_level=2,
-                                     train_onboarding_options=False, train_subgoal_options=False,
-                                     all_actions_possible=False, progress_bar=True)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
-    print(taxicab.environment_name + " preparedness training options")
     exit()
 
     train_louvain_agents(lavaflow, lavaflow.environment_name,
@@ -2257,15 +2268,6 @@ if __name__ == "__main__":
                            progress_bar=True,
                            all_actions_valid=False,
                            total_eval_steps=total_evaluation_steps)
-    exit()
-
-    state_transition_graph, preparedness_subgoal_graph, stg_values = (
-        preparedness_aggregate_graph(lavaflow, adj_matrix,
-                                     state_transition_graph, stg_values, min_hop=2, max_hop=None))
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
     exit()
 
     state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adj_matrix,
