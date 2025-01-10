@@ -318,6 +318,9 @@ class PreparednessAgent(OptionsAgent):
                 for end_node, end_values in self.aggregate_graph.nodes(data=True):
                     if k != aggregate_graph_distances[start_node][end_node]:
                         continue
+                    if self.max_option_distances != np.inf:
+                        if not self.has_path_to_node(self.state_str_to_state(start_node_str), end_node):
+                            continue
                     end_node_str = end_values['state']
                     option = self.create_option([start_node], end_node,
                                                 [start_node_str], end_node_str, k,
