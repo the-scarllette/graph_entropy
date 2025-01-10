@@ -644,7 +644,7 @@ class PreparednessAgent(OptionsAgent):
         self.state_node_lookup = agent_save_file['state node lookup']
         self.path_lookup = agent_save_file['path lookup']
         self.state_option_values = agent_save_file['state option values']
-        self.max_option_length = int(agent_save_file['max option length'])
+        self.max_option_length = agent_save_file['max option length']
         return
 
     def node_to_state(self, node: str) -> np.ndarray:
@@ -722,7 +722,7 @@ class PreparednessAgent(OptionsAgent):
                            'environment start states str': self.environment_start_states_str,
                            'environment start nodes': self.environment_start_nodes,
                            'state option values': self.state_option_values,
-                           'max option length': int(self.max_option_length)}
+                           'max option length': self.max_option_length}
 
         with open(save_path, 'w') as f:
             json.dump(agent_save_file, f)

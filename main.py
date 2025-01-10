@@ -873,7 +873,15 @@ def preparedness_aggregate_graph(environment: Environment,
                                  preparedness_subgoals: Dict[str, List[str]] | None=None,
                                  min_hop: int=1,
                                  max_hop: int | None=None,
-                                 beta: float=0.5) -> (nx.MultiDiGraph, nx.MultiDiGraph, Dict[str, Dict]):
+                                 beta: float=0.5,
+                                 max_distance: int=np.inf) -> (nx.MultiDiGraph, nx.MultiDiGraph, Dict[str, Dict]):
+    def connect_nodes(node_1, node_2):
+        return nx.has_path(state_transition_graph, node_1, node_2)
+    if max_distance != np.inf:
+        def connect_nodes(node_1, node_2):
+            shortest_path_distance = nx.shortest_path_length(state_transition_graph, node_1, node_2)
+            return shortest_path_distance <= max_distance
+
     if preparedness_subgoals is None:
         state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(adjacency_matrix,
                                                                                                 state_transition_graph,
@@ -909,7 +917,7 @@ def preparedness_aggregate_graph(environment: Environment,
             start_height = subgoal_height + 1
             while (start_height <= max_height) and (not increasing_path_found):
                 for start_node in preparedness_subgoals[start_height]:
-                    if nx.has_path(state_transition_graph, start_node, subgoal):
+                    if connect_nodes(start_node, subgoal):
                         aggregate_graph.add_edge(start_node, subgoal, weight=1.0)
                         increasing_path_found = True
                 start_height += 1
@@ -919,7 +927,7 @@ def preparedness_aggregate_graph(environment: Environment,
             start_height = subgoal_height - 1
             while (min_height <= start_height) and (not decreasing_path_found):
                 for start_node in preparedness_subgoals[start_height]:
-                    if nx.has_path(state_transition_graph, start_node, subgoal):
+                    if connect_nodes(start_node, subgoal):
                         aggregate_graph.add_edge(start_node, subgoal, weight=1.0)
                         decreasing_path_found = True
                 start_height -= 1
@@ -2157,7 +2165,7 @@ if __name__ == "__main__":
     taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     # tinytown = TinyTown(2, 2, pick_every=1)
 
-    option_onboarding = 'generic'
+    option_onboarding = 'none'
     graphing_window = 10
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
@@ -2180,6 +2188,22 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
+    data = graphing.extract_data(filenames['results'])
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='Taxicab',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='st_error',
+                                       labels=os.listdir(filenames['results']))
+    exit()
+
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
+                              option_onboarding, taxicab, training_timesteps,
+                              num_agents, evaluate_policy_window, False,
+                              total_evaluation_steps,
+                              continue_training=False, progress_bar=True)
+    exit()
+
     print(taxicab.environment_name + " preparedness training options")
     preparedness_agent = PreparednessAgent(taxicab.possible_actions,
                                            0.9, 0.15, 0.9,
@@ -2195,22 +2219,6 @@ if __name__ == "__main__":
                                      all_actions_possible=False, progress_bar=True)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     print(taxicab.environment_name + " preparedness training options")
-    exit()
-
-    data = graphing.extract_data(filenames['results'])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='Taxicab',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='st_error',
-                                       labels=os.listdir(filenames['results']))
-    exit()
-
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
-                              option_onboarding, taxicab, training_timesteps,
-                              num_agents, evaluate_policy_window, False,
-                              total_evaluation_steps,
-                              continue_training=True, progress_bar=True)
     exit()
 
     train_louvain_agents(lavaflow, lavaflow.environment_name,
