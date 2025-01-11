@@ -2176,7 +2176,7 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
     total_evaluation_steps = 50
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 500_000
+    options_training_timesteps = 100_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 50_000
@@ -2196,10 +2196,10 @@ if __name__ == "__main__":
                                            option_onboarding='none',
                                            max_option_length=30)
     preparedness_agent.create_options(taxicab)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
 
     preparedness_agent.train_options(taxicab, options_training_timesteps,
-                                     train_between_options=True, min_level=1, max_level=1,
+                                     train_between_options=True, min_level=2, max_level=2,
                                      train_onboarding_options=False, train_subgoal_options=False,
                                      all_actions_possible=False, progress_bar=True)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')

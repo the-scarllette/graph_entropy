@@ -563,7 +563,8 @@ class PreparednessAgent(OptionsAgent):
                                                                                    state_option_values[option_index] +
                                                                                    self.gamma * gamma_product)
 
-        if not (terminal or self.current_option.terminated(next_state)):
+        if (not (terminal or self.current_option.terminated(next_state))) and (
+                self.current_option_step < self.max_option_length):
             return
 
         option_value = self.get_state_option_values(self.option_start_state)[str(self.current_option_index)]
@@ -576,6 +577,7 @@ class PreparednessAgent(OptionsAgent):
         self.option_start_state = None
         self.current_option_index = None
         self.total_option_reward = 0
+        self.current_option_step = 0
         return
 
     def load(self, save_path: str) -> None:
