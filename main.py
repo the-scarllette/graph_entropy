@@ -2200,7 +2200,7 @@ if __name__ == "__main__":
 
     preparedness_agent.train_options(taxicab, options_training_timesteps,
                                      train_between_options=False,
-                                     train_onboarding_options=False, train_subgoal_options=True,
+                                     train_onboarding_options=True, train_subgoal_options=False,
                                      all_actions_possible=False, progress_bar=True)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     print(taxicab.environment_name + " preparedness training options")

@@ -283,8 +283,7 @@ class PreparednessAgent(OptionsAgent):
                 if start_state_str is not None:
                     start_state = self.state_str_to_state(start_state_str[0])
                     return self.has_path_to_node(start_state, s_node)
-                else:
-                    return False
+                return True
 
         if initiation_func is None:
             initiation_func = continuation_func
