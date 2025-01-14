@@ -913,7 +913,7 @@ class PreparednessAgent(OptionsAgent):
                     probabilities = self.action_transition_probs[(start_state_str, o)]
                     return probabilities
             try:
-                option_key = (start_state_str, o.start_node, o.end_node)
+                option_key = (start_state_str, o.start_node[0], o.end_node)
             except AttributeError:
                 option_key = (start_state_str, self.generic_onboarding_index)
 
