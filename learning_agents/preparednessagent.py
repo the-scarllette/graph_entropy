@@ -885,9 +885,10 @@ class PreparednessAgent(OptionsAgent):
 
         return total_end_states, total_successes
 
-    # TODO: Finish value iteration training
     def train_option_value_iteration(self, option: Option, environment: Environment,
-                                     min_delta: float, option_rollouts: int) -> None:
+                                     option_success_states: List[str],
+                                     final_delta: float, option_rollouts: int,
+                                     all_actions_valid: bool=False) -> None:
         try:
             primitive_option = option.hierarchy_level <=  1
         except AttributeError:
@@ -948,6 +949,63 @@ class PreparednessAgent(OptionsAgent):
             if not state_values.values():
                 return 0.0
             return max(state_values.values())
+
+        possible_actions = environment.possible_actions
+        delta = np.inf
+
+        nodes = []
+        for node in self.state_transition_graph.nodes(data=False):
+            state = self.node_to_state(node)
+            if option.terminated(state):
+                continue
+            nodes.append(node)
+
+        while delta > final_delta:
+            delta = 0
+            for node in nodes:
+                state = self.node_to_state(node)
+                if option.terminated(state):
+                    continue
+
+                temp = v(state)
+
+                if not all_actions_valid:
+                    possible_actions = environment.get_possible_actions(state)
+                if primitive_option:
+                    possible_options = possible_actions
+                else:
+                    possible_options = option.policy.get_available_options(state, possible_actions)
+
+                option_values = {possible_option: 0.0 for possible_option in possible_options}
+                for possible_option in possible_options:
+                    if primitive_option:
+                        transition_probabilities = t(state, possible_option)
+                    else:
+                        transition_probabilities = t(state, option.policy.options[possible_option])
+                    option_value = 0.0
+                    for tilde_state_str in list(transition_probabilities.keys()):
+                        tilde_state = self.state_str_to_state(tilde_state_str)
+
+                        transition_prob = transition_probabilities[tilde_state_str]
+                        if transition_prob <= 0.0:
+                            continue
+
+                        reward = self.option_step_reward
+                        if tilde_state_str in option_success_states:
+                            reward = self.option_success_reward
+                        elif option.terminated(tilde_state):
+                            reward = self.option_failure_reward
+
+                        option_value += transition_prob * (reward + (self.gamma * v(tilde_state)))
+
+                    option_values[possible_option] = option_value
+
+                if primitive_option:
+                    option.policy.q_values[self.state_to_state_str(state)] = option_values
+                else:
+                    option.policy.set_state_option_values(option_values, state)
+
+                delta = max(delta, abs(temp - v(state)))
 
         return
 
@@ -1082,3 +1140,93 @@ class PreparednessAgent(OptionsAgent):
         for untrained_option in untrained_options:
             print("     " + untrained_option[0] + ' -> ' + untrained_option[1])
         return untrained_options
+
+    def train_options_value_iteration(self, environment: Environment,
+                                      final_delta: float, option_rollouts: int,
+                                      min_level: None | int=None, max_level: None | int=None,
+                                      train_between_options: bool=True,
+                                      train_onboarding_options: bool=True, train_subgoal_options: bool=True,
+                                      all_actions_possible: bool=False,
+                                      progress_bar: bool=False) -> None:
+
+        if min_level is None:
+            min_level = 1
+        if max_level is None:
+            max_level = np.inf
+
+        total_options = 0
+        if train_onboarding_options:
+            total_options += len(self.specific_onboarding_options) + 1
+        if train_subgoal_options:
+            total_options += (len(self.generic_onboarding_subgoal_options)
+                              + len(self.specific_onboarding_subgoal_options))
+        if train_between_options:
+            level = min_level
+            while level <= max_level:
+                try:
+                    total_options += len(self.options_between_subgoals[str(level)])
+                except KeyError:
+                    max_level = level - 1
+                level += 1
+
+        option_count = 0
+
+        # Options between subgoals
+        if train_between_options:
+            if progress_bar:
+                print("Training Options Between Subgoals")
+            for level in range(min_level, max_level + 1):
+                if progress_bar:
+                    print("     Training Options at level: " + str(level))
+                for option in self.options_between_subgoals[str(level)]:
+                    if progress_bar:
+                        option_count += 1
+                        print("         Option: " + option.start_node[0] + " -> " + option.end_node +
+                              " - " + str(option_count) + "/" + total_options)
+                    success_states = [option.end_state_str]
+
+                    self.train_option_value_iteration(option, environment, success_states,
+                                                      final_delta, option_rollouts,
+                                                      all_actions_possible)
+
+        # Onboarding Options
+        # Generic Onboarding Options
+        if train_onboarding_options:
+            if progress_bar:
+                print("Training Generic Onboarding option")
+            success_states = [values['state']
+                              for _, values in self.aggregate_graph.nodes(data=True)]
+            self.train_option_value_iteration(option, environment, success_states,
+                                              final_delta, option_rollouts,
+                                              all_actions_possible)
+            if progress_bar:
+                print("Training Specific Onboarding Options")
+            # Specific onboarding options
+            for option in self.specific_onboarding_options:
+                if progress_bar:
+                    print("     Option towards state: " + option.end_node)
+                self.train_option_value_iteration(option, environment, [option.end_state_str],
+                                                  final_delta, option_rollouts,
+                                                  all_actions_possible)
+
+        # Subgoal Options
+        # Generic Subgoal Options
+        if train_subgoal_options:
+            if progress_bar:
+                print("Training Generic Subgoal Options")
+            for option in self.generic_onboarding_subgoal_options:
+                if progress_bar:
+                    print("     Options towards state: " + option.end_node)
+                self.train_option_value_iteration(option, environment, [option.end_state_str],
+                                                  final_delta, option_rollouts,
+                                                  all_actions_possible)
+            # Specific Subgoal Options
+            if progress_bar:
+                print("Training Specific Subgoal Options")
+            for option in self.specific_onboarding_subgoal_options:
+                if progress_bar:
+                    print("     Option towards state: " + option.end_node)
+                self.train_option_value_iteration(option, environment, [option.end_state_str],
+                                                  final_delta, option_rollouts,
+                                                  all_actions_possible)
+        return

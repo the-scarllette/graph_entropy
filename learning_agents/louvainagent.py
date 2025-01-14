@@ -539,8 +539,6 @@ class LouvainAgent(MultiLevelGoalAgent):
 
                 option_values = {possible_option: 0.0 for possible_option in possible_options}
                 for possible_option in possible_options:
-                    # if node == 822 and possible_option == 4:
-                    #     pass
 
                     if primitive_option:
                         transition_probabilities = t(state, possible_option)
