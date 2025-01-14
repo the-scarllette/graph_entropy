@@ -2164,12 +2164,12 @@ if __name__ == "__main__":
                       ])
     board_name = 'blocks'
 
-    lavaflow = LavaFlow(None, None, (0, 0))
-    # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
+    # lavaflow = LavaFlow(None, None, (0, 0))
+    taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     # tinytown = TinyTown(2, 2, pick_every=1)
 
     option_onboarding = 'none'
-    graphing_window = 10
+    graphing_window = 25
     evaluate_policy_window = 10
     intrinsic_reward_lambda = 0.5
     hops = 5
@@ -2184,12 +2184,31 @@ if __name__ == "__main__":
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 50_000
 
-    filenames = get_filenames(lavaflow)
+    filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    print(taxicab.environment_name + " preparedness training options")
+    preparedness_agent = PreparednessAgent(taxicab.possible_actions,
+                                           0.9, 0.15, 0.9,
+                                           taxicab.state_dtype, taxicab.state_shape,
+                                           state_transition_graph, preparednesss_subgoal_graph,
+                                           option_onboarding='none',
+                                           max_option_length=30,
+                                           max_hierarchy_height=2)
+    preparedness_agent.create_options(taxicab)
+    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent.train_options_value_iteration(taxicab, 0.0001, 100,
+                                                     train_between_options=False,
+                                                     train_onboarding_options=True,
+                                                     train_subgoal_options=True,
+                                                     progress_bar=True)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    print(taxicab.environment_name + " preparedness training options")
+    exit()
 
     data = graphing.extract_data(filenames['results'])
     graphing.graph_reward_per_timestep(data, graphing_window,
@@ -2205,25 +2224,6 @@ if __name__ == "__main__":
                               num_agents, evaluate_policy_window, False,
                               total_evaluation_steps, max_hierarchy_height=1,
                               continue_training=False, progress_bar=True)
-    exit()
-
-    print(taxicab.environment_name + " preparedness training options")
-    preparedness_agent = PreparednessAgent(taxicab.possible_actions,
-                                           0.9, 0.15, 0.9,
-                                           taxicab.state_dtype, taxicab.state_shape,
-                                           state_transition_graph, preparednesss_subgoal_graph,
-                                           option_onboarding='none',
-                                           max_option_length=15,
-                                           max_hierarchy_height=1)
-    pre
-    preparedness_agent.create_options(taxicab)
-    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent.train_options(taxicab, options_training_timesteps,
-                                     train_between_options=True, min_level=1, max_level=1,
-                                     train_onboarding_options=False, train_subgoal_options=False,
-                                     all_actions_possible=False, progress_bar=True)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
-    print(taxicab.environment_name + " preparedness training options")
     exit()
 
     state_transition_graph, preparedness_subgoal_graph, stg_values = (

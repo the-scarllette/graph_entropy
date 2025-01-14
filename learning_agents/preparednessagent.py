@@ -895,7 +895,7 @@ class PreparednessAgent(OptionsAgent):
             primitive_option = True
 
         def t(start_state: np.ndarray, o: Option | int) -> Dict[str, float]:
-            start_state_str = self.state_str_to_state(start_state)
+            start_state_str = self.state_to_state_str(start_state)
             if primitive_option:
                 try:
                     probabilities = self.action_transition_probs[(start_state_str, o)]
@@ -1181,8 +1181,8 @@ class PreparednessAgent(OptionsAgent):
                 for option in self.options_between_subgoals[str(level)]:
                     if progress_bar:
                         option_count += 1
-                        print("         Option: " + option.start_node[0] + " -> " + option.end_node +
-                              " - " + str(option_count) + "/" + total_options)
+                        print("         Option: " + str(option.start_node[0]) + " -> " + str(option.end_node) +
+                              " - " + str(option_count) + "/" + str(total_options))
                     success_states = [option.end_state_str]
 
                     self.train_option_value_iteration(option, environment, success_states,
@@ -1196,7 +1196,7 @@ class PreparednessAgent(OptionsAgent):
                 print("Training Generic Onboarding option")
             success_states = [values['state']
                               for _, values in self.aggregate_graph.nodes(data=True)]
-            self.train_option_value_iteration(option, environment, success_states,
+            self.train_option_value_iteration(self.generic_onboarding_option, environment, success_states,
                                               final_delta, option_rollouts,
                                               all_actions_possible)
             if progress_bar:
