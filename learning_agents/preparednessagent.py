@@ -131,7 +131,8 @@ class PreparednessAgent(OptionsAgent):
                  state_transition_graph: nx.MultiDiGraph,
                  aggregate_graph: nx.MultiDiGraph,
                  option_onboarding: str,
-                 max_option_length: int=np.inf):
+                 max_option_length: int=np.inf,
+                 max_hierarchy_height : None | int=None):
         assert actions is not None
         assert option_onboarding == 'none' or option_onboarding == 'specific' or option_onboarding == 'generic'
 
@@ -145,6 +146,7 @@ class PreparednessAgent(OptionsAgent):
         self.aggregate_graph = aggregate_graph
         self.option_onboarding = option_onboarding
         self.max_option_length = max_option_length
+        self.max_hierarchy_height = max_hierarchy_height
 
         self.min_subgoal_level = np.inf
         self.max_subgoal_level = -np.inf
@@ -186,6 +188,8 @@ class PreparednessAgent(OptionsAgent):
         self.total_option_reward = 0
         self.current_option_step = 0
         self.state_option_values = {'none': {}, 'generic': {}, 'specific': {}}
+
+        self.action_transition_probs = {}
         return
 
     def choose_action(self, state, optimal_choice=False, possible_actions=None):
@@ -257,6 +261,9 @@ class PreparednessAgent(OptionsAgent):
         self.environment_start_nodes = copy_from.environment_start_nodes
         self.state_option_values = copy_from.state_option_values.copy()
 
+        self.max_option_length = copy_from.max_option_length
+        self.max_hierarchy_height = copy_from.max_hierarchy_height
+
         self.current_step = 0
         self.current_option = None
         self.current_option_index = None
@@ -309,6 +316,10 @@ class PreparednessAgent(OptionsAgent):
                 if distance > max_option_level:
                     max_option_level = distance
         max_option_level = int(max_option_level)
+        if self.max_hierarchy_height is None:
+            self.max_hierarchy_height = max_option_level
+        else:
+            max_option_level = min(self.max_hierarchy_height, max_option_level)
 
         self.options_between_subgoals = {str(i): [] for i in range(1, max_option_level + 1)}
         options_for_option = []
@@ -589,6 +600,10 @@ class PreparednessAgent(OptionsAgent):
         self.options_between_subgoals = {}
         options_for_option = []
         for level in agent_save_file['options between subgoals']:
+            if self.max_hierarchy_height is not None:
+                if int(level) > self.max_hierarchy_height:
+                    continue
+
             option_list = agent_save_file['options between subgoals'][level]
             self.options_between_subgoals[level] = []
             for option_dict in option_list:
@@ -871,44 +886,68 @@ class PreparednessAgent(OptionsAgent):
         return total_end_states, total_successes
 
     # TODO: Finish value iteration training
-    def train_option_value_iteration(self, training_option: PreparednessOption, environment: Environment,
-                                     min_delta: float, option_runs: int) -> None:
-        def run_option(start_state: np.ndarray, option: Option) -> Tuple[np.ndarray, float]:
-            terminal = False
-            current_state = environment.reset(start_state)
-            total_reward = 0
-            while not terminal:
-                possible_actions = environment.get_possible_actions(current_state)
-                action = option.choose_action(current_state, possible_actions)
-                current_state, _, terminal, _ = environment.step(action)
-                total_reward += self.option_step_reward
-                if not terminal:
-                    terminal = option.terminated(current_state)
+    def train_option_value_iteration(self, option: Option, environment: Environment,
+                                     min_delta: float, option_rollouts: int) -> None:
+        try:
+            primitive_option = option.hierarchy_level <=  1
+        except AttributeError:
+            primitive_option = True
 
-            if self.get_state_node(current_state) == training_option.end_node:
-                total_reward += self.option_success_reward
-            elif training_option.terminated(current_state):
-                total_reward += self.option_failure_reward
-            return current_state, total_reward
+        def t(start_state: np.ndarray, o: Option | int) -> Dict[str, float]:
+            start_state_str = self.state_str_to_state(start_state)
+            if primitive_option:
+                try:
+                    probabilities = self.action_transition_probs[(start_state_str, o)]
+                    return probabilities
+                except KeyError:
+                    self.action_transition_probs[(start_state_str, o)] = {}
+                    for _ in range(option_rollouts):
+                        _ = environment.reset(start_state)
+                        next_state, _, done, _ = environment.step(o)
+                        next_state_str = self.state_to_state_str(next_state)
+                        try:
+                            self.action_transition_probs[(start_state_str, o)][next_state_str] += (1 / option_rollouts)
+                        except KeyError:
+                            self.action_transition_probs[(start_state_str, o)][next_state_str] = (1 / option_rollouts)
+                    probabilities = self.action_transition_probs[(start_state_str, o)]
+                    return probabilities
+            try:
+                option_key = (start_state_str, o.start_node, o.end_node)
+            except AttributeError:
+                option_key = (start_state_str, self.generic_onboarding_index)
+
+            try:
+                probabilities = self.action_transition_probs[option_key]
+                return probabilities
+            except KeyError:
+                pass
+
+            self.action_transition_probs[option_key] = {}
+            for _ in range(option_rollouts):
+                next_state = environment.reset(start_state)
+                option_terminal = False
+                while not option_terminal:
+                    action = o.choose_action(next_state, environment.get_possible_actions(next_state))
+                    next_state, _, done, _ = environment.step(action)
+                    option_terminal = done or o.terminated(next_state)
+                next_state_str = self.state_to_state_str(next_state)
+
+                try:
+                    self.action_transition_probs[option_key][next_state_str] += (1/option_rollouts)
+                except KeyError:
+                    self.action_transition_probs[option_key][next_state_str] = (1 / option_rollouts)
+
+            probabilities = self.action_transition_probs[option_key]
+            return probabilities
 
         def v(s: np.ndarray) -> float:
-            state_option_values = training_option.policy.get_state_option_values(s)
-            return max(state_option_values.values())
-
-        delta = np.inf
-        while delta > min_delta:
-            delta = 0
-            for node, values in self.aggregate_graph.nodes(data=True):
-                state_str = values['state']
-                state = self.state_str_to_state(state_str)
-                if training_option.terminated(state):
-                    continue
-
-                for i in range(option_runs):
-                    possible_actions = environment.get_possible_actions(state)
-                    possible_options = training_option.policy.get_available_options(state, possible_actions)
-                    for possible_option in possible_options:
-                        state_after_option, reward = run_option(state, training_option)
+            if primitive_option:
+                state_values = option.policy.get_action_values(s)
+            else:
+                state_values = option.policy.get_state_option_values(s)
+            if not state_values.values():
+                return 0.0
+            return max(state_values.values())
 
         return
 

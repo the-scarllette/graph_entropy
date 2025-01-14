@@ -1757,6 +1757,7 @@ def train_preparedness_agents(base_agent_save_path: str,
                               all_actions_valid: bool=True,
                               total_eval_steps: int=np.inf,
                               alpha: float=0.9, epsilon: float=0.1, gamma: float=0.9,
+                              max_option_length: int=np.inf, max_hierarchy_height: None | int=None,
                               continue_training: bool=False,
                               progress_bar: bool=False) -> None:
     agent_results_file = 'preparedness_agent_returns_' + option_onboarding + '_onboarding.json'
@@ -1771,13 +1772,15 @@ def train_preparedness_agents(base_agent_save_path: str,
                                    environment.state_dtype,
                                    environment.state_shape,
                                    state_transition_graph, aggregate_graph,
-                                   option_onboarding)
+                                   option_onboarding,
+                                   max_option_length, max_hierarchy_height)
     training_agent = PreparednessAgent(environment.possible_actions,
                                    alpha, epsilon, gamma,
                                    environment.state_dtype,
                                    environment.state_shape,
                                    state_transition_graph, aggregate_graph,
-                                   option_onboarding)
+                                   option_onboarding,
+                                   max_option_length, max_hierarchy_height)
     base_agent.load(base_agent_save_path)
 
     directories_to_make = [filenames['agents'], filenames['results']]
@@ -2161,8 +2164,8 @@ if __name__ == "__main__":
                       ])
     board_name = 'blocks'
 
-    # lavaflow = LavaFlow(None, None, (0, 0))
-    taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
+    lavaflow = LavaFlow(None, None, (0, 0))
+    # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72])
     # tinytown = TinyTown(2, 2, pick_every=1)
 
     option_onboarding = 'none'
@@ -2174,19 +2177,35 @@ if __name__ == "__main__":
     max_num_hops = 6
     num_agents = 3
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
-    total_evaluation_steps = 50
+    total_evaluation_steps = 100
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 1_000_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 50_000
 
-    filenames = get_filenames(taxicab)
+    filenames = get_filenames(lavaflow)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    data = graphing.extract_data(filenames['results'])
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='Lavaflow',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='st_error',
+                                       labels=os.listdir(filenames['results']))
+    exit()
+
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
+                              option_onboarding, taxicab, training_timesteps,
+                              num_agents, evaluate_policy_window, False,
+                              total_evaluation_steps, max_hierarchy_height=1,
+                              continue_training=False, progress_bar=True)
+    exit()
 
     print(taxicab.environment_name + " preparedness training options")
     preparedness_agent = PreparednessAgent(taxicab.possible_actions,
@@ -2194,13 +2213,14 @@ if __name__ == "__main__":
                                            taxicab.state_dtype, taxicab.state_shape,
                                            state_transition_graph, preparednesss_subgoal_graph,
                                            option_onboarding='none',
-                                           max_option_length=30)
+                                           max_option_length=15,
+                                           max_hierarchy_height=1)
+    pre
     preparedness_agent.create_options(taxicab)
     preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
-
     preparedness_agent.train_options(taxicab, options_training_timesteps,
-                                     train_between_options=False,
-                                     train_onboarding_options=False, train_subgoal_options=True,
+                                     train_between_options=True, min_level=1, max_level=1,
+                                     train_onboarding_options=False, train_subgoal_options=False,
                                      all_actions_possible=False, progress_bar=True)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     print(taxicab.environment_name + " preparedness training options")
@@ -2214,22 +2234,6 @@ if __name__ == "__main__":
     nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
     with open(filenames['state transition graph values'], 'w') as f:
         json.dump(stg_values, f)
-    exit()
-
-    data = graphing.extract_data(filenames['results'])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='Taxicab',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='st_error',
-                                       labels=os.listdir(filenames['results']))
-    exit()
-
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
-                              option_onboarding, taxicab, training_timesteps,
-                              num_agents, evaluate_policy_window, False,
-                              total_evaluation_steps,
-                              continue_training=False, progress_bar=True)
     exit()
 
     train_louvain_agents(lavaflow, lavaflow.environment_name,
