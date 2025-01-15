@@ -62,7 +62,8 @@ class TaxiCab(Environment):
     def __init__(self, use_time=True, use_fuel=True,
                  arrival_probabilities=None,
                  one_hot_encoding=False,
-                 hashable_states=False):
+                 hashable_states=False,
+                 continuous=False):
         self.use_time = use_time
         self.use_fuel = use_fuel
 
@@ -129,6 +130,8 @@ class TaxiCab(Environment):
         self.state_dtype = int
 
         self.hashable_states = hashable_states
+
+        self.continuous = continuous
 
         self.options = []
         return
@@ -227,6 +230,8 @@ class TaxiCab(Environment):
             return successor_states, weights
         if self.use_fuel and fuel_level <= 0:
             return successor_states, weights
+        if (not self.continuous) and self.is_terminal(state):
+            return successor_states, weights
 
         def add_successor_state(index: int, new_value: int, weight: float) -> None:
             successor_state = state.copy()
@@ -295,7 +300,16 @@ class TaxiCab(Environment):
 
         # Putdown successor state
         if passenger_location == 4 and (taxi_x, taxi_y) == self.stops[passenger_destination]:
-            if self.arrival_probabilities:
+            if not self.continuous:
+                successor_state = state.copy()
+                successor_state[2] = 5
+                successor_state[3] = 5
+                successor_states.append(successor_state)
+                weight = 1.0
+                if probability_weights:
+                    weight = 1 / total_actions
+                weights.append(weight)
+            elif self.arrival_probabilities:
                 successor_state = state.copy()
                 successor_state[2] = self.no_passenger_index
                 successor_state[3] = self.no_passenger_index
@@ -476,7 +490,7 @@ class TaxiCab(Environment):
         self.update_state()
         return self.get_current_state()
 
-    def step(self, action: int):
+    def step(self, action: int) -> np.ndarray:
         if self.terminal:
             raise AttributeError("Environment must be reset before calling step")
 
@@ -561,8 +575,12 @@ class TaxiCab(Environment):
 
             info = None
             if can_putdown:
-                self.passenger_loc = self.no_passenger_index
-                self.passenger_destination = self.no_passenger_index
+                putdown_place = self.no_passenger_index
+                if not self.continuous:
+                    self.terminal = True
+                    putdown_place = 5
+                self.passenger_loc = putdown_place
+                self.passenger_destination = putdown_place
                 reward += self.success_reward
                 info = {'success': True}
             else:
