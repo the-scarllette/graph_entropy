@@ -209,6 +209,11 @@ class PreparednessAgent(OptionsAgent):
         else:
             chosen_action = self.current_option.actions[0]
 
+        if chosen_action is None:
+            self.current_option = self.choose_option(state, optimal_choice, possible_actions)
+            self.current_option_step = 0
+            return self.choose_action(state, optimal_choice, possible_actions)
+
         self.current_option_step += 1
         return chosen_action
 
@@ -217,6 +222,8 @@ class PreparednessAgent(OptionsAgent):
         self.option_start_state = state
 
         available_options = self.get_available_options(state, possible_actions)
+        if len(available_options) <= 0:
+            pass
 
         if (not no_random) and (rand.uniform(0, 1) < self.epsilon):
             self.current_option_index = int(rand.choice(available_options))
