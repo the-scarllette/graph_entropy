@@ -25,7 +25,7 @@ class QLearningAgent:
             self.intrinsic_reward_lambda = self.default_intrinsic_reward_lambda
         return
 
-    def copy_agent(self, copy_from):
+    def copy(self, copy_from):
         self.q_values = copy_from.q_values.copy()
         return
 

@@ -1929,7 +1929,7 @@ def train_q_learning_agent(environment: Environment,
                                                              filenames['agents'] +
                                                              '/q_learning_agent_' + str(i) + '.json',
                                                              total_eval_steps,
-                                                             True,
+                                                             False,
                                                              progress_bar)
 
         all_epoch_returns[str(i)] += epoch_returns
