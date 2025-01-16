@@ -1223,6 +1223,7 @@ def train_agent(env: Environment, agent, num_steps,
                 evaluate_policy_window=np.inf,
                 all_actions_valid=False, agent_save_path=None,
                 total_eval_steps=np.inf,
+                copy_agent=True,
                 progress_bar=False):
     current_possible_actions = env.possible_actions
     epoch_returns = []
@@ -1247,11 +1248,11 @@ def train_agent(env: Environment, agent, num_steps,
                 print_progress_bar(total_steps, num_steps, decimals=3,
                                    prefix='Agent Training: ', suffix='Complete')
             if window_steps <= 0:
-                if agent_save_path is not None:
+                if copy_agent:
+                    evaluate_agent.copy(agent)
+                else:
                     agent.save(agent_save_path)
                     evaluate_agent.load(agent_save_path)
-                else:
-                    evaluate_agent.copy(agent)
                 epoch_return = run_epoch(evaluate_env, evaluate_agent, total_eval_steps,
                                          all_actions_valid, progress_bar)
                 epoch_returns.append(epoch_return)
@@ -1421,6 +1422,7 @@ def train_betweenness_agents(base_agent_save_path: str,
                                                                    agent_save_path=(filenames['agents'] +
                                                                                     agent_filename),
                                                                    total_eval_steps=total_eval_steps,
+                                                                   copy_agent=True,
                                                                    progress_bar=progress_bar)
 
         all_agent_training_returns[str(i)] += agent_training_returns
@@ -1614,6 +1616,7 @@ def train_eigenoption_agents(base_agent_save_path,
                                                                                     '/eigenoption_agent_' + str(i) +
                                                                                     '.json'),
                                                                    total_eval_steps=total_eval_steps,
+                                                                   copy_agent=True,
                                                                    progress_bar=progress_bar)
 
         if continue_training:
@@ -1680,6 +1683,7 @@ def train_louvain_agents(environment: Environment, file_name_prefix,
                                                                            agent_directory
                                                                            +'/louvain_agent_' + str(i) + '.json'),
                                                                    total_eval_steps=total_eval_steps,
+                                                                   copy_agent=False,
                                                                    progress_bar=progress_bar)
 
         # Saving result
@@ -1814,6 +1818,7 @@ def train_preparedness_agents(base_agent_save_path: str,
                                                                             agent_save_path=(filenames['agents'] + '/' +
                                                                                              agent_save_path),
                                                                             total_eval_steps=total_eval_steps,
+                                                                            copy_agent=True,
                                                                             progress_bar=progress_bar)
         all_agent_training_returns[i_str] += agent_training_returns
         all_agent_returns[i_str] += agent_returns
@@ -1924,6 +1929,7 @@ def train_q_learning_agent(environment: Environment,
                                                              filenames['agents'] +
                                                              '/q_learning_agent_' + str(i) + '.json',
                                                              total_eval_steps,
+                                                             True,
                                                              progress_bar)
 
         all_epoch_returns[str(i)] += epoch_returns
@@ -2166,7 +2172,7 @@ if __name__ == "__main__":
 
     # lavaflow = LavaFlow(None, None, (0, 0))
     taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
-                      continuous=True)
+                      continuous=False)
     # tinytown = TinyTown(2, 2, pick_every=1)
 
     option_onboarding = 'generic'
@@ -2191,10 +2197,27 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
+    train_q_learning_agent(taxicab,
+                           training_timesteps, num_agents,
+                           continue_training=False,
+                           progress_bar=True,
+                           all_actions_valid=False,
+                           total_eval_steps=total_evaluation_steps)
+    exit()
+
+    data = graphing.extract_data(filenames['results'])
+    graphing.graph_reward_per_timestep(data, graphing_window,
+                                       name='Taxicab',
+                                       x_label='Epoch',
+                                       y_label='Average Epoch Return',
+                                       error_bars='st_error',
+                                       labels=os.listdir(filenames['results']))
+    exit()
+
     train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
-                              option_onboarding, taxicab, training_timesteps,
-                              num_agents, evaluate_policy_window, False,
-                              total_evaluation_steps,
+                              option_onboarding, taxicab,
+                              training_timesteps, num_agents, evaluate_policy_window,
+                              True, total_evaluation_steps,
                               continue_training=False, progress_bar=True)
     exit()
 
@@ -2232,15 +2255,6 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'w') as f:
         json.dump(stg_values, f)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    exit()
-
-    data = graphing.extract_data(filenames['results'])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='Taxicab',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='st_error',
-                                       labels=os.listdir(filenames['results']))
     exit()
 
     print(taxicab.environment_name + " preparedness hops 1 - 4")
@@ -2293,14 +2307,6 @@ if __name__ == "__main__":
                              True, total_evaluation_steps,
                              continue_training=False,
                              progress_bar=True)
-    exit()
-
-    train_q_learning_agent(lavaflow,
-                           training_timesteps, num_agents,
-                           continue_training=True,
-                           progress_bar=True,
-                           all_actions_valid=False,
-                           total_eval_steps=total_evaluation_steps)
     exit()
 
     train_preparedness_agents(filenames['agents'] + "/preparedness_base_agent.json",
