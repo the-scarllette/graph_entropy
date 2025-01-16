@@ -80,7 +80,7 @@ class QLearningAgent:
                                                                    - action_value)))
         return
 
-    def load_policy(self, load_path):
+    def load(self, load_path):
         try:
             with open(load_path, 'r') as f:
                 self.q_values = json.load(f)
