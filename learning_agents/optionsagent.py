@@ -244,7 +244,7 @@ class OptionsAgent:
         else:
             chosen_action = self.current_option.actions[self.current_option_step]
 
-        if chosen_action == -1 or chosen_action is None:
+        if chosen_action == -1:
             self.current_option = None
             self.current_option_index = None
             self.current_option_step = 0

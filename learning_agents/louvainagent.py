@@ -254,10 +254,13 @@ class LouvainAgent(MultiLevelGoalAgent):
 
     def get_available_options(self, state, possible_actions=None):
         state_str = np.array2string(state)
+        lookup_options = True
+
         try:
             available_options = self.available_options[state_str]
         except KeyError:
             available_options = []
+            lookup_options = False
 
             if possible_actions is None:
                 available_options = [str(option_index) for option_index in range(self.num_primitive_options)]
@@ -276,6 +279,12 @@ class LouvainAgent(MultiLevelGoalAgent):
                 option_index += 1
 
             self.available_options[state_str] = available_options
+
+        if len(self.options) >= 300:
+            print("Error Here")
+            print(state)
+            print("Lookup options " + str(lookup_options))
+            exit()
 
         return available_options
 
@@ -323,6 +332,7 @@ class LouvainAgent(MultiLevelGoalAgent):
         self.num_clusters = []
 
         # Getting Option Data
+        self.options = []
         for option_data in data['options']:
             hierarchy_level = option_data['hierarchy_level']
             option = self.create_option(hierarchy_level,
@@ -539,6 +549,8 @@ class LouvainAgent(MultiLevelGoalAgent):
 
                 option_values = {possible_option: 0.0 for possible_option in possible_options}
                 for possible_option in possible_options:
+                    # if node == 822 and possible_option == 4:
+                    #     pass
 
                     if primitive_option:
                         transition_probabilities = t(state, possible_option)

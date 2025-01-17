@@ -2,22 +2,19 @@ import json
 import os
 import matplotlib.pyplot as plt
 import numpy as np
+from typing import List
 
 
-def extract_data(folderpath, index=None):
+def extract_data(folderpath: str, filenames: List[str] | None=None):
     data = []
 
-    filenames = os.listdir(folderpath)
     for filename in filenames:
         f = open(folderpath + '/' + filename)
         file_data = json.load(f)
         f.close()
         data.append(list(file_data.values()))
 
-    if index is None:
-        return data
-
-    return [[data[0][index]]]
+    return data
 
 
 def get_averages(data):
@@ -147,7 +144,7 @@ def graph_average(data, name=None, label=None):
     return
 
 
-def graph_reward_per_timestep(data, window=10, name=None, labels=None, x_label=None, y_label=None,
+def graph_reward_per_timestep(data, window=10, evaluate_window=1, name=None, labels=None, x_label=None, y_label=None,
                               xlim=None, ylim=None, error_bars=None):
     averaged_data = list(map(get_averages, data))
     reward_per_timestep_data = list(map(lambda x: get_reward_per_timestep(x, window), averaged_data))
@@ -170,6 +167,7 @@ def graph_reward_per_timestep(data, window=10, name=None, labels=None, x_label=N
             fill_data.append([bottom_std, top_std])
 
     x = [i * window for i in range(1, n + 1)]
+    x = [i * evaluate_window for i in x]
 
     graph_multiple(reward_per_timestep_data_trimmed, x,
                    name=name, labels=labels, x_label=x_label, y_label=y_label,

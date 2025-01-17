@@ -1249,7 +1249,7 @@ def train_agent(env: Environment, agent, num_steps,
                                    prefix='Agent Training: ', suffix='Complete')
             if window_steps <= 0:
                 if copy_agent:
-                    evaluate_agent.copy(agent)
+                    evaluate_agent.copy_agent(agent)
                 else:
                     agent.save(agent_save_path)
                     evaluate_agent.load(agent_save_path)
@@ -1929,7 +1929,7 @@ def train_q_learning_agent(environment: Environment,
                                                              filenames['agents'] +
                                                              '/q_learning_agent_' + str(i) + '.json',
                                                              total_eval_steps,
-                                                             False,
+                                                             True,
                                                              progress_bar)
 
         all_epoch_returns[str(i)] += epoch_returns
@@ -2172,11 +2172,11 @@ if __name__ == "__main__":
 
     # lavaflow = LavaFlow(None, None, (0, 0))
     taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
-                      continuous=False)
+                      continuous=True)
     # tinytown = TinyTown(2, 2, pick_every=1)
 
-    option_onboarding = 'generic'
-    graphing_window = 25
+    option_onboarding = 'none'
+    graphing_window = 10
     evaluate_policy_window = 10
     hops = 5
     min_num_hops = 1
@@ -2190,6 +2190,15 @@ if __name__ == "__main__":
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 50_000
 
+    # Graph Odering:
+    # None Onboarding
+    # Generic
+    # Specific
+    # Eigenoptions
+    # Louvain
+    # Betweenness
+    # Primitives
+
     filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
@@ -2197,28 +2206,15 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    train_q_learning_agent(taxicab,
-                           training_timesteps, num_agents,
-                           continue_training=False,
-                           progress_bar=True,
-                           all_actions_valid=False,
-                           total_eval_steps=total_evaluation_steps)
-    exit()
+    train_louvain_agents(taxicab, taxicab.environment_name,
+                         filenames['agents'], filenames['results'],
+                         training_timesteps, num_agents, evaluate_policy_window,
+                         filenames['agents'] + '/louvain_base_agent.json',
+                         initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
+                         all_actions_valid=True,
+                         total_eval_steps=total_evaluation_steps,
+                         state_dtype=taxicab.state_dtype, state_shape=taxicab.state_shape, progress_bar=True)
 
-    data = graphing.extract_data(filenames['results'])
-    graphing.graph_reward_per_timestep(data, graphing_window,
-                                       name='Taxicab',
-                                       x_label='Epoch',
-                                       y_label='Average Epoch Return',
-                                       error_bars='st_error',
-                                       labels=os.listdir(filenames['results']))
-    exit()
-
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
-                              option_onboarding, taxicab,
-                              training_timesteps, num_agents, evaluate_policy_window,
-                              True, total_evaluation_steps,
-                              continue_training=False, progress_bar=True)
     exit()
 
     print(taxicab.environment_name + " preparedness training options")
@@ -2230,12 +2226,60 @@ if __name__ == "__main__":
     preparedness_agent.create_options(taxicab)
     preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
     preparedness_agent.train_options(taxicab, options_training_timesteps,
-                                     train_between_options=False,
+                                     train_between_options=True, min_level=2,
                                      train_onboarding_options=False,
-                                     train_subgoal_options=True,
+                                     train_subgoal_options=False,
                                      progress_bar=True)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     print(taxicab.environment_name + " preparedness training options")
+    exit()
+
+    data = graphing.extract_data(filenames['results'],
+                                 [
+                                     'preparedness_agent_returns_none_onboarding.json',
+                                     #                                 'preparedness_agent_returns_generic_onboarding.json',
+                                     #                                 'preparedness_agent_returns_specific_onboarding.json',
+                                     'eigenoptions_epoch_returns.json',
+                                     'louvain agent returns',
+                                     'betweenness_epoch_returns.json',
+                                     'q_learning_epoch_returns.json'
+                                 ])
+    graphing.graph_reward_per_timestep(data, graphing_window, evaluate_policy_window,
+                                       name='Taxicab',
+                                       x_label='Decision Stages',
+                                       y_label='Average Epoch Return',
+                                       error_bars='st_error',
+                                       labels=[
+                                           'No Onboarding',
+                                           #                                     'Generic Onboarding',
+                                           #                                     'Specific Onboarding',
+                                           'Eigenoptions',
+                                           'Louvain',
+                                           'Betweenness',
+                                           'Primitives'
+                                       ])
+    exit()
+
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
+                              option_onboarding, taxicab,
+                              training_timesteps, num_agents, evaluate_policy_window,
+                              True, total_evaluation_steps,
+                              continue_training=True, progress_bar=True)
+    exit()
+
+    train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent.json', taxicab,
+                             training_timesteps, num_agents, evaluate_policy_window,
+                             True, total_evaluation_steps,
+                             continue_training=False,
+                             progress_bar=True)
+    exit()
+
+    train_q_learning_agent(taxicab,
+                           training_timesteps, num_agents,
+                           continue_training=False,
+                           progress_bar=True,
+                           all_actions_valid=False,
+                           total_eval_steps=total_evaluation_steps)
     exit()
 
     state_transition_graph, preparedness_subgoal_graph, stg_values = (
@@ -2300,13 +2344,6 @@ if __name__ == "__main__":
     louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
     louvain_agent.train_options_value_iteration(0.001, lavaflow, 1, True, True)
     louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
-    exit()
-
-    train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent.json', lavaflow,
-                             training_timesteps, num_agents, evaluate_policy_window,
-                             True, total_evaluation_steps,
-                             continue_training=False,
-                             progress_bar=True)
     exit()
 
     train_preparedness_agents(filenames['agents'] + "/preparedness_base_agent.json",

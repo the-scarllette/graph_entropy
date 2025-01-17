@@ -442,17 +442,6 @@ class PreparednessAgent(OptionsAgent):
                 return True
         return False
 
-    def get_state_node(self, state: np.ndarray) -> str:
-        state_str = np.array2string(state.astype(self.state_dtype))
-        try:
-            node = self.state_node_lookup[state_str]
-        except KeyError:
-            for node, values in self.state_transition_graph.nodes(data=True):
-                if state_str == values['state']:
-                    break
-            self.state_node_lookup[state_str] = node
-        return node
-
     def get_available_options(self, state: np.ndarray, possible_actions: None | List[int]=None) -> List[str]:
         state_str = np.array2string(state.astype(self.state_dtype))
         available_options = []
@@ -495,6 +484,17 @@ class PreparednessAgent(OptionsAgent):
 
 
         return available_options
+
+    def get_state_node(self, state: np.ndarray) -> str:
+        state_str = np.array2string(state.astype(self.state_dtype))
+        try:
+            node = self.state_node_lookup[state_str]
+        except KeyError:
+            for node, values in self.state_transition_graph.nodes(data=True):
+                if state_str == values['state']:
+                    break
+            self.state_node_lookup[state_str] = node
+        return node
 
     def get_state_option_values(self, state: np.ndarray, available_options: None | List[Option]=None) -> Dict[str, float]:
         state_str = np.array2string(state.astype(self.state_dtype))
@@ -584,7 +584,7 @@ class PreparednessAgent(OptionsAgent):
                                                                                    self.gamma * gamma_product)
 
         if (not (terminal or self.current_option.terminated(next_state))) and (
-                self.current_option_step < self.max_option_length):
+                self.current_option_step < self.max_option_length and self.max_option_length > np.inf):
             return
 
         option_value = self.get_state_option_values(self.option_start_state)[str(self.current_option_index)]
@@ -683,7 +683,7 @@ class PreparednessAgent(OptionsAgent):
         self.state_node_lookup = agent_save_file['state node lookup']
         self.path_lookup = agent_save_file['path lookup']
         self.state_option_values = agent_save_file['state option values']
-        self.max_option_length = agent_save_file['max option length']
+        # self.max_option_length = agent_save_file['max option length']
         return
 
     def node_to_state(self, node: str) -> np.ndarray:
