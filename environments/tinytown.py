@@ -321,6 +321,9 @@ class TinyTown(Environment):
                             return False
         return True
 
+    def is_terminal(self, state):
+        return self.is_state_terminal(state)
+
     def score_state(self, state):
         has_greenhouse = False
         need_feeding = 0
