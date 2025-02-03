@@ -5,7 +5,7 @@ import numpy as np
 from typing import List
 
 
-def extract_data(folderpath: str, filenames: List[str] | None=None):
+def extract_data(folderpath: str, filenames: List[str] | None=None) -> List[List[List[float]]]:
     data = []
 
     for filename in filenames:
@@ -141,6 +141,50 @@ def graph_average(data, name=None, label=None):
     to_graph = get_averages(data)
 
     graph(to_graph, name=name, label=label)
+    return
+
+
+def graph_reward_per_epoch(data: List[List[List[float]]], graphing_window: int=10, evaluate_timesteps: int=1,
+                           name: str="", labels: None | List[str]=None,
+                           x_label: str="", y_label: str="",
+                           x_lim: None | List[int]=None, y_lim: None | List[int]=None, error_bars: bool=False) -> None:
+    num_agents = len(data)
+    num_samples = min([len(agent_data) for agent_data in data])
+    n = min([len(agent_data[i]) for agent_data in data for i in range(num_samples)])
+
+    adjusted_data = [[[] for _ in range(num_samples)] for _ in range(num_agents)]
+    for i in range(n):
+        all_average = sum([data[agent][sample][i] for agent in range(num_agents)
+                           for sample in range(num_samples)])
+        all_average /= (num_samples * num_agents)
+
+        for sample in range(num_samples):
+            sample_average = sum([data[agent][sample][i] for agent in range(num_agents)])
+            sample_average /= num_agents
+
+            for agent in range(num_agents):
+                adjusted_data[agent][sample].append(data[agent][sample][i] + all_average - sample_average)
+
+    averaged_data = list(map(get_averages, adjusted_data))
+    windowed_data = list(map(lambda x: get_reward_per_timestep(x, graphing_window), averaged_data))
+    len_windowed_data = int(np.floor(n / graphing_window))
+
+    fill_data = None
+    if error_bars:
+        error_values = [get_standard_error(adjusted_data[i], averaged_data[i]) for i in range(num_agents)]
+        windowed_error = list(map(lambda x: get_reward_per_timestep(x, graphing_window), error_values))
+        fill_data = []
+        for i in range(num_agents):
+            bottom_st = [windowed_data[i][j] - windowed_error[i][j] for j in range(len_windowed_data)]
+            top_st = [windowed_data[i][j] + windowed_error[i][j] for j in range(len_windowed_data)]
+            fill_data.append([bottom_st, top_st])
+
+    x = [i * graphing_window for i in range(1, len_windowed_data + 1)]
+    x = [i * evaluate_timesteps for i in x]
+
+    graph_multiple(windowed_data, x,
+                   name=name, labels=labels, x_label=x_label, y_label=y_label,
+                   xlim=x_lim, ylim=y_lim, fill_data=fill_data)
     return
 
 
