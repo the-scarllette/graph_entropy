@@ -1359,7 +1359,7 @@ def run_epoch(env: Environment,
         next_state, reward, done, _ = env.step(action)
 
         if not all_actions_valid:
-            current_possible_actions = env.get_possible_actions(state)
+            current_possible_actions = env.get_possible_actions(next_state)
 
         agent.learn(state, action, reward, next_state, done,
                     current_possible_actions)
@@ -2183,12 +2183,12 @@ if __name__ == "__main__":
     max_num_hops = 4
     num_agents = 3
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
-    total_evaluation_steps = 100
+    total_evaluation_steps = 35
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 1_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 50_000
+    training_timesteps = 200_000
 
     # Graph Odering:
     # None Onboarding
@@ -2205,6 +2205,32 @@ if __name__ == "__main__":
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent.json', tinytown,
+                             training_timesteps, num_agents, evaluate_policy_window,
+                             False, total_evaluation_steps,
+                             continue_training=False,
+                             progress_bar=True)
+    exit()
+
+    eigenoptions_agent = EigenOptionAgent(adj_matrix, state_transition_graph,
+                                          0.9, 0.15, 0.9,
+                                          tinytown.possible_actions,
+                                          tinytown.state_dtype, tinytown.state_shape,
+                                          64)
+    eigenoptions_agent.load(filenames['agents'] + '/eigenoptions_base_agent.json')
+    eigenoptions_agent.train_options(tinytown, options_training_timesteps,
+                                     False, True)
+    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
+    exit()
+
+    louvain_agent = LouvainAgent(tinytown.possible_actions, state_transition_graph,
+                                 tinytown.state_dtype, tinytown.state_shape,
+                                 0.9, 0.15, 0.9)
+    louvain_agent.apply_louvain(return_aggregate_graphs=True, graph_save_path=filenames['state transition graph'])
+    louvain_agent.create_options()
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+    exit()
 
     print(tinytown.environment_name + " preparedness training options")
     preparedness_agent = PreparednessAgent(tinytown.possible_actions,
@@ -2320,13 +2346,6 @@ if __name__ == "__main__":
     nx.set_node_attributes(state_transition_graph, stg_values)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     print(taxicab.environment_name + " preparedness hops 1 - 4")
-    exit()
-
-    train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent.json', taxicab,
-                             training_timesteps, num_agents, evaluate_policy_window,
-                             True, total_evaluation_steps,
-                             continue_training=False,
-                             progress_bar=True)
     exit()
 
     train_q_learning_agent(taxicab,
