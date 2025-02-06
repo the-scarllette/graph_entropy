@@ -220,7 +220,7 @@ def graph_reward_per_timestep(data, window=10, evaluate_window=1, name=None, lab
 
 
 def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=None, xlim=None, ylim=None,
-                   fill_data=None):
+                   fill_data=None, colour: None | List[str]=None):
     plt.style.use('ggplot')
 
     data_len = len(data)

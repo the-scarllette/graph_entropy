@@ -1417,8 +1417,8 @@ def train_betweenness_agents(base_agent_save_path: str,
         existing_agents_index = len(all_agent_training_returns)
         num_agents += existing_agents_index
         for i in range(existing_agents_index, num_agents):
-            all_agent_returns[i] = []
-            all_agent_training_returns[i] = []
+            all_agent_returns[str(i)] = []
+            all_agent_training_returns[str(i)] = []
         if not continue_training:
             agent_start_index = existing_agents_index
 
@@ -1507,8 +1507,8 @@ def train_eigenoption_agents(base_agent_save_path,
         existing_agents_index = len(all_agent_training_returns)
         num_agents += existing_agents_index
         for i in range(existing_agents_index, num_agents):
-            all_agent_returns[i] = []
-            all_agent_training_returns[i] = []
+            all_agent_returns[str(i)] = []
+            all_agent_training_returns[str(i)] = []
         if not continue_training:
             agent_start_index = existing_agents_index
 
@@ -1693,8 +1693,8 @@ def train_preparedness_agents(base_agent_save_path: str,
         existing_agents_index = len(all_agent_training_returns)
         num_agents += existing_agents_index
         for i in range(existing_agents_index, num_agents):
-            all_agent_returns[i] = []
-            all_agent_training_returns[i] = []
+            all_agent_returns[str(i)] = []
+            all_agent_training_returns[str(i)] = []
         if not continue_training:
             agent_start_index = existing_agents_index
 
@@ -1771,8 +1771,8 @@ def train_q_learning_agent(environment: Environment,
         existing_agents_index = len(all_agent_training_returns)
         num_agents += existing_agents_index
         for i in range(existing_agents_index, num_agents):
-            all_agent_returns[i] = []
-            all_agent_training_returns[i] = []
+            all_agent_returns[str(i)] = []
+            all_agent_training_returns[str(i)] = []
         if not continue_training:
             agent_start_index = existing_agents_index
 
@@ -1858,22 +1858,22 @@ if __name__ == "__main__":
     max_num_hops = 4
     num_agents = 3
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
-    total_evaluation_steps = 35
+    total_evaluation_steps = 50
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 1_000_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 200_000
+    training_timesteps = 50_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
 
-    # Graph Odering:
-    # None Onboarding
-    # Generic
-    # Specific
-    # Eigenoptions
-    # Louvain
-    # Betweenness
-    # Primitives
+    # Graph Ordering + Colouring:
+    # None Onboarding - 332288
+    # Generic - 117733
+    # Specific - 88CCEE
+    # Eigenoptions - DDCC77
+    # Louvain - CC6677
+    # Betweenness - AA4499
+    # Primitives - 555555
 
     filenames = get_filenames(lavaflow)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
@@ -1881,6 +1881,15 @@ if __name__ == "__main__":
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    train_q_learning_agent(lavaflow,
+                           training_timesteps, num_agents,
+                           continue_training=False,
+                           progress_bar=True,
+                           overwrite_existing_agents=False,
+                           all_actions_valid=True,
+                           total_eval_steps=total_evaluation_steps)
+    exit()
 
     data = graphing.extract_data(filenames['results'],
                                  [
@@ -2029,14 +2038,6 @@ if __name__ == "__main__":
     nx.set_node_attributes(state_transition_graph, stg_values)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     print(taxicab.environment_name + " preparedness hops 1 - 4")
-    exit()
-
-    train_q_learning_agent(taxicab,
-                           training_timesteps, num_agents,
-                           continue_training=False,
-                           progress_bar=True,
-                           all_actions_valid=False,
-                           total_eval_steps=total_evaluation_steps)
     exit()
 
     train_louvain_agents(lavaflow, lavaflow.environment_name,
