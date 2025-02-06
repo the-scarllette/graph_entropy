@@ -1376,6 +1376,7 @@ def train_betweenness_agents(base_agent_save_path: str,
                              all_actions_valid=True,
                              total_eval_steps=np.inf,
                              continue_training=False,
+                             overwrite_existing_agents=True,
                              alpha=0.9, epsilon=0.1, gamma=0.9, subgoal_distance: int=30,
                              progress_bar=False):
     all_agent_training_returns = {str(i): [] for i in range(num_agents)}
@@ -1389,11 +1390,27 @@ def train_betweenness_agents(base_agent_save_path: str,
         if not os.path.isdir(directory):
             os.mkdir(directory)
 
-    if continue_training:
-        with open(agent_results_file, 'r') as f:
-            all_agent_returns = json.load(f)
-        with open(agent_training_results_file, 'r') as f:
-            all_agent_training_returns = json.load(f)
+    existing_results = False
+    if continue_training or not overwrite_existing_agents:
+        if os.path.exists(agent_results_file):
+            existing_results = True
+            with open(agent_results_file, 'r') as f:
+                all_agent_returns = json.load(f)
+        if os.path.exists(agent_training_results_file):
+            existing_results = True
+            with open(agent_training_results_file, 'r') as f:
+                all_agent_training_returns = json.load(f)
+
+    agent_start_index = 0
+    existing_agents_index = 0
+    if (not overwrite_existing_agents) and existing_results:
+        existing_agents_index = len(all_agent_training_returns)
+        num_agents += existing_agents_index
+        for i in range(existing_agents_index, num_agents):
+            all_agent_returns[i] = []
+            all_agent_training_returns[i] = []
+        if not continue_training:
+            agent_start_index = existing_agents_index
 
     base_agent = BetweennessAgent(environment.possible_actions,
                                   alpha, epsilon, gamma,
@@ -1402,7 +1419,7 @@ def train_betweenness_agents(base_agent_save_path: str,
     base_agent.load(filenames['agents'] + '/' + base_agent_save_path)
 
     # Training Agent
-    for i in range(num_agents):
+    for i in range(agent_start_index, num_agents):
         if progress_bar:
             print("Training betweenness agent " + str(i))
         agent_filename = '/betweenness_agent_' + str(i) + '.json'
@@ -1410,7 +1427,7 @@ def train_betweenness_agents(base_agent_save_path: str,
                                  alpha, epsilon, gamma,
                                  environment.state_shape, environment.state_dtype,
                                  stg, subgoal_distance)
-        if continue_training:
+        if continue_training and (i < existing_agents_index):
             agent.load(filenames['agents'] + '/' + agent_filename)
         else:
             agent.copy_agent(base_agent)
@@ -1437,138 +1454,17 @@ def train_betweenness_agents(base_agent_save_path: str,
     return
 
 
-def train_dads_agent(environment: Environment,
-                     results_directory,
-                     num_skills,
-                     training_timesteps, num_agents, evaluate_policy_window=10,
-                     skill_training_cycles=10, skill_training_steps=1000,
-                     skill_length=10, model_layers=[128, 128],
-                     all_actions_valid=True,
-                     progress_bar=False, progress_bar_prefix=None):
-    if progress_bar_prefix is None:
-        progress_bar_prefix = ""
-
-    directories_to_make = [agent_directory, results_directory]
-    for directory in directories_to_make:
-        if not os.path.isdir(directory):
-            os.mkdir(directory)
-
-    base_dads_agent = DADSAgent(environment.possible_actions, environment.state_shape, num_skills, skill_length,
-                                model_layers)
-
-    # Train Skills
-    start_skills_time = time.time()
-    if progress_bar:
-        print("Training DADS skills " + progress_bar_prefix)
-    base_dads_agent.learn_skills(environment, skill_training_cycles, skill_training_steps, all_actions_valid)
-    end_skills_time = time.time()
-
-    # Train agent
-    all_agent_training_returns = {}
-    all_agent_returns = {}
-    agent_training_results_file = 'dads training returns'
-    agent_results_file = 'dads returns'
-    agent_training_times = [0 for _ in range(num_agents)]
-    for i in range(num_agents):
-        agent_start_time = time.time()
-        if progress_bar:
-            print("Training DADS agent " + progress_bar_prefix)
-        dads_agent = copy.deepcopy(base_dads_agent)
-        dads_agent, training_returns, episode_returns = train_agent(environment, dads_agent,
-                                                                    training_timesteps, evaluate_policy_window,
-                                                                    all_actions_valid,
-                                                                    total_eval_steps=total_evaluation_steps,
-                                                                    progress_bar=progress_bar)
-        all_agent_training_returns[i] = training_returns
-        all_agent_returns[i] = episode_returns
-        agent_training_times[i] = time.time() - agent_start_time
-
-    # Saving Results
-    with open(results_directory + '/' + agent_training_results_file, 'w') as f:
-        json.dump(all_agent_training_returns, f)
-    with open(results_directory + '/' + agent_results_file, 'w') as f:
-        json.dump(all_agent_returns, f)
-
-    print("Skill Training Time: " + str(end_skills_time - start_skills_time))
-    print("Agent Training Times: ")
-    for i in range(num_agents):
-        print("Agent " + str(i) + ": " + str(agent_training_times[i]))
-    print("Average Agent Training Time: " + str(sum(agent_training_times) / num_agents))
-
-    return
-
-
-def train_diayn_agent(environment: Environment,
-                      results_directory,
-                      num_skills,
-                      training_timesteps, num_agents, evaluate_policy_window=10,
-                      skill_training_episodes=10, skill_training_max_steps_per_episode=1000,
-                      skill_length=10, model_layers=[128, 128],
-                      all_actions_valid=True,
-                      progress_bar=False, progress_bar_prefix=None):
-    if progress_bar_prefix is None:
-        progress_bar_prefix = ""
-
-    directories_to_make = [agent_directory, results_directory]
-    for directory in directories_to_make:
-        if not os.path.isdir(directory):
-            os.mkdir(directory)
-
-    base_diayn_agent = DIAYNAgent(environment.possible_actions, environment.state_shape,
-                                  num_skills, skill_length, model_layers)
-
-    # Train Skills
-    start_skills_time = time.time()
-    if progress_bar:
-        print("Training DIAYN skills " + progress_bar_prefix)
-    base_diayn_agent.learn_skills(environment, skill_training_episodes, skill_training_max_steps_per_episode,
-                                  all_actions_valid)
-    end_skills_time = time.time()
-
-    # Train Agent
-    all_agent_training_returns = {}
-    all_agent_returns = {}
-    agent_training_results_file = 'diayn training returns'
-    agent_results_file = 'diayn returns'
-    agent_training_times = [0 for _ in range(num_agents)]
-    for i in range(num_agents):
-        agent_start_time = time.time()
-        if progress_bar:
-            print("Training DIAYN agent " + progress_bar_prefix)
-        diayn_agent = copy.deepcopy(base_diayn_agent)
-        dads_agent, training_returns, episode_returns = train_agent(environment, diayn_agent,
-                                                                    training_timesteps, evaluate_policy_window,
-                                                                    all_actions_valid,
-                                                                    total_eval_steps=total_evaluation_steps,
-                                                                    progress_bar=progress_bar)
-        all_agent_training_returns[i] = training_returns
-        all_agent_returns[i] = episode_returns
-        agent_training_times[i] = time.time() - agent_start_time
-
-        # Saving Results
-        with open(results_directory + '/' + agent_training_results_file, 'w') as f:
-            json.dump(all_agent_training_returns, f)
-        with open(results_directory + '/' + agent_results_file, 'w') as f:
-            json.dump(all_agent_returns, f)
-
-    print("Skill Training Time: " + str(end_skills_time - start_skills_time))
-    print("Agent Training Times: ")
-    for i in range(num_agents):
-        print("Agent " + str(i) + ": " + str(agent_training_times[i]))
-    print("Average Agent Training Time: " + str(sum(agent_training_times) / num_agents))
-    return
-
-
 def train_eigenoption_agents(base_agent_save_path,
                              environment: Environment,
                              training_timesteps, num_agents, evaluate_policy_window,
                              all_actions_valid=True,
                              total_eval_steps=np.inf,
                              continue_training=False,
+                             overwrite_existing_agents=False,
                              num_options=64, alpha=0.9, epsilon=0.1, gamma=0.9,
                              progress_bar=False):
-    all_agent_training_returns = {}
-    all_agent_returns = {}
+    all_agent_training_returns = {str(i): [] for i in range(num_agents)}
+    all_agent_returns = {str(i): [] for i in range(num_agents)}
     filenames = get_filenames(environment)
     adjacency_matrix_filename = filenames['adjacency matrix']
     agent_directory = filenames['agents']
@@ -1584,16 +1480,32 @@ def train_eigenoption_agents(base_agent_save_path,
     if not os.path.isdir(agent_directory):
         os.mkdir(agent_directory)
 
-    if continue_training:
-        with open(results_directory + '/' + agent_results_file, 'r') as f:
-            all_agent_returns = json.load(f)
-        with open(results_directory + '/' + agent_training_results_file, 'r') as f:
-            all_agent_training_returns = json.load(f)
+    existing_results = False
+    if continue_training or not overwrite_existing_agents:
+        if os.path.exists(agent_results_file):
+            existing_results = True
+            with open(agent_results_file, 'r') as f:
+                all_agent_returns = json.load(f)
+        if os.path.exists(agent_training_results_file):
+            existing_results = True
+            with open(agent_training_results_file, 'r') as f:
+                all_agent_training_returns = json.load(f)
+
+    agent_start_index = 0
+    existing_agents_index = 0
+    if (not overwrite_existing_agents) and existing_results:
+        existing_agents_index = len(all_agent_training_returns)
+        num_agents += existing_agents_index
+        for i in range(existing_agents_index, num_agents):
+            all_agent_returns[i] = []
+            all_agent_training_returns[i] = []
+        if not continue_training:
+            agent_start_index = existing_agents_index
 
     adjacency_matrix = sparse.load_npz(adjacency_matrix_filename)
 
     # Training Agent
-    for i in range(num_agents):
+    for i in range(agent_start_index, num_agents):
         if progress_bar:
             print("Training eigenoptions agent " + str(i))
 
@@ -1603,7 +1515,7 @@ def train_eigenoption_agents(base_agent_save_path,
                                  environment.possible_actions,
                                  environment.state_dtype,
                                  num_options)
-        if continue_training:
+        if continue_training and (i < existing_agents_index):
             agent.load(agent_directory + '/eigenoption_agent_' + str(i) + '.json')
         else:
             agent.load(base_agent_save_path)
@@ -1619,12 +1531,8 @@ def train_eigenoption_agents(base_agent_save_path,
                                                                    copy_agent=True,
                                                                    progress_bar=progress_bar)
 
-        if continue_training:
-            all_agent_training_returns[str(i)] += agent_training_returns
-            all_agent_returns[str(i)] += agent_returns
-        else:
-            all_agent_training_returns[str(i)] = agent_training_returns
-            all_agent_returns[str(i)] = agent_returns
+        all_agent_training_returns[str(i)] += agent_training_returns
+        all_agent_returns[str(i)] += agent_returns
 
         # Save results
         with open(results_directory + '/' + agent_training_results_file, 'w') as f:
@@ -1637,13 +1545,15 @@ def train_eigenoption_agents(base_agent_save_path,
 def train_louvain_agents(environment: Environment, file_name_prefix,
                          agent_directory, results_directory,
                          training_timesteps, num_agents, evaluate_policy_window=10,
-                         agent_load_file=None,
                          initial_load_path: str | None = None,
                          all_actions_valid=False,
                          total_eval_steps=np.inf,
+                         overwrite_existing_agents=False,
                          alpha=0.9, epsilon=0.1, gamma=0.9,
                          state_dtype=int, state_shape=None,
                          progress_bar=False):
+    all_agent_training_returns = {str(i): [] for i in range(num_agents)}
+    all_agent_returns = {str(i): [] for i in range(num_agents)}
     stg_filename = file_name_prefix + '_stg.gexf'
     agent_training_results_file = 'louvain agent training returns'
     agent_results_file = 'louvain agent returns'
@@ -1669,10 +1579,29 @@ def train_louvain_agents(environment: Environment, file_name_prefix,
         initial_load_path = environment.environment_name + "_agents/initial_louvain_agent.json"
         initial_agent.save(initial_load_path)
 
+    existing_results = False
+    if not overwrite_existing_agents:
+        if os.path.exists(agent_results_file):
+            existing_results = True
+            with open(agent_results_file, 'r') as f:
+                all_agent_returns = json.load(f)
+        if os.path.exists(agent_training_results_file):
+            existing_results = True
+            with open(agent_training_results_file, 'r') as f:
+                all_agent_training_returns = json.load(f)
+
+    agent_start_index = 0
+    if (not overwrite_existing_agents) and existing_results:
+        agent_start_index = len(all_agent_training_returns)
+        num_agents += agent_start_index
+        for i in range(agent_start_index, num_agents):
+            all_agent_returns[i] = []
+            all_agent_training_returns[i] = []
+
     agent = LouvainAgent(environment.possible_actions, stg, state_dtype, state_shape,
                          alpha, epsilon, gamma)
 
-    for i in range(num_agents):
+    for i in range(agent_start_index, num_agents):
         if progress_bar:
             print("Training Louvain Agent " + str(i))
         agent.load(initial_load_path)
@@ -1696,73 +1625,16 @@ def train_louvain_agents(environment: Environment, file_name_prefix,
 
     return
 
-
-def train_multi_level_preparedness_agents(environment: Environment, file_name_prefix,
-                                          agent_directory, results_directory,
-                                          training_timesteps, num_agents, evaluate_policy_window=10,
-                                          agent_load_file=None,
-                                          initial_agent=None,
-                                          all_actions_valid=False,
-                                          total_eval_steps=np.inf,
-                                          alpha=0.9, epsilon=0.1, gamma=0.9,
-                                          state_dtype=int,
-                                          progress_bar=False):
-    stg_filename = file_name_prefix + '_stg.gexf'
-    agent_training_results_file = 'preparedness multi level agent training returns'
-    agent_results_file = 'preparedness multi level agent returns'
-    agent_save_directory = "preparedness_multi_level_agents"
-
-    stg = nx.read_gexf(stg_filename)
-
-    directories_to_make = [agent_directory, results_directory]
-    for directory in directories_to_make:
-        if not os.path.isdir(directory):
-            os.mkdir(directory)
-
-    if not os.path.isdir(agent_directory + '/' + agent_save_directory):
-        os.mkdir(agent_directory + '/' + agent_save_directory)
-
-    preparedness_subgoals = get_preparedness_subgoals(environment, beta=0.5)
-
-    all_agent_training_returns = {}
-    all_agent_returns = {}
-    if initial_agent is None:
-        initial_agent = MultiLevelGoalAgent(environment.possible_actions,
-                                            alpha, epsilon, gamma,
-                                            preparedness_subgoals, stg,
-                                            state_dtype=state_dtype)
-    for i in range(num_agents):
-        if progress_bar:
-            print("Training agent " + str(i))
-
-        agent = copy.deepcopy(initial_agent)
-        if agent_load_file is not None:
-            agent.load_policy(agent_load_file)
-        agent, agent_training_returns, agent_returns = train_agent(environment, agent,
-                                                                   training_timesteps, evaluate_policy_window,
-                                                                   all_actions_valid,
-                                                                   total_eval_steps=total_eval_steps,
-                                                                   progress_bar=progress_bar)
-
-        # Saving result
-        all_agent_training_returns[i] = agent_training_returns
-        all_agent_returns[i] = agent_returns
-        with open(results_directory + '/' + agent_training_results_file, 'w') as f:
-            json.dump(all_agent_training_returns, f)
-        with open(results_directory + '/' + agent_results_file, 'w') as f:
-            json.dump(all_agent_returns, f)
-
-    return
-
 def train_preparedness_agents(base_agent_save_path: str,
                               option_onboarding: str,
                               environment: Environment,
                               training_timesteps: int, num_agents: int, evaluate_policy_window: int=10,
                               all_actions_valid: bool=True,
                               total_eval_steps: int=np.inf,
+                              continue_training: bool=False,
+                              overwrite_existing_agents=False,
                               alpha: float=0.9, epsilon: float=0.1, gamma: float=0.9,
                               max_option_length: int=np.inf, max_hierarchy_height: None | int=None,
-                              continue_training: bool=False,
                               progress_bar: bool=False) -> None:
     agent_results_file = 'preparedness_agent_returns_' + option_onboarding + '_onboarding.json'
     agent_training_results_file = 'preparedness_agent_training_returns_' + option_onboarding + '_onboarding.json'
@@ -1794,13 +1666,29 @@ def train_preparedness_agents(base_agent_save_path: str,
 
     all_agent_returns = {str(i): [] for i in range(num_agents)}
     all_agent_training_returns = {str(i): [] for i in range(num_agents)}
-    if continue_training:
-        with open(filenames['results'] + '/' + agent_results_file, 'r') as f:
-            all_agent_returns = json.load(f)
-        with open(filenames['results'] + '/' + agent_training_results_file, 'r') as f:
-            all_agent_training_returns = json.load(f)
+    existing_results = False
+    if continue_training or not overwrite_existing_agents:
+        if os.path.exists(agent_results_file):
+            existing_results = True
+            with open(agent_results_file, 'r') as f:
+                all_agent_returns = json.load(f)
+        if os.path.exists(agent_training_results_file):
+            existing_results = True
+            with open(agent_training_results_file, 'r') as f:
+                all_agent_training_returns = json.load(f)
 
-    for i in range(num_agents):
+    agent_start_index = 0
+    existing_agents_index = 0
+    if (not overwrite_existing_agents) and existing_results:
+        existing_agents_index = len(all_agent_training_returns)
+        num_agents += existing_agents_index
+        for i in range(existing_agents_index, num_agents):
+            all_agent_returns[i] = []
+            all_agent_training_returns[i] = []
+        if not continue_training:
+            agent_start_index = existing_agents_index
+
+    for i in range(agent_start_index, num_agents):
         i_str = str(i)
         if progress_bar:
             print("Training Preparedness agent " + option_onboarding + " onboarding: " +
@@ -1808,9 +1696,12 @@ def train_preparedness_agents(base_agent_save_path: str,
 
         agent_save_path = 'preparedness_agent_' + option_onboarding + '_' + i_str
 
-        training_agent.copy_agent(base_agent)
         training_agent.specific_onboarding_possible = True
         training_agent.set_onboarding(option_onboarding)
+        if continue_training and (i < existing_agents_index):
+            training_agent.load(agent_save_path)
+        else:
+            training_agent.copy_agent(base_agent)
         training_agent, agent_training_returns, agent_returns = train_agent(environment, training_agent,
                                                                             training_timesteps,
                                                                             evaluate_policy_window,
@@ -1832,96 +1723,56 @@ def train_preparedness_agents(base_agent_save_path: str,
     return
 
 
-def train_preparedness_options(environment: Environment, file_name_prefix, training_timesteps,
-                               all_actions_valid=True, compressed_matrix=False,
-                               min_num_hops=1, max_num_hops=5,
-                               options_save_directory=None,
-                               alpha=0.9, epsilon=0.1, gamma=0.9, beta=None,
-                               progress_bar=False, progress_bar_prefix=None):
-    stg_values_filename = file_name_prefix + '_stg_values.json'
-    with open(stg_values_filename, 'r') as f:
-        preparedness_values = json.load(f)
-
-    adj_matrix = None
-    stg = None
-    state_indexer = None
-
-    if compressed_matrix:
-        adj_matrix_filename = file_name_prefix + '_adj_matrix.txt.npz'
-        adj_matrix = sparse.load_npz(adj_matrix_filename)
-
-        state_indexer = {preparedness_values[index]['state']: index
-                         for index in preparedness_values}
-    else:
-        stg_filename = file_name_prefix + '_stg.gexf'
-        stg = nx.read_gexf(stg_filename)
-
-    if (options_save_directory is not None) and (not os.path.isdir(options_save_directory)):
-        os.mkdir(options_save_directory)
-
-    subgoals_with_options = []
-    for num_hops in range(min_num_hops, max_num_hops + 1):
-        if progress_bar:
-            print("Training Options for " + str(num_hops) + " hops")
-        key = 'preparedness - ' + str(num_hops) + ' hops '
-        if beta is not None:
-            key += '- beta = ' + str(beta) + ' subgoal'
-        else:
-            key += 'subgoal'
-        subgoals = [node for node in preparedness_values
-                    if preparedness_values[node][key]]
-
-        for subgoal in subgoals:
-            if subgoal in subgoals_with_options:
-                continue
-            save_path = None
-            if options_save_directory is not None:
-                save_path = options_save_directory + "/subgoal - " + str(subgoal)
-            if progress_bar_prefix is not None:
-                print(progress_bar_prefix)
-            option = generate_option_to_goal(environment, subgoal,
-                                             training_timesteps,
-                                             stg, adj_matrix, state_indexer,
-                                             all_actions_valid,
-                                             alpha, epsilon, gamma,
-                                             progress_bar,
-                                             save_path=save_path)
-            subgoals_with_options.append(subgoal)
-
-    return
-
-
 def train_q_learning_agent(environment: Environment,
                            training_timesteps, num_agents, evaluate_policy_window=10,
                            all_actions_valid=True,
                            total_eval_steps=np.inf,
                            continue_training=False,
+                           overwrite_existing_agents=False,
                            alpha=0.9, epsilon=0.1, gamma=0.9,
                            intrinsic_reward=None, intrinsic_reward_lambda=None,
                            file_save_name='q_learning',
                            progress_bar=False):
-    all_epoch_returns = {str(i): [] for i in range(num_agents)}
-    all_training_returns = {str(i): [] for i in range(num_agents)}
+    all_agent_returns = {str(i): [] for i in range(num_agents)}
+    all_agent_training_returns = {str(i): [] for i in range(num_agents)}
     filenames = get_filenames(environment)
+    agent_results_file = filenames['results'] + '/' + file_save_name + '_epoch_returns.json'
+    agent_training_results_file = filenames['results'] + '/' + file_save_name + '_training_returns.json'
 
     directories_to_make = [filenames['agents'], filenames['results']]
     for directory in directories_to_make:
         if not os.path.isdir(directory):
             os.mkdir(directory)
 
-    if continue_training:
-        with open(filenames['results'] + '/' + file_save_name + '_epoch_returns.json', 'r') as f:
-            all_epoch_returns = json.load(f)
-        with open(filenames['results'] + '/' + file_save_name + '_training_returns.json', 'r') as f:
-            all_training_returns = json.load(f)
+    existing_results = False
+    if continue_training or not overwrite_existing_agents:
+        if os.path.exists(agent_results_file):
+            existing_results = True
+            with open(agent_results_file, 'r') as f:
+                all_agent_returns = json.load(f)
+        if os.path.exists(agent_training_results_file):
+            existing_results = True
+            with open(agent_training_results_file, 'r') as f:
+                all_agent_training_returns = json.load(f)
 
-    for i in range(num_agents):
+    agent_start_index = 0
+    existing_agents_index = 0
+    if (not overwrite_existing_agents) and existing_results:
+        existing_agents_index = len(all_agent_training_returns)
+        num_agents += existing_agents_index
+        for i in range(existing_agents_index, num_agents):
+            all_agent_returns[i] = []
+            all_agent_training_returns[i] = []
+        if not continue_training:
+            agent_start_index = existing_agents_index
+
+    for i in range(agent_start_index, num_agents):
         if progress_bar:
             print("Training Q-Learning Agent " + str(i))
 
         agent = QLearningAgent(environment.possible_actions, alpha, epsilon, gamma,
                                intrinsic_reward, intrinsic_reward_lambda)
-        if continue_training:
+        if continue_training and (i < existing_agents_index):
             agent.load_policy(filenames['agents'] + '/q_learning_agent_' + str(i) + '.json')
         agent, training_returns, epoch_returns = train_agent(environment, agent, training_timesteps,
                                                              evaluate_policy_window,
@@ -1932,199 +1783,13 @@ def train_q_learning_agent(environment: Environment,
                                                              True,
                                                              progress_bar)
 
-        all_epoch_returns[str(i)] += epoch_returns
-        all_training_returns[str(i)] += training_returns
+        all_agent_returns[str(i)] += epoch_returns
+        all_agent_training_returns[str(i)] += training_returns
 
         with open(filenames['results'] + '/' + file_save_name + '_epoch_returns.json', 'w') as f:
-            json.dump(all_epoch_returns, f)
+            json.dump(all_agent_returns, f)
         with open(filenames['results'] + '/' + file_save_name + '_training_returns.json', 'w') as f:
-            json.dump(all_training_returns, f)
-
-    return
-
-
-def train_sac_agent(environment: Environment, state_shape,
-                    results_directory,
-                    training_timesteps, num_agents, evaluate_policy_window=10,
-                    all_actions_valid=True,
-                    total_eval_steps=np.inf,
-                    file_save_name='sac',
-                    progress_bar=False):
-    all_episode_returns = {}
-    all_training_returns = {}
-    directories_to_make = [results_directory]
-
-    for directory in directories_to_make:
-        if not os.path.isdir(directory):
-            os.mkdir(directory)
-
-    for i in range(num_agents):
-        if progress_bar:
-            print("Training SAC Agent " + str(i))
-
-        agent = SoftActorCritic(environment.possible_actions, state_shape,
-                                model_layers=[8, 8],
-                                update_steps=10)
-        agent, training_returns, episode_returns = train_agent(env, agent,
-                                                               training_timesteps, evaluate_policy_window,
-                                                               all_actions_valid=False,
-                                                               total_eval_steps=total_evaluation_steps,
-                                                               progress_bar=True)
-
-        all_episode_returns[i] = episode_returns
-        all_training_returns[i] = training_returns
-
-        with open(results_directory + '/' + file_save_name + '_episode_returns.json', 'w') as f:
-            json.dump(all_episode_returns, f)
-        with open(results_directory + '/' + file_save_name + '_training_returns.json', 'w') as f:
-            json.dump(all_training_returns, f)
-
-    return
-
-
-def train_subgoal_agent(environment: Environment, keys, file_name_prefix,
-                        options_directory, agent_directory, results_directory,
-                        training_timesteps, num_agents, evaluate_policy_window=10,
-                        all_actions_valid=True,
-                        total_eval_steps=np.inf,
-                        alpha=0.9, epsilon=0.1, gamma=0.9,
-                        progress_bar=False,
-                        compressed_matrix=False):
-    stg_values_filename = file_name_prefix + '_stg_values.json'
-    with open(stg_values_filename, 'r') as f:
-        stg_values = json.load(f)
-
-    adj_matrix = None
-    stg = None
-    state_indexer = None
-
-    if compressed_matrix:
-        adj_matrix_filename = file_name_prefix + '_adj_matrix.txt.npz'
-        adj_matrix = sparse.load_npz(adj_matrix_filename)
-
-        state_indexer = {stg_values[index]['state']: index
-                         for index in stg_values}
-    else:
-        stg_filename = file_name_prefix + '_stg.gexf'
-        stg = nx.read_gexf(stg_filename)
-
-    directories_to_make = [agent_directory, results_directory]
-    for directory in directories_to_make:
-        if not os.path.isdir(directory):
-            os.mkdir(directory)
-
-    primitive_options = [Option(actions=[possible_action]) for possible_action in environment.possible_actions]
-
-    for key in keys:
-        # Creating Directory
-        dir = agent_directory + '/' + key
-        if not os.path.isdir(dir):
-            os.mkdir(dir)
-
-        # Collect Options
-        options = []
-        has_options = False
-        for node in stg_values:
-            if stg_values[node][key] == 'True':
-                policy = QLearningAgent(environment.possible_actions,
-                                        alpha, epsilon, gamma)
-                try:
-                    policy.load_policy(options_directory + "/subgoal - " + str(node))
-                except FileNotFoundError:
-                    stg_values[node][key] = 'False'
-                    continue
-
-                initiation_func = create_option_goal_initiation_func(node, stg, adj_matrix, state_indexer)
-                option = Option(policy=policy, initiation_func=initiation_func,
-                                terminating_func=lambda x: not initiation_func(x))
-                has_options = True
-                options.append(option)
-
-        if not has_options:
-            print("No options for " + key + ' agent')
-            continue
-        options += primitive_options
-
-        # Training Agents
-        all_agent_training_returns = {}
-        all_agent_returns = {}
-        agent_training_results_file = key + ' training returns'
-        agent_results_file = key + ' returns'
-        for i in range(num_agents):
-            print("Training " + key + " agent " + str(i))
-
-            agent = OptionsAgent(alpha, epsilon, gamma, options)
-            agent, agent_training_returns, agent_returns = train_agent(environment, agent, training_timesteps,
-                                                                       evaluate_policy_window,
-                                                                       all_actions_valid,
-                                                                       agent_save_path=(dir + '/agent ' + str(i)),
-                                                                       total_eval_steps=total_eval_steps,
-                                                                       progress_bar=progress_bar)
-
-            all_agent_training_returns[i] = agent_training_returns
-            all_agent_returns[i] = agent_returns
-
-            # Saving Results
-            with open(results_directory + '/' + agent_training_results_file, 'w') as f:
-                json.dump(all_agent_training_returns, f)
-            with open(results_directory + '/' + agent_results_file, 'w') as f:
-                json.dump(all_agent_returns, f)
-
-    return
-
-
-def train_subgoal_options(environment: Environment, file_name_prefix, training_timesteps,
-                          keys,
-                          all_actions_valid=True, compressed_matrix=False,
-                          options_save_directory=None,
-                          alpha=0.9, epsilon=0.1, gamma=0.9,
-                          progress_bar=False, progress_bar_prefix=None):
-    stg_values_filename = file_name_prefix + '_stg_values.json'
-    with open(stg_values_filename, 'r') as f:
-        stg_values = json.load(f)
-
-    adj_matrix = None
-    stg = None
-    state_indexer = None
-
-    if compressed_matrix:
-        adj_matrix_filename = file_name_prefix + '_adj_matrix.txt.npz'
-        adj_matrix = sparse.load_npz(adj_matrix_filename)
-
-        state_indexer = {stg_values[index]['state']: index
-                         for index in stg_values}
-    else:
-        stg_filename = file_name_prefix + '_stg.gexf'
-        stg = nx.read_gexf(stg_filename)
-
-    if (options_save_directory is not None) and (not os.path.isdir(options_save_directory)):
-        os.mkdir(options_save_directory)
-
-    subgoals_with_options = []
-    for key in keys:
-        if progress_bar:
-            print("Training Options for " + key)
-
-        subgoals = [node for node in stg_values
-                    if stg_values[node][key] == 'True']
-
-        for subgoal in subgoals:
-            if subgoal in subgoals_with_options:
-                continue
-            save_path = None
-            if options_save_directory is not None:
-                save_path = options_save_directory + "/subgoal - " + str(subgoal)
-            if progress_bar_prefix is not None:
-                print(progress_bar_prefix)
-                print(key)
-            option = generate_option_to_goal(environment, subgoal,
-                                             training_timesteps,
-                                             stg, adj_matrix, state_indexer,
-                                             all_actions_valid,
-                                             alpha, epsilon, gamma,
-                                             progress_bar,
-                                             save_path=save_path)
-            subgoals_with_options.append(subgoal)
+            json.dump(all_agent_training_returns, f)
 
     return
 
