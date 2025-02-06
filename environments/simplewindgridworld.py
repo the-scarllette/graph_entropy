@@ -203,8 +203,11 @@ class SimpleWindGridWorld(Environment):
 
         return self.current_state.copy(), reward, self.terminal, None
 
-    def reset(self, start_state=None) -> Any:
+    def reset(self, start_state=None, seed: None|int=None) -> Any:
         self.terminal = False
+
+        if seed is not None:
+            rand.seed(seed)
 
         if start_state is not None:
             self.current_state = start_state.copy()

@@ -1254,6 +1254,7 @@ def train_agent(env: Environment, agent, num_steps,
                     agent.save(agent_save_path)
                     evaluate_agent.load(agent_save_path)
                 epoch_return = run_epoch(evaluate_env, evaluate_agent, total_eval_steps,
+                                         total_steps,
                                          all_actions_valid, progress_bar)
                 epoch_returns.append(epoch_return)
                 window_steps = evaluate_policy_window
@@ -1333,13 +1334,18 @@ def run_episode(env: Environment,
 def run_epoch(env: Environment,
               agent: LearningAgent,
               num_steps: int,
+              seed: None | int=None,
               all_actions_valid: bool=True,
               progress_bar: bool=False):
     current_possible_actions = env.possible_actions
     epoch_return = 0
     total_steps = 0
 
-    state = env.reset()
+    if seed is not None:
+        state = env.reset(seed=seed)
+        seed += 1
+    else:
+        state = env.reset()
     done = False
     if not all_actions_valid:
         current_possible_actions = env.get_possible_actions(state)
@@ -1350,7 +1356,11 @@ def run_epoch(env: Environment,
         if done:
             if num_steps >= np.inf:
                 break
-            state = env.reset()
+            if seed is not None:
+                state = env.reset(seed=seed)
+                seed += 1
+            else:
+                state = env.reset()
             if not all_actions_valid:
                 current_possible_actions = env.get_possible_actions(state)
 

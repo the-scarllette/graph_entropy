@@ -439,7 +439,9 @@ class TaxiCab(Environment):
 
         return (state[4] <= 0) or passenger_at_destination
 
-    def reset(self, start_state=None):
+    def reset(self, start_state=None, seed: None|int=None) -> np.ndarray:
+        if seed is not None:
+            rand.seed(seed)
 
         state_len = 4
         if self.use_fuel:

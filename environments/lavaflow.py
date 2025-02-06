@@ -300,7 +300,10 @@ class LavaFlow(Environment):
         reachable_nodes = nx.descendants(state_graph, self.cord_node_key(i, j))
         return len(reachable_nodes) + 1
 
-    def reset(self, state: np.ndarray | None=None) -> np.ndarray:
+    def reset(self, state: np.ndarray | None=None, seed: None | int=None) -> np.ndarray:
+        if seed is not None:
+            rand.seed(seed)
+
         if state is None:
             self.current_state = self.board.copy()
             self.board_graph = self.build_state_graph()

@@ -212,5 +212,5 @@ class Environment:
     def step(self, action) -> (Any, float, bool, Any):
         return None, 0.0, False, None
 
-    def reset(self, start_state=None) -> Any:
+    def reset(self, start_state=None, seed: None | int=None) -> Any:
         return None

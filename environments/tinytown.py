@@ -410,7 +410,10 @@ class TinyTown(Environment):
 
         return self.board.copy(), self.step_reward, False, None
 
-    def reset(self, start_state=None) -> Any:
+    def reset(self, start_state=None, seed: None|int=None) -> np.ndarray:
+        if seed is not None:
+            rand.seed(seed)
+
         if start_state is not None:
             self.board = start_state.copy()
             self.next_resource = self.board[self.width, self.height]
