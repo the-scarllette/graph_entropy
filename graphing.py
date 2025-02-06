@@ -145,7 +145,7 @@ def graph_average(data, name=None, label=None):
 
 
 def graph_reward_per_epoch(data: List[List[List[float]]], graphing_window: int=10, evaluate_timesteps: int=1,
-                           name: str="", labels: None | List[str]=None,
+                           name: str="", labels: None | List[str]=None, colours: None | List[str]=None,
                            x_label: str="", y_label: str="",
                            x_lim: None | List[int]=None, y_lim: None | List[int]=None, error_bars: bool=False) -> None:
     num_agents = len(data)
@@ -183,7 +183,7 @@ def graph_reward_per_epoch(data: List[List[List[float]]], graphing_window: int=1
     x = [i * evaluate_timesteps for i in x]
 
     graph_multiple(windowed_data, x,
-                   name=name, labels=labels, x_label=x_label, y_label=y_label,
+                   name=name, labels=labels, colours=colours, x_label=x_label, y_label=y_label,
                    xlim=x_lim, ylim=y_lim, fill_data=fill_data)
     return
 
@@ -220,7 +220,7 @@ def graph_reward_per_timestep(data, window=10, evaluate_window=1, name=None, lab
 
 
 def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=None, xlim=None, ylim=None,
-                   fill_data=None, colour: None | List[str]=None):
+                   fill_data=None, colours: None | List[str]=None):
     plt.style.use('ggplot')
 
     data_len = len(data)
@@ -235,18 +235,21 @@ def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=N
     if y_label is not None:
         ax.set_ylabel(y_label)
 
-    if labels is None:
-        for i in range(data_len):
-            y = data[i]
-            ax.plot(x, y)
-            if fill_data is not None:
-                ax.fill_between(x, fill_data[i][0], fill_data[i][1], alpha=0.3)
-    else:
-        for i in range(data_len):
-            ax.plot(x, data[i], label=labels[i])
-            if fill_data is not None:
-                ax.fill_between(x, fill_data[i][0], fill_data[i][1], alpha=0.3)
+    for i in range(data_len):
+        y = data[i]
 
+        colour = None
+        if colours is not None:
+            colour = colours[i]
+        label = None
+        if labels is not None:
+            label = labels[i]
+
+        ax.plot(x, y, label=label, color=colour)
+        if fill_data is not None:
+            ax.fill_between(x, fill_data[i][0], fill_data[i][1], color=colour, alpha=0.3)
+
+    if labels is not None:
         ax.legend()
 
     if name is not None:
