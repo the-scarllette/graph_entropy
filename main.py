@@ -1579,8 +1579,6 @@ def train_louvain_agents(environment: Environment, file_name_prefix,
     if not os.path.isdir(agent_directory + '/' + agent_save_directory):
         os.mkdir(agent_directory + '/' + agent_save_directory)
 
-    all_agent_training_returns = {}
-    all_agent_returns = {}
     if initial_load_path is None:
         initial_agent = LouvainAgent(environment.possible_actions, stg,
                                      state_dtype, state_shape,
@@ -1591,13 +1589,13 @@ def train_louvain_agents(environment: Environment, file_name_prefix,
 
     existing_results = False
     if not overwrite_existing_agents:
-        if os.path.exists(agent_results_file):
+        if os.path.exists(results_directory + '/' + agent_results_file):
             existing_results = True
-            with open(agent_results_file, 'r') as f:
+            with open(results_directory + '/' + agent_results_file, 'r') as f:
                 all_agent_returns = json.load(f)
-        if os.path.exists(agent_training_results_file):
+        if os.path.exists(results_directory + '/' + agent_training_results_file):
             existing_results = True
-            with open(agent_training_results_file, 'r') as f:
+            with open(results_directory + '/' + agent_training_results_file, 'r') as f:
                 all_agent_training_returns = json.load(f)
 
     agent_start_index = 0
@@ -1845,9 +1843,9 @@ if __name__ == "__main__":
                       ])
     board_name = 'blocks'
 
-    # lavaflow = LavaFlow(None, None, (0, 0))
-    taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
-                      continuous=False)
+    lavaflow = LavaFlow(None, None, (0, 0))
+    # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
+    #                   continuous=False)
     # tinytown = TinyTown(2, 3, pick_every=1)
 
     option_onboarding = 'specific'
@@ -1860,32 +1858,69 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
     total_evaluation_steps = 50
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 1_000_000
+    options_training_timesteps = 500_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 50_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
 
     # Graph Ordering + Colouring:
-    # None Onboarding - 332288
-    # Generic - 117733
-    # Specific - 88CCEE
-    # Eigenoptions - DDCC77
-    # Louvain - CC6677
-    # Betweenness - AA4499
-    # Primitives - 555555
+    # None Onboarding - 332288 - 1
+    # Generic - 117733 - 2
+    # Specific - 88CCEE - 3
+    # Eigenoptions - DDCC77 - 4
+    # Louvain - CC6677 - 5
+    # Betweenness - AA4499 - 6
+    # Primitives - 555555 - 7
 
-    filenames = get_filenames(taxicab)
+    filenames = get_filenames(lavaflow)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
+    print("Training Lavaflow Louvain Agents")
+    train_louvain_agents(lavaflow, lavaflow.environment_name,
+                         filenames['agents'], filenames['results'],
+                         training_timesteps, 2, evaluate_policy_window,
+                         initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
+                         all_actions_valid=True,
+                         overwrite_existing_agents=False,
+                         total_eval_steps=total_evaluation_steps,
+                         state_dtype=lavaflow.state_dtype, state_shape=lavaflow.state_shape, progress_bar=True)
+
+    exit()
+
+    print("Training tinytown 2x3 primitives")
+    train_q_learning_agent(tinytown,
+                           training_timesteps, 2,
+                           continue_training=False,
+                           progress_bar=True,
+                           overwrite_existing_agents=False,
+                           all_actions_valid=False,
+                           total_eval_steps=total_evaluation_steps)
+    exit()
+
+    preparedness_agent = PreparednessAgent(tinytown.possible_actions,
+                                           0.9, 0.15, 0.9,
+                                           tinytown.state_dtype, tinytown.state_shape,
+                                           state_transition_graph, preparednesss_subgoal_graph,
+                                           option_onboarding='none')
+    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent.train_options(tinytown, options_training_timesteps,
+                                     train_between_options=True,
+                                     train_onboarding_options=True,
+                                     train_subgoal_options=True,
+                                     progress_bar=True)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    print(tinytown.environment_name + " preparedness training options")
+    exit()
+
     data = graphing.extract_data(filenames['results'],
                                  [
                                      'preparedness_agent_returns_none_onboarding.json',
-                                     'preparedness_agent_returns_generic_onboarding.json',
+                                     # 'preparedness_agent_returns_generic_onboarding.json',
                                      # 'preparedness_agent_returns_specific_onboarding.json',
                                      'eigenoptions_epoch_returns.json',
                                      'louvain agent returns',
@@ -1893,13 +1928,13 @@ if __name__ == "__main__":
                                      'q_learning_epoch_returns.json'
                                  ])
     graphing.graph_reward_per_epoch(data, graphing_window, evaluate_policy_window,
-                                    name='Taxicab',
+                                    name='Lavaflow',
                                     x_label='Decision Stages',
                                     y_label='Average Epoch Return',
                                     error_bars='st_error',
                                     labels=[
                                         'No Onboarding',
-                                        'Generic Onboarding',
+                                        # 'Generic Onboarding',
                                         # 'Specific Onboarding',
                                         'Eigenoptions',
                                         'Louvain',
@@ -1907,25 +1942,13 @@ if __name__ == "__main__":
                                         'Primitives'
                                     ],
                                     colours=['#332288',
-                                             '#117733',
+                                             # '#117733',
                                              # '#88CCEE',
                                              '#DDCC77',
                                              '#CC6677',
                                              '#AA4499',
                                              '#555555'
                                     ])
-    exit()
-
-    train_louvain_agents(lavaflow, lavaflow.environment_name,
-                         filenames['agents'], filenames['results'],
-                         training_timesteps, 5, evaluate_policy_window,
-                         filenames['agents'] + '/louvain_base_agent.json',
-                         initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
-                         all_actions_valid=True,
-                         overwrite_existing_agents=True,
-                         total_eval_steps=total_evaluation_steps,
-                         state_dtype=lavaflow.state_dtype, state_shape=lavaflow.state_shape, progress_bar=True)
-
     exit()
 
     train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent.json', lavaflow,
@@ -1960,30 +1983,6 @@ if __name__ == "__main__":
     louvain_agent.train_options(options_training_timesteps, lavaflow,
                                 False, True)
     louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
-    exit()
-
-    train_q_learning_agent(lavaflow,
-                           training_timesteps, num_agents,
-                           continue_training=False,
-                           progress_bar=True,
-                           overwrite_existing_agents=False,
-                           all_actions_valid=True,
-                           total_eval_steps=total_evaluation_steps)
-    exit()
-
-    preparedness_agent = PreparednessAgent(tinytown.possible_actions,
-                                           0.9, 0.15, 0.9,
-                                           tinytown.state_dtype, tinytown.state_shape,
-                                           state_transition_graph, preparednesss_subgoal_graph,
-                                           option_onboarding='none')
-    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent.train_options(tinytown, options_training_timesteps,
-                                     train_between_options=True,
-                                     train_onboarding_options=True,
-                                     train_subgoal_options=True,
-                                     progress_bar=True)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
-    print(tinytown.environment_name + " preparedness training options")
     exit()
 
     print(tinytown.environment_name + " preparedness training options")
