@@ -1843,12 +1843,12 @@ if __name__ == "__main__":
                       ])
     board_name = 'blocks'
 
-    lavaflow = LavaFlow(None, None, (0, 0))
-    # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
-    #                   continuous=False)
-    # tinytown = TinyTown(2, 3, pick_every=1)
+    # lavaflow = LavaFlow(None, None, (0, 0))
+    taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
+                      continuous=True)
+    #tinytown = TinyTown(2, 3, pick_every=1)
 
-    option_onboarding = 'specific'
+    option_onboarding = 'generic'
     graphing_window = 25
     evaluate_policy_window = 10
     hops = 5
@@ -1856,10 +1856,10 @@ if __name__ == "__main__":
     max_num_hops = 4
     num_agents = 5
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
-    total_evaluation_steps = 50
+    total_evaluation_steps = 100
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 500_000
-    #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_2x3(random)=150_000 tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
+    options_training_timesteps = 100
+    #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 50_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
@@ -1873,33 +1873,64 @@ if __name__ == "__main__":
     # Betweenness - AA4499 - 6
     # Primitives - 555555 - 7
 
-    filenames = get_filenames(lavaflow)
+    filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    print("Training Lavaflow Louvain Agents")
-    train_louvain_agents(lavaflow, lavaflow.environment_name,
+    print("Training eigenoptions taxicab options")
+    eigenoptions_agent = EigenOptionAgent(adj_matrix, state_transition_graph,
+                                          0.9, 0.15, 0.9,
+                                          taxicab.possible_actions,
+                                          taxicab.state_dtype, taxicab.state_shape,
+                                          64)
+    eigenoptions_agent.find_options(True)
+    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
+    eigenoptions_agent.train_options(taxicab, options_training_timesteps,
+                                     True, True)
+    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
+    exit()
+
+    print("Training taxicab eigenoptions agent")
+    train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent.json', taxicab,
+                             training_timesteps, 5, evaluate_policy_window,
+                             True, total_evaluation_steps,
+                             continue_training=False,
+                             overwrite_existing_agents=True,
+                             progress_bar=True)
+    exit()
+
+    print("Taining Taxicab No-Onboarding Preparedness Agent")
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
+                              option_onboarding, taxicab,
+                              training_timesteps, 2, evaluate_policy_window,
+                              True, total_evaluation_steps,
+                              continue_training=False, overwrite_existing_agents=False,
+                              progress_bar=True)
+    exit()
+
+    print("Training taxicab primitives")
+    train_q_learning_agent(taxicab,
+                           training_timesteps, 5,
+                           continue_training=False,
+                           progress_bar=True,
+                           overwrite_existing_agents=True,
+                           all_actions_valid=True,
+                           total_eval_steps=total_evaluation_steps)
+    exit()
+
+    print("Training Tinytown Louvain Agents")
+    train_louvain_agents(tinytown, tinytown.environment_name,
                          filenames['agents'], filenames['results'],
                          training_timesteps, 2, evaluate_policy_window,
                          initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
-                         all_actions_valid=True,
+                         all_actions_valid=False,
                          overwrite_existing_agents=False,
                          total_eval_steps=total_evaluation_steps,
-                         state_dtype=lavaflow.state_dtype, state_shape=lavaflow.state_shape, progress_bar=True)
+                         state_dtype=tinytown.state_dtype, state_shape=tinytown.state_shape, progress_bar=True)
 
-    exit()
-
-    print("Training tinytown 2x3 primitives")
-    train_q_learning_agent(tinytown,
-                           training_timesteps, 2,
-                           continue_training=False,
-                           progress_bar=True,
-                           overwrite_existing_agents=False,
-                           all_actions_valid=False,
-                           total_eval_steps=total_evaluation_steps)
     exit()
 
     preparedness_agent = PreparednessAgent(tinytown.possible_actions,
@@ -1951,22 +1982,6 @@ if __name__ == "__main__":
                                     ])
     exit()
 
-    train_eigenoption_agents(filenames['agents'] + '/eigenoptions_base_agent.json', lavaflow,
-                             training_timesteps, 5, evaluate_policy_window,
-                             False, total_evaluation_steps,
-                             continue_training=False,
-                             overwrite_existing_agents=True,
-                             progress_bar=True)
-    exit()
-
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
-                              option_onboarding, lavaflow,
-                              training_timesteps, 5, evaluate_policy_window,
-                              False, total_evaluation_steps,
-                              continue_training=False, overwrite_existing_agents=True,
-                              progress_bar=True)
-    exit()
-
     print("Betweenness agent " + lavaflow.environment_name + " agent training")
     train_betweenness_agents('/betweenness_base_agent.json', lavaflow,
                              training_timesteps, 5, evaluate_policy_window,
@@ -1991,17 +2006,6 @@ if __name__ == "__main__":
                                      min_hop=3))
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
-    exit()
-
-    eigenoptions_agent = EigenOptionAgent(adj_matrix, state_transition_graph,
-                                          0.9, 0.15, 0.9,
-                                          tinytown.possible_actions,
-                                          tinytown.state_dtype, tinytown.state_shape,
-                                          64)
-    eigenoptions_agent.load(filenames['agents'] + '/eigenoptions_base_agent.json')
-    eigenoptions_agent.train_options(tinytown, options_training_timesteps,
-                                     False, True)
-    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
     exit()
 
     print("Betweenness Agent " + taxicab.environment_name + " training options")

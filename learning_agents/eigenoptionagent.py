@@ -132,7 +132,7 @@ class EigenOptionAgent(OptionsAgent):
                                                         for goal_index in goal_indexes}
 
         for i in range(self.num_options):
-            eigenvector = eigenvectors[:, i]
+            eigenvector = np.real(eigenvectors[:, i])
             goal_state_index = goal_indexes[i]
             option = EigenOption(self.actions, eigenvector, goal_state_index, self.terminate_action,
                                  lambda s: self.option_initiation_function(s, goal_state_index))
@@ -161,8 +161,10 @@ class EigenOptionAgent(OptionsAgent):
         try:
             index = self.state_to_index_lookup[state_str]
         except KeyError:
+            index_found = False
             for index, values in self.state_transition_graph.nodes(data=True):
                 if values['state'] == state_str:
+                    index_found = True
                     break
             index = int(index)
             self.state_to_index_lookup[state_str] = index
