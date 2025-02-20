@@ -274,18 +274,52 @@ def compute_entropy(distribution, log_base=10):
     return entropy
 
 
-def create_preparedness_reward_function(environment_name, hops, beta=None):
-    with open(environment_name + '_stg_values.json', 'r') as f:
-        stg_values = json.load(f)
+def create_subgoal_graph(state_transition_graph: nx.MultiDiGraph,
+                         stg_values : Dict[str, Dict[str, str | float | int]],
+                         subgoals: Dict[str, List[str]],
+                         max_distance: int=np.inf) -> (
+        nx.MultiDiGraph, nx.MultiDiGraph, Dict[str, Dict[str, float|str]]):
+    def connect_nodes(node_1: str, node_2: str) -> bool:
+        return nx.has_path(state_transition_graph, node_1, node_2)
+    if max_distance != np.inf:
+        def connect_nodes(node_1: str, node_2: str) -> bool:
+            shortest_path_distance = nx.shortest_path_length(state_transition_graph, node_1, node_2)
+            return shortest_path_distance <= max_distance
 
-    key = 'preparedness - ' + str(hops) + ' hops'
-    if beta is not None:
-        key += ' - beta = ' + str(beta)
+    # Building Aggregate Graph
+    aggregate_graph = nx.MultiDiGraph()
+    subgoal_heights = [int(height) for height in subgoals.keys()]
+    min_height = subgoal_heights[0]
+    max_height = subgoal_heights[-1]
+    for subgoal_height in subgoals:
+        for node in subgoals[subgoal_height]:
+            aggregate_graph.add_node(node)
 
-    stg_lookup = {stg_values[state_index]['state']: stg_values[state_index][key]
-                  for state_index in stg_values}
+        # Path Between Subgoals
+        for subgoal_height in range(min_height, max_height + 1):
+            for subgoal in subgoals[subgoal_height]:
+                # Path of Decreasing Preparedness
+                increasing_path_found = False
+                start_height = subgoal_height + 1
+                while (start_height <= max_height) and (not increasing_path_found):
+                    for start_node in subgoals[start_height]:
+                        if connect_nodes(start_node, subgoal):
+                            aggregate_graph.add_edge(start_node, subgoal, weight=1.0)
+                            increasing_path_found = True
+                    start_height += 1
 
-    return lambda state: stg_lookup[np.array2string(state)]
+                # Paths of Increasing Preparedness
+                decreasing_path_found = False
+                start_height = subgoal_height - 1
+                while (min_height <= start_height) and (not decreasing_path_found):
+                    for start_node in subgoals[start_height]:
+                        if connect_nodes(start_node, subgoal):
+                            aggregate_graph.add_edge(start_node, subgoal, weight=1.0)
+                            decreasing_path_found = True
+                    start_height -= 1
+    nx.set_node_attributes(aggregate_graph, stg_values)
+
+    return state_transition_graph, aggregate_graph, stg_values
 
 
 def extract_graph_entropy_values(values_dict):
