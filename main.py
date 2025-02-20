@@ -1914,6 +1914,23 @@ def train_q_learning_agent(environment: Environment,
 
     return
 
+def update_graph_attributes(environment: Environment,
+                            attributes: Dict[str, Dict[str, str|float]]) -> None:
+    graph_filenames = get_filenames(environment)
+
+    for path in [graph_filenames['state transition graph'],
+                 graph_filenames['preparedness aggregate graph'],
+                 graph_filenames['frequency entropy subgoal graph'],
+                 graph_filenames['neighbourhood entropy subgoal graph']]:
+        try:
+            g = nx.read_gexf(path)
+        except FileNotFoundError:
+            continue
+        nx.set_node_attributes(g, attributes)
+        nx.write_gexf(g, path)
+
+    return
+
 
 # Comparators: DIAYN, DADS, Hierarchical Empowerment, Betweenness, Eigenoptions, Louvain
 # Environments: Taxicab (modified), Lavaworld, tiny towns (2x2, 3x3), SimpleWindGridworld (4x7x7, 4x10x10)
@@ -1957,9 +1974,9 @@ if __name__ == "__main__":
     board_name = 'blocks'
 
     # lavaflow = LavaFlow(None, None, (0, 0))
-    # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
-    #                   continuous=True)
-    tinytown = TinyTown(2, 2, pick_every=1)
+    taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
+                       continuous=True)
+    # tinytown = TinyTown(2, 2, pick_every=1)
 
     option_onboarding = 'specific'
     graphing_window = 25
@@ -1986,19 +2003,23 @@ if __name__ == "__main__":
     # Betweenness - AA4499 - 6
     # Primitives - 555555 - 7
 
-    filenames = get_filenames(tinytown)
+    filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
+        adj_matrix, state_transition_graph, stg_values
+    )
+
     print("Labeling frequency entropy subgoals")
     state_transition_graph, stg_values, frequency_entropy_subgoals = label_subgoals(
         adj_matrix,
         state_transition_graph,
         stg_values,
-        'frequency entropy',
+        'frequency entropy ',
         min_level=1
     )
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
@@ -2011,6 +2032,16 @@ if __name__ == "__main__":
         frequency_entropy_subgoals
     )
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    nx.write_gexf(subgoal_graph, filenames['frequency entropy subgoal graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+    stg_values = preparedness_efficient(adj_matrix, beta=0.5, max_num_hops=4,
+                                        compressed_matrix=True,
+                                        existing_stg_values=stg_values
+                                        )
+    nx.set_node_attributes(state_transition_graph, stg_values)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
