@@ -650,7 +650,7 @@ def label_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
                 _ = stg_values['0'][get_value_key(max_level)]
                 max_level += 1
             except KeyError:
-                max_hop_found = True
+                max_level_found = True
 
     distance_matrix = sparse.csgraph.dijkstra(adj_matrix, True,
                                               unweighted=True, limit=max_level)
@@ -1959,7 +1959,7 @@ if __name__ == "__main__":
     # lavaflow = LavaFlow(None, None, (0, 0))
     # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
     #                   continuous=True)
-    tinytown = TinyTown(2, 3, pick_every=1)
+    tinytown = TinyTown(2, 2, pick_every=1)
 
     option_onboarding = 'specific'
     graphing_window = 25
