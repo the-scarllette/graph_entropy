@@ -680,7 +680,7 @@ def label_preparedness_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGr
                                 ) -> Tuple[nx.MultiDiGraph, Dict[str, float|str], Dict[int, List[str]]]:
     return label_subgoals(adj_matrix, stg, stg_values, " - beta = " + str(beta), min_level, max_level)
 
-
+'''
 def label_preparedness_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
                                 stg_values: Dict[str, float|str], beta: float=0.5,
                                 min_hops: int=1, max_hop: None|int=None
@@ -759,6 +759,7 @@ def label_preparedness_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGr
 
     nx.set_node_attributes(stg, stg_values)
     return stg, stg_values, subgoals_no_empty
+'''
 
 
 def make_entropy_intrinsic_reward(graph_entropies):
