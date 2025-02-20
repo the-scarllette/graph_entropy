@@ -9,7 +9,7 @@ import numpy as np
 import scipy.sparse
 from scipy import sparse
 import time
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import environments.environment
 from environments.environment import Environment
@@ -588,8 +588,103 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
     return connected_nodes
 
 
-def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5,
-                                min_hops=1, max_hop=None):
+def label_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
+                   stg_values: Dict[str, Dict[str, float|str]], value_key: str,
+                   value_key_suffix: str="",
+                   min_level: None|int=None, max_level: None|int=None
+                   ) -> Tuple[nx.MultiDiGraph, Dict[str, Dict[str, float|str]], Dict[int, List[str]]]:
+    subgoal_level_key = value_key + " subgoal level"
+    if min_level is None:
+        get_value_key = lambda _: value_key
+        get_subgoal_key = lambda _: value_key + " - local maxima"
+    else:
+        get_value_key = lambda level: value_key + " - " + str(level) + " hops" + value_key_suffix
+        get_subgoal_key = lambda level: value_key + " - "+ str(level) + " hops" + value_key_suffix + " - local maxima"
+
+    if min_level is None:
+        min_level = 1
+        max_level = 1
+    elif max_level is None:
+        max_level = 1
+        max_level_found = False
+        while not max_level_found:
+            try:
+                _ = stg_values['0'][get_value_key(max_level)]
+                max_level += 1
+            except KeyError:
+                max_hop_found = True
+
+    distance_matrix = sparse.csgraph.dijkstra(adj_matrix, True,
+                                              unweighted=True, limit=max_level)
+
+    subgoals = {level: [] for level in range(min_level, max_level + 1)}
+    for level in range(min_level, max_level + 1):
+        key = get_value_key(level)
+        subgoal_key = get_subgoal_key(level)
+
+        for node in stg_values:
+            is_subgoal_str = 'True'
+
+            in_neighbours = np.where((distance_matrix[:, int(node)] <= level) &
+                                     (0 < distance_matrix[:, int(node)]))[0]
+
+            if in_neighbours.size <= 0:
+                is_subgoal_str = 'False'
+            else:
+                out_neighbours = np.where(distance_matrix[int(node)] <= level)[0]
+                value = float(stg_values[node][key])
+                for neighbour in np.append(out_neighbours, in_neighbours):
+                    neighbour_str = str(neighbour)
+                    if neighbour_str == node:
+                        continue
+                    neighbour_value = float(stg_values[neighbour_str][key])
+                    if neighbour_value > value:
+                        is_subgoal_str = 'False'
+                        break
+
+            stg_values[node][subgoal_key] = is_subgoal_str
+
+            if is_subgoal_str == 'True':
+                subgoals[level].append(node)
+                stg_values[node][subgoal_level_key] = str(level)
+            elif level == min_level:
+                stg_values[node][subgoal_level_key] = 'None'
+
+        if level > min_level and (subgoals[level - 1] == subgoals[level] or subgoals[level] == []):
+            break
+
+    subgoals[level - 1] = subgoals[level].copy()
+    subgoals[level] = []
+    level -= 1
+    for node in subgoals[level]:
+        stg_values[node][subgoal_level_key] = str(level)
+    for levels_to_prune in range(level, min_level, -1):
+        for lower_levels in range(min_level, levels_to_prune):
+            for node in subgoals[levels_to_prune]:
+                if node in subgoals[lower_levels]:
+                    subgoals[lower_levels].remove(node)
+    subgoals_no_empty = {}
+    level_to_set = 0
+    for i in range(min_level, level + 1):
+        if subgoals[i]:
+            level_to_set += 1
+            subgoals_no_empty[level_to_set] = subgoals[i]
+
+    nx.set_node_attributes(stg, stg_values)
+    return stg, stg_values, subgoals_no_empty
+
+
+def label_preparedness_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
+                                stg_values: Dict[str, Dict[str, float|str]], beta: float=0.5,
+                                min_level: int=1, max_level: None|int=None
+                                ) -> Tuple[nx.MultiDiGraph, Dict[str, float|str], Dict[int, List[str]]]:
+    return label_subgoals(adj_matrix, stg, stg_values, " - beta = " + str(beta), min_level, max_level)
+
+
+def label_preparedness_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
+                                stg_values: Dict[str, float|str], beta: float=0.5,
+                                min_hops: int=1, max_hop: None|int=None
+                                ) -> Tuple[nx.MultiDiGraph, Dict[str, float|str], Dict[int, List[str]]]:
     subgoal_level_key = 'preparedness subgoal level'
     def get_preparedness_key(x):
         return 'preparedness - ' + str(x) + ' hops - beta = ' + str(beta)
@@ -661,27 +756,6 @@ def label_preparedness_subgoals(adj_matrix, stg, stg_values, beta=0.5,
         if subgoals[i]:
             level += 1
             subgoals_no_empty[level] = subgoals[i]
-
-    '''
-    final_subgoals = {l: [] for l in range(1, level + 1)}
-    final_subgoals[1] = subgoals_no_empty[1]
-    l = 2
-    for l in range(2, level + 1):
-        for node in subgoals_no_empty[l]:
-            valid_subgoal = False
-            for prior_level in range(l - 1, 0, -1):
-                for start_node in final_subgoals[prior_level]:
-                    if distance_matrix[int(start_node), int(node)] < np.inf:
-                        valid_subgoal = True
-                        break
-                if valid_subgoal:
-                    break
-
-            if valid_subgoal:
-                final_subgoals[l].append(node)
-            else:
-                stg_values[node][subgoal_level_key] = 'None'
-    '''
 
     nx.set_node_attributes(stg, stg_values)
     return stg, stg_values, subgoals_no_empty
@@ -1336,7 +1410,7 @@ def run_epoch(env: Environment,
               num_steps: int,
               seed: None | int=None,
               all_actions_valid: bool=True,
-              progress_bar: bool=False):
+              progress_bar: bool=True):
     current_possible_actions = env.possible_actions
     epoch_return = 0
     total_steps = 0
@@ -1848,7 +1922,7 @@ if __name__ == "__main__":
     #                   continuous=True)
     tinytown = TinyTown(2, 3, pick_every=1)
 
-    option_onboarding = 'generic'
+    option_onboarding = 'specific'
     graphing_window = 25
     evaluate_policy_window = 10
     hops = 5
@@ -1879,6 +1953,30 @@ if __name__ == "__main__":
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    print("Training " + tinytown.environment_name + " " + option_onboarding + " Preparedness Agent")
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
+                              option_onboarding, tinytown,
+                              training_timesteps, 5, evaluate_policy_window,
+                              False, total_evaluation_steps,
+                              continue_training=False, overwrite_existing_agents=True,
+                              progress_bar=True)
+    exit()
+
+    preparedness_agent = PreparednessAgent(tinytown.possible_actions,
+                                           0.9, 0.15, 0.9,
+                                           tinytown.state_dtype, tinytown.state_shape,
+                                           state_transition_graph, preparednesss_subgoal_graph,
+                                           option_onboarding='none')
+    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent.train_options(tinytown, options_training_timesteps,
+                                     train_between_options=True,
+                                     train_onboarding_options=True,
+                                     train_subgoal_options=True,
+                                     progress_bar=True)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    print(tinytown.environment_name + " preparedness training options")
+    exit()
 
     print("Training tinytown Louvain Agents")
     train_louvain_agents(tinytown, tinytown.environment_name,
@@ -1923,15 +2021,6 @@ if __name__ == "__main__":
     eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
     exit()
 
-    print("Taining Taxicab No-Onboarding Preparedness Agent")
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
-                              option_onboarding, taxicab,
-                              training_timesteps, 2, evaluate_policy_window,
-                              True, total_evaluation_steps,
-                              continue_training=False, overwrite_existing_agents=False,
-                              progress_bar=True)
-    exit()
-
     print("Training taxicab primitives")
     train_q_learning_agent(taxicab,
                            training_timesteps, 5,
@@ -1940,21 +2029,6 @@ if __name__ == "__main__":
                            overwrite_existing_agents=True,
                            all_actions_valid=True,
                            total_eval_steps=total_evaluation_steps)
-    exit()
-
-    preparedness_agent = PreparednessAgent(tinytown.possible_actions,
-                                           0.9, 0.15, 0.9,
-                                           tinytown.state_dtype, tinytown.state_shape,
-                                           state_transition_graph, preparednesss_subgoal_graph,
-                                           option_onboarding='none')
-    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent.train_options(tinytown, options_training_timesteps,
-                                     train_between_options=True,
-                                     train_onboarding_options=True,
-                                     train_subgoal_options=True,
-                                     progress_bar=True)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
-    print(tinytown.environment_name + " preparedness training options")
     exit()
 
     data = graphing.extract_data(filenames['results'],
