@@ -487,13 +487,17 @@ def get_filenames(env: Environment) -> Dict[str, str]:
     agent_directory = env.environment_name + '_agents'
     results_directory = env.environment_name + '_episode_results'
     preparedness_aggregate_graph = env.environment_name + '_preparedness_aggregate_graph.gexf'
+    frequency_entropy_aggregate_graph = env.environment_name + '_frequency_entropy_subgoal_graph.gexf'
+    neighbourhood_entropy_aggregate_graph = env.environment_name + '_neighbourhood_entropy_subgoal_graph.gexf'
     return {'adjacency matrix': adj_matrix_filename,
             'all states': all_states_filename,
             'state transition graph': stg_filename,
             'state transition graph values': stg_values_filename,
             'agents': agent_directory,
             'results': results_directory,
-            'preparedness aggregate graph': preparedness_aggregate_graph}
+            'preparedness aggregate graph': preparedness_aggregate_graph,
+            'frequency entropy subgoal graph': frequency_entropy_aggregate_graph,
+            'neighbourhood entropy subgoal graph': neighbourhood_entropy_aggregate_graph}
 
 
 def get_neighbours(adjacency_matrix: np.matrix, node, num_hops=1, directed=True, compressed_matrix=True):
@@ -1988,6 +1992,29 @@ if __name__ == "__main__":
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    print("Labeling frequency entropy subgoals")
+    state_transition_graph, stg_values, frequency_entropy_subgoals = label_subgoals(
+        adj_matrix,
+        state_transition_graph,
+        stg_values,
+        'frequency entropy',
+        min_level=1
+    )
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    print("Creating frequency entropy subgoal graph")
+    state_transition_graph, subgoal_graph, stg_values = create_subgoal_graph(
+        state_transition_graph,
+        stg_values,
+        frequency_entropy_subgoals
+    )
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
 
     print("Training " + tinytown.environment_name + " " + option_onboarding + " Preparedness Agent")
     train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
