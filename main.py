@@ -656,7 +656,7 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
 
 
 def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multiple_levels: List[bool],
-                        graph_name: None|str=None, width: float=0.5):
+                        graph_name: None|str=None, width: float=0.5, colours: None|List[str]=None):
     num_keys = len(subgoal_keys)
     subgoal_counts = {}
     max_level = 0
@@ -683,7 +683,8 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
                                     width,
                                     "Subgoal Method",
                                     "Number of Subgoals",
-                                    graph_name
+                                    graph_name,
+                                    colours
                                     )
     return
 
@@ -1924,7 +1925,7 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    print(count_subgoals(lavaflow, 'preparedness subgoal level', True))
+    graph_subgoal_count(lavaflow, ['preparedness subgoal level'], [True])
     exit()
 
     print("Training tinytown Louvain Agents")
