@@ -655,6 +655,10 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
     return connected_nodes
 
 
+def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multiple_levels: List[bool]):
+    return
+
+
 def label_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
                    stg_values: Dict[str, Dict[str, float|str]], value_key: str,
                    value_key_suffix: str="",

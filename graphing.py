@@ -2,7 +2,7 @@ import json
 import os
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import List
+from typing import Dict, List, Tuple
 
 
 def extract_data(folderpath: str, filenames: List[str] | None=None) -> List[List[List[float]]]:
@@ -260,6 +260,29 @@ def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=N
         ax.set_xlim(xlim)
     if ylim is not None:
         ax.set_ylim(ylim)
+
+    plt.show()
+    return
+
+def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str], width: float=0.5,
+                           x_label: None|str=None, y_label: None|str=None, name: None|str=None):
+    fig, ax = plt.subplots()
+    if x_label is not None:
+        ax.set_xlabel(x_label)
+    if y_label is not None:
+        ax.set_ylabel(y_label)
+
+    bottom = np.zeros(len(labels))
+
+    for label, values in data.items():
+        _ = ax.bar(labels, values, width, label=label, bottom=bottom)
+        bottom += values
+
+    ax.legend(loc="upper right")
+
+    if name is not None:
+        ax.set_title(name)
+        plt.savefig(name + '.png')
 
     plt.show()
     return
