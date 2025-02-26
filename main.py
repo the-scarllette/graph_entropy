@@ -655,7 +655,36 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
     return connected_nodes
 
 
-def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multiple_levels: List[bool]):
+def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multiple_levels: List[bool],
+                        graph_name: None|str=None, width: float=0.5):
+    num_keys = len(subgoal_keys)
+    subgoal_counts = {}
+    max_level = 0
+
+    for i in range(num_keys):
+        subgoal_counts[subgoal_keys[i]] = count_subgoals(environment, subgoal_keys[i], multiple_levels[i])
+        height = max(subgoal_counts[subgoal_keys[i]].keys())
+        if height > max_level:
+            max_level = height
+
+    graphing_data = {"Level " + str(level): np.zeros(num_keys) for level in range(1, max_level + 1)}
+
+    for i in range(num_keys):
+        subgoal_key = subgoal_keys[i]
+        for level in range(1, max_level + 1):
+            try:
+                count = subgoal_counts[subgoal_key][level]
+            except KeyError:
+                count = 0
+            graphing_data["Level " + str(level)][i] = count
+
+    graphing.graph_stacked_barchart(graphing_data,
+                                    tuple(subgoal_keys),
+                                    width,
+                                    "Subgoal Method",
+                                    "Number of Subgoals",
+                                    graph_name
+                                    )
     return
 
 
