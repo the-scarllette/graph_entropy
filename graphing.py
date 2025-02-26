@@ -265,7 +265,8 @@ def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=N
     return
 
 def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str], width: float=0.5,
-                           x_label: None|str=None, y_label: None|str=None, name: None|str=None):
+                           x_label: None|str=None, y_label: None|str=None, name: None|str=None,
+                           colours: None|List[str]=None):
     fig, ax = plt.subplots()
     if x_label is not None:
         ax.set_xlabel(x_label)
@@ -273,10 +274,16 @@ def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str], widt
         ax.set_ylabel(y_label)
 
     bottom = np.zeros(len(labels))
+    num_items = len(data)
+    i = 0
 
     for label, values in data.items():
-        _ = ax.bar(labels, values, width, label=label, bottom=bottom)
+        colour = None
+        if colours is not None:
+            colour = colours[i]
+        _ = ax.bar(labels, values, width, label=label, bottom=bottom, color=colour)
         bottom += values
+        i += 1
 
     ax.legend(loc="upper right")
 
