@@ -134,6 +134,8 @@ def add_preparedness_subgoals_to_file(env_name, min_num_subgoals, min_num_hops=1
     return
 
 
+
+
 def add_subgoals(env_name,
                  compressed_matrix=False,
                  beta=0.5, beta_values=None, min_num_hops=1, max_num_hops=10,
@@ -213,6 +215,33 @@ def betweenness(stg: nx.Graph, existing_stg_values=None):
     nx.set_node_attributes(stg, existing_stg_values)
 
     return stg, existing_stg_values
+
+
+def count_subgoals(environment: Environment, subgoal_key: str, multiple_levels: bool=False) -> Dict[int, int]:
+    env_filenames = get_filenames(environment)
+    with open(env_filenames['state transition graph values'], 'r') as f:
+        state_transition_graph_values = json.load(f)
+    subgoal_count = {}
+
+    if not multiple_levels:
+        subgoal_count[1] = 0
+        for node in state_transition_graph_values:
+            if state_transition_graph_values[node][subgoal_key] == 'True':
+                subgoal_count[1] += 1
+        return subgoal_count
+
+    for node in state_transition_graph_values:
+        node_subgoal_level = state_transition_graph_values[node][subgoal_key]
+
+        if node_subgoal_level == 'None':
+            continue
+
+        try:
+            subgoal_count[int(node_subgoal_level)] += 1
+        except KeyError:
+            subgoal_count[int(node_subgoal_level)] = 1
+
+    return subgoal_count
 
 
 def compute_betweeness(adj_matrix):
@@ -716,88 +745,7 @@ def label_preparedness_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGr
                                 stg_values: Dict[str, Dict[str, float|str]], beta: float=0.5,
                                 min_level: int=1, max_level: None|int=None
                                 ) -> Tuple[nx.MultiDiGraph, Dict[str, float|str], Dict[int, List[str]]]:
-    return label_subgoals(adj_matrix, stg, stg_values, " - beta = " + str(beta), min_level, max_level)
-
-'''
-def label_preparedness_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
-                                stg_values: Dict[str, float|str], beta: float=0.5,
-                                min_hops: int=1, max_hop: None|int=None
-                                ) -> Tuple[nx.MultiDiGraph, Dict[str, float|str], Dict[int, List[str]]]:
-    subgoal_level_key = 'preparedness subgoal level'
-    def get_preparedness_key(x):
-        return 'preparedness - ' + str(x) + ' hops - beta = ' + str(beta)
-    def get_local_maxima_key(x):
-        return get_preparedness_key(x) + ' - local maxima'
-
-    if max_hop is None:
-        max_hop = 1
-        max_hop_found = False
-        while not max_hop_found:
-            try:
-                _ = stg_values['0'][get_local_maxima_key(max_hop)]
-                max_hop += 1
-            except KeyError:
-                max_hop_found = True
-    distance_matrix = sparse.csgraph.dijkstra(adj_matrix, True,
-                                              unweighted=True, limit=max_hop)
-
-    subgoals = {hop: [] for hop in range(1, max_hop + 1)}
-    hops = min_hops
-    while hops <= max_hop:
-        local_maxima_key = get_local_maxima_key(hops)
-        preparedness_key = get_preparedness_key(hops)
-        for node in stg_values:
-            is_subgoal_str = 'True'
-
-            in_neighbours = np.where((distance_matrix[:, int(node)] <= hops) &
-                                     (0 < distance_matrix[:, int(node)]))[0]
-
-            if in_neighbours.size <= 0:
-                is_subgoal_str = 'False'
-            else:
-                out_neighbours = np.where(distance_matrix[int(node)] <= hops)[0]
-                preparedness_value = float(stg_values[node][preparedness_key])
-                for neighbour in np.append(out_neighbours, in_neighbours):
-                    neighbour_str = str(neighbour)
-                    if neighbour_str == node:
-                        continue
-                    neighbour_preparedness = float(stg_values[neighbour_str][preparedness_key])
-                    if neighbour_preparedness > preparedness_value:
-                        is_subgoal_str = 'False'
-                        break
-
-            stg_values[node][local_maxima_key] = is_subgoal_str
-
-            if is_subgoal_str == 'True':
-                subgoals[hops].append(node)
-                stg_values[node][subgoal_level_key] = str(hops)
-            elif hops == min_hops:
-                stg_values[node][subgoal_level_key] = 'None'
-
-        if hops > min_hops and (subgoals[hops - 1] == subgoals[hops] or subgoals[hops] == []):
-            break
-        hops += 1
-
-    subgoals[hops - 1] = subgoals[hops].copy()
-    subgoals[hops] = []
-    hops -= 1
-    for node in subgoals[hops]:
-        stg_values[node][subgoal_level_key] = str(hops)
-    for hops_to_prune in range(hops, min_hops, -1):
-        for lower_hops in range(min_hops, hops_to_prune):
-            for node in subgoals[hops_to_prune]:
-                if node in subgoals[lower_hops]:
-                    subgoals[lower_hops].remove(node)
-    subgoals_no_empty = {}
-    level = 0
-    for i in range(min_hops, hops + 1):
-        if subgoals[i]:
-            level += 1
-            subgoals_no_empty[level] = subgoals[i]
-
-    nx.set_node_attributes(stg, stg_values)
-    return stg, stg_values, subgoals_no_empty
-'''
+    return label_subgoals(adj_matrix, stg, stg_values, "preparedness", " - beta = " + str(beta), min_level, max_level)
 
 
 def make_entropy_intrinsic_reward(graph_entropies):
@@ -1120,75 +1068,6 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
                 preparedness_values[str(node)][preparedness_key] = \
                     (beta * preparedness_values[str(node)]['frequency entropy ' + name_suffix]) + \
                     ((1 - beta) * preparedness_values[str(node)]['structural entropy ' + name_suffix])
-
-    # Finding Subgoals
-    '''
-    subgoals = {i: [] for i in range(min(min_computed_hops, min_num_hops), max(max_computed_hops, max_num_hops) + 1)}
-    all_subgoals = []
-    for node in range(num_nodes):
-        distances = sparse.csgraph.dijkstra(adjacency_matrix, directed=False, indices=node, unweighted=True,
-                                            limit=max_num_hops + 1)
-
-        for num_hops in range(min(min_num_hops, min_computed_hops), max(max_num_hops, max_computed_hops) + 1):
-            preparedness_key = get_preparedness_key(num_hops, beta) + ' - local maxima'
-            try:
-                if preparedness_values[str(node)][preparedness_key] == 'True':
-                    subgoals[num_hops].append(node)
-                    all_subgoals.append(node)
-                    continue
-            except KeyError:
-                ()
-            is_subgoal_str = 'False'
-
-            neighbours = np.where((0 < distances) & (distances <= num_hops))[0]
-            preparedness_key = get_preparedness_key(num_hops, beta)
-
-            if neighbours.shape[0] > 0:
-                sorted_values = np.sort([preparedness_values[str(neighbour)][get_preparedness_key(num_hops, beta)]
-                                         for neighbour in neighbours])
-
-                is_subgoal_str = 'False'
-                if preparedness_values[str(node)][preparedness_key] > sorted_values[-1]:
-                    is_subgoal_str = 'True'
-                    subgoals[num_hops].append(node)
-                    all_subgoals.append(node)
-
-            preparedness_values[str(node)][preparedness_key + ' - local maxima'] = is_subgoal_str
-
-    # Pruning Subgoals
-    pruned_subgoals = {i: [] for i in range(min(min_computed_hops, min_num_hops),
-                                            max(max_computed_hops, max_num_hops) + 1)}
-
-
-    # Finding hierarchy level
-    level = min_num_hops + 1
-    if computed_hops_range is not None:
-        level = min_computed_hops + 1
-    hierarchy_level_found = False
-    while (not hierarchy_level_found) and (level <= max_num_hops):
-        index = num_hops + max_computed_hops - min_computed_hops + 1 - min_num_hops
-        if computed_hops_range is not None and (min_computed_hops <= level <= max_computed_hops):
-            index = level - min_computed_hops
-
-        if num_subgoals[index - 1] != num_subgoals[index]:
-            level += 1
-            continue
-
-        arrays_equal = True
-        for i in range(num_subgoals[index - 1]):
-            if subgoals[index - 1] != subgoals[index]:
-                arrays_equal = False
-                break
-        if not arrays_equal:
-            level += 1
-            continue
-
-        hierarchy_level_found = True
-
-    if not hierarchy_level_found:
-        level -= 1
-        print("Hierarchy level maxed-out")
-    '''
     return preparedness_values
 
 
@@ -1973,12 +1852,13 @@ if __name__ == "__main__":
                       ])
     board_name = 'blocks'
 
-    # lavaflow = LavaFlow(None, None, (0, 0))
-    taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
-                       continuous=True)
-    # tinytown = TinyTown(2, 2, pick_every=1)
+    lavaflow = LavaFlow(None, None, (0, 0))
+    # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
+    #                   continuous=True)
+    # tinytown = TinyTown(2, 3, pick_every=1)
 
     option_onboarding = 'specific'
+    # Taxicab=25, tinytown2x2=25
     graphing_window = 25
     evaluate_policy_window = 10
     hops = 5
@@ -2002,17 +1882,69 @@ if __name__ == "__main__":
     # Louvain - CC6677 - 5
     # Betweenness - AA4499 - 6
     # Primitives - 555555 - 7
+    # _ - EE3377 - 8
 
-    filenames = get_filenames(taxicab)
+    filenames = get_filenames(lavaflow)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
-        adj_matrix, state_transition_graph, stg_values
+    print(count_subgoals(lavaflow, 'preparedness subgoal level', True))
+    exit()
+
+    print("Training tinytown Louvain Agents")
+    train_louvain_agents(tinytown, tinytown.environment_name,
+                         filenames['agents'], filenames['results'],
+                         training_timesteps, 5, evaluate_policy_window,
+                         initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
+                         all_actions_valid=False,
+                         overwrite_existing_agents=True,
+                         total_eval_steps=total_evaluation_steps,
+                         state_dtype=tinytown.state_dtype, state_shape=tinytown.state_shape, progress_bar=True)
+
+    exit()
+
+    data = graphing.extract_data(
+        filenames['results'],
+        [
+            'preparedness_agent_returns_none_onboarding.json',
+            'preparedness_agent_returns_generic_onboarding.json',
+            'preparedness_agent_returns_specific_onboarding.json',
+            'eigenoptions_epoch_returns.json',
+            # 'louvain agent returns',
+            'betweenness_epoch_returns.json',
+            'q_learning_epoch_returns.json'
+        ]
     )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='TinyTown (2x3)',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        labels=[
+            'No Onboarding',
+            'Generic Onboarding',
+            'Specific Onboarding',
+            'Eigenoptions',
+            # 'Louvain',
+            'Betweenness',
+            'Primitives'
+        ],
+        colours=['#332288',
+                 '#117733',
+                 '#88CCEE',
+                 '#DDCC77',
+                 # '#CC6677',
+                 '#AA4499',
+                 '#555555'
+                 ]
+    )
+    exit()
 
     print("Labeling frequency entropy subgoals")
     state_transition_graph, stg_values, frequency_entropy_subgoals = label_subgoals(
@@ -2022,19 +1954,79 @@ if __name__ == "__main__":
         'frequency entropy ',
         min_level=1
     )
+    print("Labeling neighbourhood entropy subgoals")
+    state_transition_graph, stg_values, neighbourhood_entropy_subgoals = label_subgoals(
+        adj_matrix,
+        state_transition_graph,
+        stg_values,
+        'structural entropy ',
+        min_level=1
+    )
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
+
     print("Creating frequency entropy subgoal graph")
-    state_transition_graph, subgoal_graph, stg_values = create_subgoal_graph(
+    state_transition_graph, frequency_subgoal_graph, stg_values = create_subgoal_graph(
         state_transition_graph,
         stg_values,
         frequency_entropy_subgoals
     )
+    nx.write_gexf(frequency_subgoal_graph, filenames['frequency entropy subgoal graph'])
+    print("Creating neighbourhood entropy subgoal graph")
+    state_transition_graph, neighbourhood_subgoal_graph, stg_values = create_subgoal_graph(
+        state_transition_graph,
+        stg_values,
+        neighbourhood_entropy_subgoals
+    )
+    nx.write_gexf(neighbourhood_subgoal_graph, filenames['neighbourhood entropy subgoal graph'])
+
+    holder_graph = nx.read_graphml('tinytown_2x2x3_visual_graph.graphml')
+    nx.set_node_attributes(holder_graph, stg_values)
+    nx.write_graphml(holder_graph, 'tinytown_2x2x3_visual_graph.graphml')
+    exit()
+
+    print("Preparedness " + tinytown.environment_name + " computing")
+    stg_values = preparedness_efficient(adj_matrix, 0.5,
+                                        max_num_hops=9,
+                                        compressed_matrix=True,
+                                        existing_stg_values=stg_values,
+                                        computed_hops_range=[1, 8],
+                                        progress_bar=True)
+    nx.set_node_attributes(state_transition_graph, stg_values)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    nx.write_gexf(subgoal_graph, filenames['frequency entropy subgoal graph'])
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
+    exit()
+
+    print("Training " + lavaflow.environment_name + " " + option_onboarding + " Preparedness Agent")
+    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
+                              option_onboarding, lavaflow,
+                              training_timesteps, 5, evaluate_policy_window,
+                              True, total_evaluation_steps,
+                              continue_training=False, overwrite_existing_agents=True,
+                              progress_bar=True)
+    exit()
+
+    print("Labeling preparedness subgoals")
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
+        adj_matrix, state_transition_graph, stg_values,0.5)
+
+    print("Creating preparedness subgoal graph")
+    state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
+        taxicab, adj_matrix, state_transition_graph, stg_values,
+        preparedness_subgoals
+    )
+
+    adj_matrix, state_transition_graph, stg_values = taxicab.get_adjacency_matrix(True, True, True, progress_bar=True)
+
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
+        adj_matrix, state_transition_graph, stg_values
+    )
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+
+    update_graph_attributes(taxicab, stg_values)
     exit()
 
     stg_values = preparedness_efficient(adj_matrix, beta=0.5, max_num_hops=4,
@@ -2045,15 +2037,6 @@ if __name__ == "__main__":
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
-    exit()
-
-    print("Training " + tinytown.environment_name + " " + option_onboarding + " Preparedness Agent")
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
-                              option_onboarding, tinytown,
-                              training_timesteps, 5, evaluate_policy_window,
-                              False, total_evaluation_steps,
-                              continue_training=False, overwrite_existing_agents=True,
-                              progress_bar=True)
     exit()
 
     preparedness_agent = PreparednessAgent(tinytown.possible_actions,
@@ -2069,18 +2052,6 @@ if __name__ == "__main__":
                                      progress_bar=True)
     preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     print(tinytown.environment_name + " preparedness training options")
-    exit()
-
-    print("Training tinytown Louvain Agents")
-    train_louvain_agents(tinytown, tinytown.environment_name,
-                         filenames['agents'], filenames['results'],
-                         training_timesteps, 5, evaluate_policy_window,
-                         initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
-                         all_actions_valid=False,
-                         overwrite_existing_agents=True,
-                         total_eval_steps=total_evaluation_steps,
-                         state_dtype=tinytown.state_dtype, state_shape=tinytown.state_shape, progress_bar=True)
-
     exit()
 
     print("Training tinytown eigenoptions agent")
@@ -2122,40 +2093,6 @@ if __name__ == "__main__":
                            overwrite_existing_agents=True,
                            all_actions_valid=True,
                            total_eval_steps=total_evaluation_steps)
-    exit()
-
-    data = graphing.extract_data(filenames['results'],
-                                 [
-                                     'preparedness_agent_returns_none_onboarding.json',
-                                     # 'preparedness_agent_returns_generic_onboarding.json',
-                                     # 'preparedness_agent_returns_specific_onboarding.json',
-                                     'eigenoptions_epoch_returns.json',
-                                     'louvain agent returns',
-                                     'betweenness_epoch_returns.json',
-                                     'q_learning_epoch_returns.json'
-                                 ])
-    graphing.graph_reward_per_epoch(data, graphing_window, evaluate_policy_window,
-                                    name='Lavaflow',
-                                    x_label='Decision Stages',
-                                    y_label='Average Epoch Return',
-                                    error_bars='st_error',
-                                    labels=[
-                                        'No Onboarding',
-                                        # 'Generic Onboarding',
-                                        # 'Specific Onboarding',
-                                        'Eigenoptions',
-                                        'Louvain',
-                                        'Betweenness',
-                                        'Primitives'
-                                    ],
-                                    colours=['#332288',
-                                             # '#117733',
-                                             # '#88CCEE',
-                                             '#DDCC77',
-                                             '#CC6677',
-                                             '#AA4499',
-                                             '#555555'
-                                    ])
     exit()
 
     louvain_agent = LouvainAgent(lavaflow.possible_actions, state_transition_graph,
