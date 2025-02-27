@@ -1871,6 +1871,8 @@ def update_graph_attributes(environment: Environment,
         nx.set_node_attributes(g, attributes)
         nx.write_gexf(g, path)
 
+    with open(graph_filenames['state transition graph values'], 'r') as f:
+        json.dump(attributes, f)
     return
 
 
@@ -1953,6 +1955,12 @@ if __name__ == "__main__":
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    betweenness_agent = BetweennessAgent(taxicab.possible_actions,
+                                         0.9, 0.1, 0.9, taxicab.state_shape, taxicab.state_dtype,
+                                         state_transition_graph, 30)
+    stg_values = betweenness_agent.find_betweenness_subgoals(stg_values)
+    update
 
     graph_subgoal_count(taxicab, ['preparedness subgoal level',
                                    'frequency entropy  subgoal level',
