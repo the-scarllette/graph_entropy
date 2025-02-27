@@ -268,6 +268,7 @@ def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str, ...],
                            threshold: None|float=None, threshold_key: None|str=None,
                            width: float=0.5,
                            x_label: None|str=None, y_label: None|str=None, y_lim: None|List[int]=None,
+                           legend: bool=True,
                            name: None|str=None,
                            colours: None|List[str]=None):
     plt.style.use('ggplot')
@@ -296,17 +297,18 @@ def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str, ...],
         label = None
         if threshold_key is not None:
             label = threshold_key
-        ax.plot(labels, [threshold, threshold], "k--", label=label)
+        ax.plot([threshold, threshold], "k--", label=label)
 
     if y_lim is not None:
         ax.set_ylim(y_lim)
 
-    ax.legend(loc="upper right")
+    if legend:
+        ax.legend(loc="upper right")
 
     if name is not None:
         ax.set_title(name)
-        plt.savefig(name + '.png')
 
+    plt.tight_layout()
     plt.show()
     return
 

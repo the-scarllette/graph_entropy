@@ -217,7 +217,43 @@ def betweenness(stg: nx.Graph, existing_stg_values=None):
     return stg, existing_stg_values
 
 
-def count_subgoals(environment: Environment, subgoal_key: str, multiple_levels: bool=False, count_states: bool=False)\
+def count_clusters(environment: Environment, cluster_key: str, count_states: bool=False)\
+    -> Dict[int, int] | Tuple[Dict[int, int], int]:
+    env_filenames = get_filenames(environment)
+    with open(env_filenames['state transition graph values'], 'r') as f:
+        state_transition_graph_values = json.load(f)
+    cluster_count = {}
+    num_states = 0
+    cluster_level = 0
+    all_levels_counted = False
+
+    while not all_levels_counted:
+        key = cluster_key + "-" + str(cluster_level)
+        clusters_at_level = 0
+
+        for node in state_transition_graph_values:
+            try:
+                node_cluster = state_transition_graph_values[node][key]
+            except KeyError:
+                all_levels_counted = True
+                break
+            if node_cluster > clusters_at_level:
+                clusters_at_level = node_cluster
+            num_states += 1
+
+        if not all_levels_counted:
+            cluster_count[cluster_level] = clusters_at_level
+        cluster_level += 1
+
+    if not count_states:
+        return cluster_count
+
+    num_states = num_states / cluster_level
+    return cluster_count, num_states
+
+
+def count_subgoals(environment: Environment, subgoal_key: str, multiple_levels: bool=False,
+                   count_states: bool=False)\
         -> Dict[int, int] | Tuple[Dict[int, int], int]:
     env_filenames = get_filenames(environment)
     with open(env_filenames['state transition graph values'], 'r') as f:
@@ -664,6 +700,7 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
 
 
 def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multiple_levels: List[bool],
+                        clusters: None|List[bool]=None,
                         plot_percentage: bool=False,
                         plot_num_states: bool=False,
                         labels: None|List[str]=None, graph_name: None|str=None,
@@ -672,10 +709,19 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
     subgoal_counts = {}
     max_level = 0
     num_states = None
+    any_clusters = False
+
+    if clusters is None:
+        clusters = [False] * num_keys
 
     for i in range(num_keys):
-        subgoal_counts[subgoal_keys[i]], num_states = count_subgoals(environment, subgoal_keys[i], multiple_levels[i],
-                                                                     True)
+        if not clusters[i]:
+            subgoal_counts[subgoal_keys[i]], num_states = count_subgoals(environment, subgoal_keys[i], multiple_levels[i],
+                                                                         True)
+        else:
+            subgoal_counts[subgoal_keys[i]], num_states = count_clusters(environment, subgoal_keys[i],
+                                                                         True)
+            any_clusters = True
         height = max(subgoal_counts[subgoal_keys[i]].keys())
         if height > max_level:
             max_level = height
@@ -702,8 +748,12 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
         threshold_key = None
 
     y_label = "Number of Subgoals"
-    if plot_percentage:
+    if plot_percentage and (not any_clusters):
         y_label = "Percentage of Subgoal States"
+    elif any_clusters:
+        y_label = "Number of Subgoal States/Clusters"
+    elif plot_percentage:
+        y_label = "Percentage of Subgoal States/Clusters"
 
     graphing.graph_stacked_barchart(graphing_data,
                                     tuple(labels),
@@ -1956,28 +2006,34 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    betweenness_agent = BetweennessAgent(taxicab.possible_actions,
-                                         0.9, 0.1, 0.9, taxicab.state_shape, taxicab.state_dtype,
-                                         state_transition_graph, 30)
-    stg_values = betweenness_agent.find_betweenness_subgoals(stg_values)
-    update_graph_attributes(taxicab, stg_values)
-    exit()
-
     graph_subgoal_count(taxicab, ['preparedness subgoal level',
                                    'frequency entropy  subgoal level',
-                                   'structural entropy  subgoal level'
+                                   'structural entropy  subgoal level',
+                                   'node betweenness subgoal',
+                                   'cluster'
                                    ],
                         [
                             True,
                             True,
+                            True,
+                            False,
                             True
                          ],
-                        plot_percentage=True,
+                        clusters=[
+                            False,
+                            False,
+                            False,
+                            False,
+                            True
+                        ],
+                        plot_percentage=False,
                         plot_num_states=False,
                         labels=[
                             'Preparedness',
-                            'Frequency Entropy',
-                            'Neighbourhood Entropy'
+                            'Frequency\nEntropy',
+                            'Neighbourhood\nEntropy',
+                            'Betweenness',
+                            'Louvain'
                         ],
                         colours=['#332288',
                                  '#117733',
@@ -1987,8 +2043,16 @@ if __name__ == "__main__":
                                  '#AA4499',
                                  '#555555'
                                  ],
-                        graph_name="Taxicab Percentage of Subgoal States"
+                        graph_name="Taxicab Percentage of Clusters/Subgoal States"
                         )
+    exit()
+
+
+
+    louvain_agent = LouvainAgent(taxicab.possible_actions, state_transition_graph,
+                                 taxicab.state_dtype, taxicab.state_shape,)
+    stg_values = louvain_agent.apply_louvain(state_transition_graph_values=stg_values)
+    update_graph_attributes(taxicab, stg_values)
     exit()
 
     print("Training tinytown Louvain Agents")

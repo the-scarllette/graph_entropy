@@ -88,6 +88,7 @@ class LouvainAgent(MultiLevelGoalAgent):
                       partition_type: la.VertexPartition.LinearResolutionParameterVertexPartition = None,
                       return_aggregate_graphs: bool = True,
                       first_levels_to_skip=0, weights=None,
+                      state_transition_graph_values=None,
                       graph_save_path=None):
         # Set optimisation metric, define initial partition, initialise optimiser.
         if partition_type is None:
@@ -135,7 +136,15 @@ class LouvainAgent(MultiLevelGoalAgent):
             nx_graph = self.stg.to_networkx()
             nx.write_gexf(nx_graph, graph_save_path)
 
-        return
+        if state_transition_graph_values is None:
+            return
+
+        for level in range(hierarchy_level):
+            key = "cluster-" + str(level)
+            for node in self.stg.vs.indices:
+                state_transition_graph_values[str(node)][key] = self.stg.vs[key][node]
+
+        return state_transition_graph_values
 
     def can_initiate_option(self, hierarchy_level, source_cluster, target_cluster, node):
         try:
