@@ -267,6 +267,8 @@ def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=N
 def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str], width: float=0.5,
                            x_label: None|str=None, y_label: None|str=None, name: None|str=None,
                            colours: None|List[str]=None):
+    plt.style.use('ggplot')
+
     fig, ax = plt.subplots()
     if x_label is not None:
         ax.set_xlabel(x_label)

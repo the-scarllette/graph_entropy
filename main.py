@@ -656,7 +656,8 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
 
 
 def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multiple_levels: List[bool],
-                        graph_name: None|str=None, width: float=0.5, colours: None|List[str]=None):
+                        labels: None|List[str]=None, graph_name: None|str=None,
+                        width: float=0.5, colours: None|List[str]=None):
     num_keys = len(subgoal_keys)
     subgoal_counts = {}
     max_level = 0
@@ -678,8 +679,11 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
                 count = 0
             graphing_data["Level " + str(level)][i] = count
 
+    if labels is None:
+        labels = subgoal_keys
+
     graphing.graph_stacked_barchart(graphing_data,
-                                    tuple(subgoal_keys),
+                                    tuple(labels),
                                     width,
                                     "Subgoal Method",
                                     "Number of Subgoals",
@@ -1886,9 +1890,9 @@ if __name__ == "__main__":
                       ])
     board_name = 'blocks'
 
-    lavaflow = LavaFlow(None, None, (0, 0))
-    # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
-    #                   continuous=True)
+    # lavaflow = LavaFlow(None, None, (0, 0))
+    taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
+                       continuous=True)
     # tinytown = TinyTown(2, 3, pick_every=1)
 
     option_onboarding = 'specific'
@@ -1918,14 +1922,40 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # _ - EE3377 - 8
 
-    filenames = get_filenames(lavaflow)
+    filenames = get_filenames(taxicab)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    graph_subgoal_count(lavaflow, ['preparedness subgoal level'], [True])
+    graph_subgoal_count(taxicab, ['preparedness subgoal level',
+                                   'frequency entropy  subgoal level',
+                                   'structural entropy  subgoal level',
+                                   'node betweenness subgoal'
+                                   ],
+                        [
+                            True,
+                            True,
+                            True,
+                            False
+                         ],
+                        labels=[
+                            'Preparedness',
+                            'Frequency Entropy',
+                            'Neighbourhood Entropy',
+                            'Betweenness'
+                        ],
+                        colours=['#332288',
+                                 '#117733',
+                                 '#88CCEE',
+                                 '#DDCC77',
+                                 '#CC6677',
+                                 '#AA4499',
+                                 '#555555'
+                                 ],
+                        graph_name="Taxicab Number of Subgoals"
+                        )
     exit()
 
     print("Training tinytown Louvain Agents")
