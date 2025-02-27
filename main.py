@@ -217,20 +217,26 @@ def betweenness(stg: nx.Graph, existing_stg_values=None):
     return stg, existing_stg_values
 
 
-def count_subgoals(environment: Environment, subgoal_key: str, multiple_levels: bool=False) -> Dict[int, int]:
+def count_subgoals(environment: Environment, subgoal_key: str, multiple_levels: bool=False, count_states: bool=False)\
+        -> Dict[int, int] | Tuple[Dict[int, int], int]:
     env_filenames = get_filenames(environment)
     with open(env_filenames['state transition graph values'], 'r') as f:
         state_transition_graph_values = json.load(f)
     subgoal_count = {}
+    num_states = 0
 
     if not multiple_levels:
         subgoal_count[1] = 0
         for node in state_transition_graph_values:
+            num_states += 1
             if state_transition_graph_values[node][subgoal_key] == 'True':
                 subgoal_count[1] += 1
-        return subgoal_count
+        if not count_states:
+            return subgoal_count
+        return subgoal_count, num_states
 
     for node in state_transition_graph_values:
+        num_states += 1
         node_subgoal_level = state_transition_graph_values[node][subgoal_key]
 
         if node_subgoal_level == 'None':
@@ -241,7 +247,9 @@ def count_subgoals(environment: Environment, subgoal_key: str, multiple_levels: 
         except KeyError:
             subgoal_count[int(node_subgoal_level)] = 1
 
-    return subgoal_count
+    if not count_states:
+        return subgoal_count
+    return subgoal_count, num_states
 
 
 def compute_betweeness(adj_matrix):
@@ -656,14 +664,18 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
 
 
 def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multiple_levels: List[bool],
+                        plot_percentage: bool=False,
+                        plot_num_states: bool=False,
                         labels: None|List[str]=None, graph_name: None|str=None,
-                        width: float=0.5, colours: None|List[str]=None):
+                        width: float=0.5, y_lim: None|List[int]=None, colours: None|List[str]=None):
     num_keys = len(subgoal_keys)
     subgoal_counts = {}
     max_level = 0
+    num_states = None
 
     for i in range(num_keys):
-        subgoal_counts[subgoal_keys[i]] = count_subgoals(environment, subgoal_keys[i], multiple_levels[i])
+        subgoal_counts[subgoal_keys[i]], num_states = count_subgoals(environment, subgoal_keys[i], multiple_levels[i],
+                                                                     True)
         height = max(subgoal_counts[subgoal_keys[i]].keys())
         if height > max_level:
             max_level = height
@@ -675,6 +687,8 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
         for level in range(1, max_level + 1):
             try:
                 count = subgoal_counts[subgoal_key][level]
+                if plot_percentage:
+                    count = (count / num_states) * 100
             except KeyError:
                 count = 0
             graphing_data["Level " + str(level)][i] = count
@@ -682,11 +696,22 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
     if labels is None:
         labels = subgoal_keys
 
+    threshold_key = "Total Number of States"
+    if not plot_num_states:
+        num_states = None
+        threshold_key = None
+
+    y_label = "Number of Subgoals"
+    if plot_percentage:
+        y_label = "Percentage of Subgoal States"
+
     graphing.graph_stacked_barchart(graphing_data,
                                     tuple(labels),
+                                    num_states, threshold_key,
                                     width,
                                     "Subgoal Method",
-                                    "Number of Subgoals",
+                                    y_label,
+                                    y_lim,
                                     graph_name,
                                     colours
                                     )
@@ -1931,20 +1956,19 @@ if __name__ == "__main__":
 
     graph_subgoal_count(taxicab, ['preparedness subgoal level',
                                    'frequency entropy  subgoal level',
-                                   'structural entropy  subgoal level',
-                                   'node betweenness subgoal'
+                                   'structural entropy  subgoal level'
                                    ],
                         [
                             True,
                             True,
-                            True,
-                            False
+                            True
                          ],
+                        plot_percentage=True,
+                        plot_num_states=False,
                         labels=[
                             'Preparedness',
                             'Frequency Entropy',
-                            'Neighbourhood Entropy',
-                            'Betweenness'
+                            'Neighbourhood Entropy'
                         ],
                         colours=['#332288',
                                  '#117733',
@@ -1954,7 +1978,7 @@ if __name__ == "__main__":
                                  '#AA4499',
                                  '#555555'
                                  ],
-                        graph_name="Taxicab Number of Subgoals"
+                        graph_name="Taxicab Percentage of Subgoal States"
                         )
     exit()
 

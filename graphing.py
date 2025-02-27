@@ -264,8 +264,11 @@ def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=N
     plt.show()
     return
 
-def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str], width: float=0.5,
-                           x_label: None|str=None, y_label: None|str=None, name: None|str=None,
+def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str, ...],
+                           threshold: None|float=None, threshold_key: None|str=None,
+                           width: float=0.5,
+                           x_label: None|str=None, y_label: None|str=None, y_lim: None|List[int]=None,
+                           name: None|str=None,
                            colours: None|List[str]=None):
     plt.style.use('ggplot')
 
@@ -275,10 +278,9 @@ def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str], widt
     if y_label is not None:
         ax.set_ylabel(y_label)
 
-    bottom = np.zeros(len(labels))
-    num_items = len(data)
+    num_labels = len(labels)
+    bottom = np.zeros(num_labels)
     i = 0
-
     for label, values in data.items():
         colour = None
         if colours is not None:
@@ -286,6 +288,18 @@ def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str], widt
         _ = ax.bar(labels, values, width, label=label, bottom=bottom, color=colour)
         bottom += values
         i += 1
+
+    if threshold is not None:
+        threshold_line = np.zeros(num_labels)
+        threshold_line.fill(threshold)
+
+        label = None
+        if threshold_key is not None:
+            label = threshold_key
+        ax.plot(labels, [threshold, threshold], "k--", label=label)
+
+    if y_lim is not None:
+        ax.set_ylim(y_lim)
 
     ax.legend(loc="upper right")
 
