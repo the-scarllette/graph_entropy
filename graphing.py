@@ -264,6 +264,51 @@ def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=N
     plt.show()
     return
 
+def graph_multiple_stacked_barchart(data: List[Dict[str, np.ndarray]],
+                                    labels: Tuple[str, ...],
+                                    axes_labels: List[str],
+                                    width: float=0.5,
+                                    x_label: None|str=None, y_label: None|str=None, y_lim: None|List[int]=None,
+                                    legend_axes: None|int=None, legend_location: str="upper right",
+                                    name: None|str=None,
+                                    colours: None|List[str]=None):
+    plt.style.use('ggplot')
+    num_plots = len(data)
+    num_labels = len(labels)
+
+    fig, axes = plt.subplots(nrows=1, ncols=num_plots, sharex=True, sharey=True)
+
+    if x_label is not None:
+        fig.supxlabel(x_label)
+    if y_label is not None:
+        fig.supylabel(y_label)
+    for ax_position in range(num_plots):
+        plot_data = data[ax_position]
+        bottom = np.zeros(num_labels)
+        j = 0
+        for label, values in plot_data.items():
+            colour = None
+            if colours is not None:
+                colour = colours[j]
+            _ = axes[ax_position].bar(labels, values, width, label=label, bottom=bottom, color=colour)
+            bottom += values
+            j += 1
+        axes[ax_position].set_title(axes_labels[ax_position])
+        plt.setp(axes[ax_position].get_xticklabels(), rotation=90, ha='right')
+
+        if y_lim is not None:
+            axes[ax_position].set_ylim(y_lim)
+
+    if legend_axes is not None:
+        axes[legend_axes].legend(loc=legend_location)
+
+    if name is not None:
+        fig.suptitle(name)
+
+    plt.tight_layout()
+    plt.show()
+    return
+
 def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str, ...],
                            threshold: None|float=None, threshold_key: None|str=None,
                            width: float=0.5,

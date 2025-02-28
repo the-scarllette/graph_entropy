@@ -698,12 +698,85 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
             connected_nodes.append(i)
     return connected_nodes
 
+def graph_multiple_subgoal_count(envs: List[Environment], env_names: List[str],
+                                 subgoal_keys: List[str], multiple_levels: List[bool],
+                                 clusters: None|List[bool]=None,
+                                 plot_percentage: bool=False,
+                                 plot_num_states: bool=False,
+                                 labels: None|List[str]=None, graph_name: None|str=None,
+                                 legend_axes: None|int=None, legend_location: str="upper right",
+                                 width: float=0.5, y_lim: None|List[int]=None, colours: None|List[str]=None):
+    num_keys = len(subgoal_keys)
+    num_envs = len(envs)
+    max_level = 0
+    num_states = None
+    any_clusters = False
+
+    if clusters is None:
+        clusters = [False] * num_keys
+
+    subgoal_counts = [{} for _ in range(num_envs)]
+    num_states = [0] * num_envs
+
+    for i in range(num_envs):
+        for j in range(num_keys):
+            if not clusters[j]:
+                subgoal_counts[i][subgoal_keys[j]], state_count = count_subgoals(envs[i], subgoal_keys[j],
+                                                                             multiple_levels[j],
+                                                                             True)
+                num_states[i] = state_count
+            else:
+                subgoal_counts[i][subgoal_keys[j]] = count_clusters(envs[i], subgoal_keys[j],
+                                                                 False)
+                any_clusters = True
+
+            height = max(subgoal_counts[i][subgoal_keys[j]].keys())
+            if height > max_level:
+                max_level = height
+
+    plot_data = [{"Level " + str(level): np.zeros(num_keys) for level in range(1, max_level + 1)}
+                 for _ in range(num_envs)]
+
+    for i in range(num_envs):
+        for j in range(num_keys):
+            subgoal_key = subgoal_keys[j]
+            for level in range(1, max_level + 1):
+                try:
+                    count = subgoal_counts[i][subgoal_key][level]
+                    if plot_percentage:
+                        count = (count / num_states[i]) * 100
+                except KeyError:
+                    count = 0
+                plot_data[i]["Level " + str(level)][j] = count
+
+    y_label = "Number of Subgoals"
+    if plot_percentage and (not any_clusters):
+        y_label = "Percentage of Subgoal States"
+    if (not plot_percentage) and any_clusters:
+        y_label = "Number of Subgoal States/Clusters"
+    if plot_percentage and any_clusters:
+        y_label = "Percentage of Subgoal States/Clusters"
+
+    if labels is None:
+        labels = subgoal_keys
+
+    graphing.graph_multiple_stacked_barchart(plot_data,
+                                             labels,
+                                             env_names,
+                                             width,
+                                             "Subgoal Method",
+                                             y_label,
+                                             y_lim,
+                                             legend_axes, legend_location,
+                                             graph_name,
+                                             colours)
+    return
 
 def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multiple_levels: List[bool],
                         clusters: None|List[bool]=None,
                         plot_percentage: bool=False,
                         plot_num_states: bool=False,
-                        labels: None|List[str]=None, graph_name: None|str=None,
+                        labels: None|List[str]=None, graph_name: None|str=None, legend: bool=True,
                         width: float=0.5, y_lim: None|List[int]=None, colours: None|List[str]=None):
     num_keys = len(subgoal_keys)
     subgoal_counts = {}
@@ -719,8 +792,8 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
             subgoal_counts[subgoal_keys[i]], num_states = count_subgoals(environment, subgoal_keys[i], multiple_levels[i],
                                                                          True)
         else:
-            subgoal_counts[subgoal_keys[i]], num_states = count_clusters(environment, subgoal_keys[i],
-                                                                         True)
+            subgoal_counts[subgoal_keys[i]] = count_clusters(environment, subgoal_keys[i],
+                                                                         False)
             any_clusters = True
         height = max(subgoal_counts[subgoal_keys[i]].keys())
         if height > max_level:
@@ -750,9 +823,9 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
     y_label = "Number of Subgoals"
     if plot_percentage and (not any_clusters):
         y_label = "Percentage of Subgoal States"
-    elif any_clusters:
+    if (not plot_percentage) and any_clusters:
         y_label = "Number of Subgoal States/Clusters"
-    elif plot_percentage:
+    if plot_percentage and any_clusters:
         y_label = "Percentage of Subgoal States/Clusters"
 
     graphing.graph_stacked_barchart(graphing_data,
@@ -762,6 +835,7 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
                                     "Subgoal Method",
                                     y_label,
                                     y_lim,
+                                    legend,
                                     graph_name,
                                     colours
                                     )
@@ -1967,10 +2041,10 @@ if __name__ == "__main__":
                       ])
     board_name = 'blocks'
 
-    # lavaflow = LavaFlow(None, None, (0, 0))
+    lavaflow = LavaFlow(None, None, (0, 0))
     taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
                        continuous=True)
-    # tinytown = TinyTown(2, 3, pick_every=1)
+    tinytown = TinyTown(2, 3, pick_every=1)
 
     option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25
@@ -1999,39 +2073,84 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # _ - EE3377 - 8
 
-    filenames = get_filenames(taxicab)
+    filenames = get_filenames(lavaflow)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    graph_subgoal_count(taxicab, ['preparedness subgoal level',
-                                   'frequency entropy  subgoal level',
-                                   'structural entropy  subgoal level',
+    graph_multiple_subgoal_count([lavaflow, taxicab, tinytown],
+                                 [
+                                     'Lavaflow',
+                                     'Taxicab',
+                                     'TinyTown'
+                                 ],
+                                 [
+                                     'preparedness subgoal level',
+                                     'frequency entropy  subgoal level',
+                                     'structural entropy  subgoal level'
+                                 ],
+                                 [
+                                     True,
+                                     True,
+                                     True
+                                 ],
+                                 [
+                                     False,
+                                     False,
+                                     False
+                                 ],
+                                 True,
+                                 False,
+                                 [
+                                     'Preparedness',
+                                     'Frequency\nEntropy',
+                                     'Neighbourhood\nEntropy'
+                                 ],
+                                 "Percentage Subgoal States/Clusters",
+                                0,
+                                 legend_location="upper left",
+                                 colours=[
+                                     '#332288',
+                                     '#117733',
+                                     '#88CCEE',
+                                     '#DDCC77',
+                                     '#CC6677',
+                                     '#AA4499',
+                                     '#555555',
+                                     '#EE3377'
+                                 ]
+                                 )
+    exit()
+
+    graph_subgoal_count(lavaflow, ['preparedness subgoal level',
+                                   # 'frequency entropy  subgoal level',
+                                   # 'structural entropy  subgoal level',
                                    'node betweenness subgoal',
                                    'cluster'
                                    ],
                         [
                             True,
-                            True,
-                            True,
-                            False,
-                            True
-                         ],
-                        clusters=[
-                            False,
-                            False,
-                            False,
+                            # True,
+                            # True,
                             False,
                             True
                         ],
-                        plot_percentage=False,
-                        plot_num_states=False,
+                        clusters=[
+                            False,
+                            # False,
+                            # False,
+                            False,
+                            True
+                        ],
+                        plot_percentage=True,
+                        legend=True,
+                        y_lim=[0, 8.5],
                         labels=[
                             'Preparedness',
-                            'Frequency\nEntropy',
-                            'Neighbourhood\nEntropy',
+                            # 'Frequency\nEntropy',
+                            # 'Neighbourhood\nEntropy',
                             'Betweenness',
                             'Louvain'
                         ],
@@ -2041,18 +2160,25 @@ if __name__ == "__main__":
                                  '#DDCC77',
                                  '#CC6677',
                                  '#AA4499',
-                                 '#555555'
+                                 '#555555',
+                                 '#EE3377'
                                  ],
-                        graph_name="Taxicab Percentage of Clusters/Subgoal States"
+                        graph_name="Lavaflow Percentage of Clusters/Subgoals States"
                         )
     exit()
 
+    louvain_agent = LouvainAgent(tinytown.possible_actions, state_transition_graph,
+                                 tinytown.state_dtype, tinytown.state_shape)
+    stg_values = louvain_agent.apply_louvain(state_transition_graph_values=stg_values, first_levels_to_skip=1)
+    update_graph_attributes(tinytown, stg_values)
+    exit()
 
-
-    louvain_agent = LouvainAgent(taxicab.possible_actions, state_transition_graph,
-                                 taxicab.state_dtype, taxicab.state_shape,)
-    stg_values = louvain_agent.apply_louvain(state_transition_graph_values=stg_values)
-    update_graph_attributes(taxicab, stg_values)
+    betweenness_agent = BetweennessAgent(tinytown.possible_actions,
+                                         0.9, 0.1, 0.9,
+                                         tinytown.state_shape, tinytown.state_dtype,
+                                         state_transition_graph, 30)
+    stg_values = betweenness_agent.find_betweenness_subgoals(stg_values)
+    update_graph_attributes(tinytown, stg_values)
     exit()
 
     print("Training tinytown Louvain Agents")
