@@ -279,6 +279,29 @@ class PreparednessAgent(OptionsAgent):
         self.current_option_step = 0
         return
 
+    def count_skills(self) -> Dict[int, int]:
+        skills_count = {}
+
+        # Counting skills between subgoals
+        for level in self.options_between_subgoals:
+            skills_count[int(level)] = len(self.options_between_subgoals[level])
+
+        if self.option_onboarding == 'none':
+            return skills_count
+
+        # Counting Onboarding options
+        level = int(level) + 1
+        if self.option_onboarding == 'generic': # generic onboarding
+            skills_count[1] += 1 # generic onboarding option
+            skills_count[level] = len(self.generic_onboarding_subgoal_options)
+            return skills_count
+
+        # specific onboarding
+        skills_count[1] += len(self.specific_onboarding_options)
+        skills_count[level] = len(self.generic_onboarding_subgoal_options)
+
+        return skills_count
+
     def create_option(self, start_node: None | str, end_node: str, start_state_str: None | str, end_state_str: str,
                       hierarchy_level: int, options: None | List[PreparednessOption]=None,
                       initiation_func: None | Callable[[np.ndarray], bool]=None) -> PreparednessOption:

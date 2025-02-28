@@ -206,6 +206,18 @@ class LouvainAgent(MultiLevelGoalAgent):
         self.current_option_index = rand.choice(ops)
         return self.get_option_from_index(self.current_option_index)
 
+    def count_skills(self) -> Dict[int, int]:
+        skills_count = {}
+
+        for option in self.options:
+            level = option.hierarchy_level
+            try:
+                skills_count[level - self.min_hierarchy_level + 1] += 1
+            except KeyError:
+                skills_count[level - self.min_hierarchy_level + 1] = 1
+
+        return skills_count
+
     def create_option(self, hierarchy_level, source_cluster, target_cluster):
         def create_initiation_function():
             def initiation_func(state):

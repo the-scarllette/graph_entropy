@@ -298,6 +298,13 @@ class OptionsAgent:
         self.current_option_index = None
         return
 
+    def count_skills(self) -> Dict[int, int]:
+        num_skills = 0
+        for option in self.options:
+            if option.has_policy():
+                num_skills += 1
+        return {1: num_skills}
+
     def get_available_options(self, state: np.ndarray, possible_actions: None|List[int]=None) -> List[int]:
         available_options = []
         option_index = 0
