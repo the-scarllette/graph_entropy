@@ -313,7 +313,7 @@ def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str, ...],
                            threshold: None|float=None, threshold_key: None|str=None,
                            width: float=0.5,
                            x_label: None|str=None, y_label: None|str=None, y_lim: None|List[int]=None,
-                           legend: bool=True,
+                           legend_location: None|str=None,
                            name: None|str=None,
                            colours: None|List[str]=None):
     plt.style.use('ggplot')
@@ -347,8 +347,8 @@ def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str, ...],
     if y_lim is not None:
         ax.set_ylim(y_lim)
 
-    if legend:
-        ax.legend(loc="upper right")
+    if legend_location is not None:
+        ax.legend(loc=legend_location)
 
     if name is not None:
         ax.set_title(name)

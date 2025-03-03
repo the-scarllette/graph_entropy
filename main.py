@@ -226,6 +226,7 @@ def count_clusters(environment: Environment, cluster_key: str, count_states: boo
     num_states = 0
     cluster_level = 0
     all_levels_counted = False
+    clusters_found = False
 
     while not all_levels_counted:
         key = cluster_key + "-" + str(cluster_level)
@@ -234,8 +235,10 @@ def count_clusters(environment: Environment, cluster_key: str, count_states: boo
         for node in state_transition_graph_values:
             try:
                 node_cluster = state_transition_graph_values[node][key]
+                clusters_found = True
             except KeyError:
-                all_levels_counted = True
+                if clusters_found:
+                    all_levels_counted = True
                 break
             if node_cluster > clusters_at_level:
                 clusters_at_level = node_cluster
@@ -702,7 +705,6 @@ def graph_multiple_subgoal_count(envs: List[Environment], env_names: List[str],
                                  subgoal_keys: List[str], multiple_levels: List[bool],
                                  clusters: None|List[bool]=None,
                                  plot_percentage: bool=False,
-                                 plot_num_states: bool=False,
                                  labels: None|List[str]=None, graph_name: None|str=None,
                                  legend_axes: None|int=None, legend_location: str="upper right",
                                  width: float=0.5, y_lim: None|List[int]=None, colours: None|List[str]=None):
@@ -770,6 +772,45 @@ def graph_multiple_subgoal_count(envs: List[Environment], env_names: List[str],
                                              legend_axes, legend_location,
                                              graph_name,
                                              colours)
+    return
+
+
+def graph_skill_count(agents: List[OptionsAgent], agent_labels: List[str],
+                      graph_name: None|str=None, legend_location: None|str=None,
+                      width: float=0.5, y_lim: None|List[int]=None, colours: None|List[str]=None):
+    num_labels = len(agents)
+    skill_counts = {}
+    max_level = 0
+
+    for i in range(num_labels):
+        agent = agents[i]
+        agent_label = agent_labels[i]
+
+        skill_counts[agent_label] = agent.count_skills()
+
+        max_level = max(max(skill_counts[agent_label].keys()), max_level)
+
+    graphing_data = {"Level " + str(level): np.zeros(num_labels) for level in range(1, max_level + 1)}
+
+    for i in range(num_labels):
+        agent_label = agent_labels[i]
+        for level in range(1, max_level + 1):
+            try:
+                count = skill_counts[agent_label][level]
+            except KeyError:
+                count = 0
+            graphing_data["Level " + str(level)][i] = count
+
+    graphing.graph_stacked_barchart(graphing_data,
+                                    tuple(agent_labels),
+                                    width=width,
+                                    x_label="Agent",
+                                    y_label="Number of Skills",
+                                    y_lim=y_lim,
+                                    legend_location=legend_location,
+                                    name=graph_name,
+                                    colours=colours
+                                    )
     return
 
 def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multiple_levels: List[bool],
@@ -2073,12 +2114,90 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # _ - EE3377 - 8
 
-    filenames = get_filenames(lavaflow)
+    filenames = get_filenames(tinytown)
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    preparedness_agent_none = PreparednessAgent(tinytown.possible_actions,
+                                                0.9, 0.15, 0.9,
+                                                tinytown.state_dtype, tinytown.state_shape,
+                                                state_transition_graph, preparednesss_subgoal_graph,
+                                                option_onboarding='none')
+    preparedness_agent_generic = PreparednessAgent(tinytown.possible_actions,
+                                                   0.9, 0.15, 0.9,
+                                                   tinytown.state_dtype, tinytown.state_shape,
+                                                   state_transition_graph, preparednesss_subgoal_graph,
+                                                   option_onboarding='generic')
+    preparedness_agent_specific = PreparednessAgent(tinytown.possible_actions,
+                                                    0.9, 0.15, 0.9,
+                                                    tinytown.state_dtype, tinytown.state_shape,
+                                                    state_transition_graph, preparednesss_subgoal_graph,
+                                                    option_onboarding='specific')
+    preparedness_agent_none.load(filenames['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent_generic.load(filenames['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent_specific.load(filenames['agents'] + '/preparedness_base_agent.json')
+    betweenness_agent = BetweennessAgent(tinytown.possible_actions, 0.9, 0.15, 0.9,
+                                         tinytown.state_shape, tinytown.state_dtype,
+                                         state_transition_graph, 30)
+    betweenness_agent.load(filenames['agents'] + '/betweenness_base_agent.json')
+    louvain_agent = LouvainAgent(tinytown.possible_actions, state_transition_graph,
+                                 tinytown.state_dtype, tinytown.state_shape,
+                                 0.9, 0.15, 0.9,
+                                 min_hierarchy_level=0)
+    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
+
+    graph_skill_count(
+        [
+            preparedness_agent_none,
+            preparedness_agent_generic,
+            preparedness_agent_specific,
+            betweenness_agent,
+            louvain_agent
+        ],
+        [
+            "Preparedness\nNo Onboarding",
+            "Preparedness\nGeneric Onboarding",
+            "Preparedness\nSpecific Onboarding",
+            "Betweenness",
+            'Louvain'
+
+        ],
+        "TinyTown Number of Skills Discovered",
+        True,
+
+        y_lim=[0, 500],
+        colours=[
+            '#332288',
+            '#117733',
+            '#88CCEE',
+            '#DDCC77',
+            '#CC6677',
+            '#AA4499',
+            '#555555',
+            '#EE3377'
+        ]
+    )
+    exit()
+
+    louvain_agent = LouvainAgent(tinytown.possible_actions, state_transition_graph,
+                                 tinytown.state_dtype, tinytown.state_shape,
+                                 0.9, 0.15, 0.9,
+                                 min_hierarchy_level=0)
+    print("Applying Louvain")
+    stg_values = louvain_agent.apply_louvain(first_levels_to_skip=2,
+                                             state_transition_graph_values=stg_values)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+
+    print("Creating Options")
+    louvain_agent.create_options()
+    print("Saving Agent")
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+    exit()
 
     graph_multiple_subgoal_count([lavaflow, taxicab, tinytown],
                                  [
@@ -2088,29 +2207,27 @@ if __name__ == "__main__":
                                  ],
                                  [
                                      'preparedness subgoal level',
-                                     'frequency entropy  subgoal level',
-                                     'structural entropy  subgoal level'
+                                     'node betweenness subgoal',
+                                     'cluster'
                                  ],
                                  [
                                      True,
-                                     True,
+                                     False,
                                      True
                                  ],
                                  [
                                      False,
                                      False,
-                                     False
+                                     True
                                  ],
                                  True,
-                                 False,
                                  [
                                      'Preparedness',
-                                     'Frequency\nEntropy',
-                                     'Neighbourhood\nEntropy'
+                                     'Betweenness',
+                                     'Louvain'
                                  ],
                                  "Percentage Subgoal States/Clusters",
-                                0,
-                                 legend_location="upper left",
+                                 y_lim=[0, 6],
                                  colours=[
                                      '#332288',
                                      '#117733',
@@ -2122,6 +2239,36 @@ if __name__ == "__main__":
                                      '#EE3377'
                                  ]
                                  )
+    exit()
+
+    print("TinyTown Louvain Training Options")
+    louvain_agent = LouvainAgent(tinytown.possible_actions,
+                                 state_transition_graph,
+                                 tinytown.state_dtype, tinytown.state_shape,
+                                 min_hierarchy_level=0)
+    print("Applying Louvain")
+    louvain_agent.apply_louvain(first_levels_to_skip=2)
+    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
+    louvain_agent.train_options(options_training_timesteps,
+                                tinytown, False, True)
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+    exit()
+
+    louvain_agent.train_options(options_training_timesteps, lavaflow,
+                                False, True)
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+    exit()
+
+    print("Training tinytown Louvain Agents")
+    train_louvain_agents(tinytown, tinytown.environment_name,
+                         filenames['agents'], filenames['results'],
+                         training_timesteps, 5, evaluate_policy_window,
+                         initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
+                         all_actions_valid=False,
+                         overwrite_existing_agents=True,
+                         total_eval_steps=total_evaluation_steps,
+                         state_dtype=tinytown.state_dtype, state_shape=tinytown.state_shape, progress_bar=True)
+
     exit()
 
     graph_subgoal_count(lavaflow, ['preparedness subgoal level',
@@ -2167,30 +2314,12 @@ if __name__ == "__main__":
                         )
     exit()
 
-    louvain_agent = LouvainAgent(tinytown.possible_actions, state_transition_graph,
-                                 tinytown.state_dtype, tinytown.state_shape)
-    stg_values = louvain_agent.apply_louvain(state_transition_graph_values=stg_values, first_levels_to_skip=1)
-    update_graph_attributes(tinytown, stg_values)
-    exit()
-
     betweenness_agent = BetweennessAgent(tinytown.possible_actions,
                                          0.9, 0.1, 0.9,
                                          tinytown.state_shape, tinytown.state_dtype,
                                          state_transition_graph, 30)
     stg_values = betweenness_agent.find_betweenness_subgoals(stg_values)
     update_graph_attributes(tinytown, stg_values)
-    exit()
-
-    print("Training tinytown Louvain Agents")
-    train_louvain_agents(tinytown, tinytown.environment_name,
-                         filenames['agents'], filenames['results'],
-                         training_timesteps, 5, evaluate_policy_window,
-                         initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
-                         all_actions_valid=False,
-                         overwrite_existing_agents=True,
-                         total_eval_steps=total_evaluation_steps,
-                         state_dtype=tinytown.state_dtype, state_shape=tinytown.state_shape, progress_bar=True)
-
     exit()
 
     data = graphing.extract_data(
@@ -2382,15 +2511,6 @@ if __name__ == "__main__":
                            total_eval_steps=total_evaluation_steps)
     exit()
 
-    louvain_agent = LouvainAgent(lavaflow.possible_actions, state_transition_graph,
-                                 lavaflow.state_dtype, lavaflow.state_shape,
-                                 0.9, 0.15, 0.9)
-    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
-    louvain_agent.train_options(options_training_timesteps, lavaflow,
-                                False, True)
-    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
-    exit()
-
     print(tinytown.environment_name + " preparedness training options")
     state_transition_graph, preparedness_subgoal_graph, stg_values = (
         preparedness_aggregate_graph(tinytown, adj_matrix, state_transition_graph, stg_values,
@@ -2456,18 +2576,6 @@ if __name__ == "__main__":
     nx.set_node_attributes(state_transition_graph, stg_values)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     print(taxicab.environment_name + " preparedness hops 1 - 4")
-    exit()
-
-    louvain_agent = LouvainAgent(lavaflow.possible_actions,
-                                 state_transition_graph,
-                                 lavaflow.state_dtype, lavaflow.state_shape)
-    print("Applying Louvain")
-    louvain_agent.apply_louvain(first_levels_to_skip=1)
-    print("Creating Options")
-    louvain_agent.create_options()
-    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
-    louvain_agent.train_options_value_iteration(0.001, lavaflow, 1, True, True)
-    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
     exit()
 
     train_preparedness_agents(filenames['agents'] + "/preparedness_base_agent.json",

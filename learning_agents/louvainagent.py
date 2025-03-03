@@ -139,7 +139,15 @@ class LouvainAgent(MultiLevelGoalAgent):
         if state_transition_graph_values is None:
             return
 
-        for level in range(hierarchy_level):
+        level = 0
+        all_removed = False
+        for level in range(0, 5):
+            key = "cluster-" + str(level)
+            for node in self.stg.vs.indices:
+                all_removed = state_transition_graph_values[str(node)].pop(key, True)
+            level += 1
+
+        for level in range(self.min_hierarchy_level, hierarchy_level):
             key = "cluster-" + str(level)
             for node in self.stg.vs.indices:
                 state_transition_graph_values[str(node)][key] = self.stg.vs[key][node]
