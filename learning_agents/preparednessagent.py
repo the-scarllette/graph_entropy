@@ -279,6 +279,18 @@ class PreparednessAgent(OptionsAgent):
         self.current_option_step = 0
         return
 
+    def count_available_skills(self, state: np.ndarray, possible_actions: None|List[int]=None) -> int:
+        num_available_skills = 0
+
+        available_options = self.get_available_options(state, possible_actions)
+
+        for option_index in available_options:
+            option = self.option_index_lookup(int(option_index))
+            if option.has_policy():
+                num_available_skills += 1
+
+        return num_available_skills
+
     def count_skills(self) -> Dict[int, int]:
         skills_count = {}
 
