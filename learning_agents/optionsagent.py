@@ -298,7 +298,7 @@ class OptionsAgent:
         self.current_option_index = None
         return
 
-    def count_available_skills(self, state: np.ndarray) -> int:
+    def count_available_skills(self, state: np.ndarray, possible_actions: None|List[int]=None) -> int:
         available_skills = 0
         for option in self.options:
             if not option.has_policy():

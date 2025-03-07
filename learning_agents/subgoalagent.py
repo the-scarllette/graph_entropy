@@ -77,6 +77,22 @@ class SubgoalAgent(OptionsAgent):
         self.state_option_values = copy_from.state_option_values.copy()
         return
 
+    def count_available_skills(self, state: np.ndarray, possible_actions: None|List[int]=None) -> int:
+        num_available_skills = 0
+        state_str = self.state_to_state_str(state)
+
+        try:
+            available_options = self.option_initiation_lookup[state_str]
+        except KeyError:
+            available_options = self.get_available_options(state, possible_actions)
+
+        for option_index in available_options:
+            option = self.options[option_index]
+            if option.has_policy():
+                num_available_skills += 1
+
+        return num_available_skills
+
     def create_options(self) -> None:
         self.options = []
         for action in self.actions:
