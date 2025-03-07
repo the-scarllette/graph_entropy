@@ -1,8 +1,11 @@
+import copy
 import json
 import os
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import Dict, List, Tuple
+
+plt.rcParams["font.family"] = "serif"
 
 
 def extract_data(folderpath: str, filenames: List[str] | None=None) -> List[List[List[float]]]:
@@ -265,18 +268,20 @@ def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=N
     return
 
 def graph_multiple_stacked_barchart(data: List[Dict[str, np.ndarray]],
-                                    labels: Tuple[str, ...],
+                                    labels: List[Tuple[str, ...]],
                                     axes_labels: List[str],
                                     width: float=0.5,
-                                    x_label: None|str=None, y_label: None|str=None, y_lim: None|List[int]=None,
+                                    x_label: None|str=None, y_label: None|str=None, y_lims: None|List[List[int]]=None,
+                                    y_ticks: None|List[int] = None,
                                     legend_axes: None|int=None, legend_location: str="upper right",
                                     name: None|str=None,
-                                    colours: None|List[str]=None):
+                                    percentage: bool=False, colours: None|List[str]=None):
     plt.style.use('ggplot')
     num_plots = len(data)
-    num_labels = len(labels)
+    num_labels = [len(label) for label in labels]
 
-    fig, axes = plt.subplots(nrows=1, ncols=num_plots, sharex=True, sharey=True)
+    fig, axes = plt.subplots(nrows=1, ncols=num_plots, sharex=False, sharey=True)
+    bar_charts = [None for _ in range(num_plots)]
 
     if x_label is not None:
         fig.supxlabel(x_label)
@@ -284,28 +289,36 @@ def graph_multiple_stacked_barchart(data: List[Dict[str, np.ndarray]],
         fig.supylabel(y_label)
     for ax_position in range(num_plots):
         plot_data = data[ax_position]
-        bottom = np.zeros(num_labels)
+        bottom = np.zeros(num_labels[ax_position])
         j = 0
         for label, values in plot_data.items():
             colour = None
             if colours is not None:
                 colour = colours[j]
-            _ = axes[ax_position].bar(labels, values, width, label=label, bottom=bottom, color=colour)
+            bar_charts[ax_position] = axes[ax_position].barh(labels[ax_position], values, width, label=label, left=bottom, color=colour)
             bottom += values
             j += 1
-        axes[ax_position].set_title(axes_labels[ax_position])
-        plt.setp(axes[ax_position].get_xticklabels(), rotation=90, ha='right')
 
-        if y_lim is not None:
-            axes[ax_position].set_ylim(y_lim)
+        axes[ax_position].set_title(axes_labels[ax_position])
+
+        if y_lims is not None:
+            axes[ax_position].set_xlim(copy.deepcopy(y_lims[ax_position]))
+            y_tick = np.arange(y_lims[ax_position][0], y_lims[ax_position][1] + y_ticks[ax_position],
+                               y_ticks[ax_position])
+            y_labels = [str(round(y, 0)) for y in y_tick]
+            if percentage:
+                y_labels = [str(round(y, 1)) + "%" for y in y_tick]
+            axes[ax_position].set_xticks(copy.deepcopy(y_tick))
+            axes[ax_position].set_xticklabels(copy.deepcopy(y_labels), rotation=90)
 
     if legend_axes is not None:
-        axes[legend_axes].legend(loc=legend_location)
+        axes[legend_axes].legend(loc=legend_location, bbox_to_anchor=(2.0, 0.75))
 
     if name is not None:
         fig.suptitle(name)
 
     plt.tight_layout()
+    plt.savefig(name + '.png')
     plt.show()
     return
 
@@ -334,6 +347,7 @@ def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str, ...],
         _ = ax.bar(labels, values, width, label=label, bottom=bottom, color=colour)
         bottom += values
         i += 1
+    plt.setp(ax.get_xticklabels(), rotation=90, ha='right')
 
     if threshold is not None:
         threshold_line = np.zeros(num_labels)
@@ -346,6 +360,9 @@ def graph_stacked_barchart(data: Dict[str, np.ndarray], labels: Tuple[str, ...],
 
     if y_lim is not None:
         ax.set_ylim(y_lim)
+        y_ticks = np.arange(y_lim[0], y_lim[1] + 5.0, 5.0)
+        y_labels = [str(round(y, 1)) + "%" for y in y_ticks]
+        ax.set_yticks(y_ticks, labels=y_labels)
 
     if legend_location is not None:
         ax.legend(loc=legend_location)

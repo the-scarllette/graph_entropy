@@ -701,13 +701,64 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
             connected_nodes.append(i)
     return connected_nodes
 
+
+def graph_multiple_skill_count(agents: List[List[OptionsAgent]],
+                               agent_labels: List[List[str]], env_names: List[str],
+                               graph_name: None|str=None,
+                               legend_axes: None|int=None, legend_location: None|str=None,
+                               width: float=0.5, y_lims: None|List[List[int]]=None, y_ticks: None|List[int]=None,
+                               colours: None|List[str]=None):
+    num_envs = len(env_names)
+    max_level = 0
+    skill_counts = [{} for _ in range(num_envs)]
+    num_agents = [len(agent_list) for agent_list in agents]
+
+    for i in range(num_envs):
+        for j in range(num_agents[i]):
+            agent_label = agent_labels[i][j]
+
+            skill_counts[i][agent_label] = agents[i][j].count_skills()
+
+            max_level = max(max(skill_counts[i][agent_label].keys()), max_level)
+
+    plot_data = [{"Level " + str(level): np.zeros(num_agents[i])
+                 for level in range(1, max_level + 1)} for i in range(num_envs)]
+
+    for i in range(num_envs):
+        for j in range(num_agents[i]):
+            agent_label = agent_labels[i][j]
+            for level in range(1, max_level + 1):
+                try:
+                    count = skill_counts[i][agent_label][level]
+                except KeyError:
+                    count = 0
+                plot_data[i]["Level " + str(level)][j] = count
+
+    x_label = "Number of Skills"
+
+    graphing.graph_multiple_stacked_barchart(plot_data,
+                                             [tuple(agent_label) for agent_label in agent_labels],
+                                             env_names,
+                                             width,
+                                             x_label,
+                                             "Agent",
+                                             y_lims, y_ticks,
+                                             legend_axes, legend_location,
+                                             graph_name,
+                                             False,
+                                             colours
+    )
+    return
+
 def graph_multiple_subgoal_count(envs: List[Environment], env_names: List[str],
                                  subgoal_keys: List[str], multiple_levels: List[bool],
                                  clusters: None|List[bool]=None,
                                  plot_percentage: bool=False,
                                  labels: None|List[str]=None, graph_name: None|str=None,
                                  legend_axes: None|int=None, legend_location: str="upper right",
-                                 width: float=0.5, y_lim: None|List[int]=None, colours: None|List[str]=None):
+                                 width: float=0.5, y_lims: None|List[List[int]]=None, y_ticks: None|List[int]=None,
+                                 percentage: bool=False,
+                                 colours: None|List[str]=None):
     num_keys = len(subgoal_keys)
     num_envs = len(envs)
     max_level = 0
@@ -751,13 +802,13 @@ def graph_multiple_subgoal_count(envs: List[Environment], env_names: List[str],
                     count = 0
                 plot_data[i]["Level " + str(level)][j] = count
 
-    y_label = "Number of Subgoals"
+    x_label = "Number of Subgoals"
     if plot_percentage and (not any_clusters):
-        y_label = "Percentage of Subgoal States"
+        x_label = "Percentage of States\nIdentified as Subgoals"
     if (not plot_percentage) and any_clusters:
-        y_label = "Number of Subgoal States/Clusters"
+        x_label = "Number of Subgoal States/Clusters"
     if plot_percentage and any_clusters:
-        y_label = "Percentage of Subgoal States/Clusters"
+        x_label = "Percentage of States\nIdentified as Subgoals/Clusters"
 
     if labels is None:
         labels = subgoal_keys
@@ -766,11 +817,13 @@ def graph_multiple_subgoal_count(envs: List[Environment], env_names: List[str],
                                              labels,
                                              env_names,
                                              width,
+                                             x_label,
                                              "Subgoal Method",
-                                             y_label,
-                                             y_lim,
+                                             y_lims,
+                                             y_ticks,
                                              legend_axes, legend_location,
                                              graph_name,
+                                             percentage,
                                              colours)
     return
 
@@ -863,19 +916,20 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
 
     y_label = "Number of Subgoals"
     if plot_percentage and (not any_clusters):
-        y_label = "Percentage of Subgoal States"
+        y_label = "Percentage of States\nIdentified as Subgoals"
     if (not plot_percentage) and any_clusters:
-        y_label = "Number of Subgoal States/Clusters"
+        y_label = "Number of Subgoals/Clusters"
     if plot_percentage and any_clusters:
-        y_label = "Percentage of Subgoal States/Clusters"
+        y_label = "Percentage of States\nIdentified as Subgoals/Clusters"
 
     graphing.graph_stacked_barchart(graphing_data,
                                     tuple(labels),
                                     num_states, threshold_key,
                                     width,
-                                    "Subgoal Method",
                                     y_label,
+                                    "Subgoal Method",
                                     y_lim,
+                                    percentage,
                                     legend,
                                     graph_name,
                                     colours
@@ -889,6 +943,7 @@ def label_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
                    min_level: None|int=None, max_level: None|int=None
                    ) -> Tuple[nx.MultiDiGraph, Dict[str, Dict[str, float|str]], Dict[int, List[str]]]:
     subgoal_level_key = value_key + " subgoal level"
+    subgoal_found = False
     if min_level is None:
         get_value_key = lambda _: value_key
         get_subgoal_key = lambda _: value_key + " - local maxima"
@@ -933,19 +988,20 @@ def label_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
                     if neighbour_str == node:
                         continue
                     neighbour_value = float(stg_values[neighbour_str][key])
-                    if neighbour_value > value:
+                    if neighbour_value >= value:
                         is_subgoal_str = 'False'
                         break
 
             stg_values[node][subgoal_key] = is_subgoal_str
 
             if is_subgoal_str == 'True':
+                subgoals_found = True
                 subgoals[level].append(node)
                 stg_values[node][subgoal_level_key] = str(level)
             elif level == min_level:
                 stg_values[node][subgoal_level_key] = 'None'
 
-        if level > min_level and (subgoals[level - 1] == subgoals[level] or subgoals[level] == []):
+        if level > min_level and subgoals_found and subgoals[level - 1] == subgoals[level]:
             break
 
     subgoals[level - 1] = subgoals[level].copy()
@@ -2098,7 +2154,7 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
     total_evaluation_steps = 35
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 500_000
+    options_training_timesteps = 10_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 200_000
@@ -2114,40 +2170,349 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # _ - EE3377 - 8
 
-    filenames = get_filenames(tinytown)
-    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    preparednesss_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
+    filenames_lavaflow = get_filenames(lavaflow)
+    adj_matrix_lavaflow = sparse.load_npz(filenames_lavaflow['adjacency matrix'])
+    preparednesss_lavaflow_subgoal_graph = nx.read_gexf(filenames_lavaflow['preparedness aggregate graph'])
+    state_transition_graph_lavaflow = nx.read_gexf(filenames_lavaflow['state transition graph'])
+    filenames_taxicab = get_filenames(taxicab)
+    adj_matrix_taxicab = sparse.load_npz(filenames_taxicab['adjacency matrix'])
+    preparednesss_taxicab_subgoal_graph = nx.read_gexf(filenames_taxicab['preparedness aggregate graph'])
+    state_transition_graph_taxicab = nx.read_gexf(filenames_taxicab['state transition graph'])
+    filenames_tinytown = get_filenames(tinytown)
+    adj_matrix_tinytown = sparse.load_npz(filenames_tinytown['adjacency matrix'])
+    preparednesss_tinytown_subgoal_graph = nx.read_gexf(filenames_tinytown['preparedness aggregate graph'])
+    state_transition_graph_tinytown = nx.read_gexf(filenames_tinytown['state transition graph'])
 
-    preparedness_agent_none = PreparednessAgent(tinytown.possible_actions,
-                                                0.9, 0.15, 0.9,
-                                                tinytown.state_dtype, tinytown.state_shape,
-                                                state_transition_graph, preparednesss_subgoal_graph,
-                                                option_onboarding='none')
-    preparedness_agent_generic = PreparednessAgent(tinytown.possible_actions,
-                                                   0.9, 0.15, 0.9,
-                                                   tinytown.state_dtype, tinytown.state_shape,
-                                                   state_transition_graph, preparednesss_subgoal_graph,
-                                                   option_onboarding='generic')
-    preparedness_agent_specific = PreparednessAgent(tinytown.possible_actions,
-                                                    0.9, 0.15, 0.9,
-                                                    tinytown.state_dtype, tinytown.state_shape,
-                                                    state_transition_graph, preparednesss_subgoal_graph,
-                                                    option_onboarding='specific')
-    preparedness_agent_none.load(filenames['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent_generic.load(filenames['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent_specific.load(filenames['agents'] + '/preparedness_base_agent.json')
-    betweenness_agent = BetweennessAgent(tinytown.possible_actions, 0.9, 0.15, 0.9,
-                                         tinytown.state_shape, tinytown.state_dtype,
-                                         state_transition_graph, 30)
-    betweenness_agent.load(filenames['agents'] + '/betweenness_base_agent.json')
-    louvain_agent = LouvainAgent(tinytown.possible_actions, state_transition_graph,
+    graph_multiple_subgoal_count([lavaflow, taxicab, tinytown, tinytown],
+                                 [
+                                     'Lavaflow',
+                                     'Taxicab',
+                                     'TinyTown\n(Truncated)',
+                                     'TinyTown'
+                                 ],
+                                 [
+                                     'preparedness subgoal level',
+                                     'frequency entropy  subgoal level',
+                                     'structural entropy  subgoal level',
+                                     'node betweenness subgoal'
+                                 ],
+                                 [
+                                     True,
+                                     True,
+                                     True,
+                                     False
+                                 ],
+                                 [
+                                     False,
+                                     False,
+                                     False,
+                                     False
+                                 ],
+                                 True,
+                                 [[
+                                     'Preparedness',
+                                     'Frequency\nEntropy',
+                                     'Neighbourhood\nEntropy',
+                                     'Betweenness',
+                                 ], [
+                                     'Preparedness',
+                                     'Frequency\nEntropy',
+                                     'Neighbourhood\nEntropy',
+                                     'Betweenness',
+                                 ],
+                                     [
+                                         'Preparedness',
+                                         'Frequency\nEntropy',
+                                         'Neighbourhood\nEntropy',
+                                         'Betweenness'
+                                     ], [
+                                     'Preparedness',
+                                     'Frequency\nEntropy',
+                                     'Neighbourhood\nEntropy',
+                                     'Betweenness'
+                                 ]
+                                 ],
+                                 "Percentage Subgoals",
+                                 y_lims=[[0, 11],
+                                         [0, 6],
+                                         [0, 3],
+                                         [0, 45]],
+                                 y_ticks=[3.0, 2.0, 1.0, 15.0],
+                                 percentage=True,
+                                 legend_axes=None,
+                                 colours=[
+                                     '#332288',
+                                     '#117733',
+                                     '#88CCEE',
+                                     '#DDCC77',
+                                     '#CC6677',
+                                     '#AA4499',
+                                     '#555555',
+                                     '#EE3377'
+                                 ]
+                                 )
+    exit()
+
+    preparedness_agent_taxicab_none = PreparednessAgent(taxicab.possible_actions,
+                                                        0.9, 0.15, 0.9,
+                                                        taxicab.state_dtype, taxicab.state_shape,
+                                                        state_transition_graph_taxicab,
+                                                        preparednesss_taxicab_subgoal_graph,
+                                                        option_onboarding='none')
+    preparedness_agent_taxicab_generic = PreparednessAgent(taxicab.possible_actions,
+                                                           0.9, 0.15, 0.9,
+                                                           taxicab.state_dtype, taxicab.state_shape,
+                                                           state_transition_graph_taxicab,
+                                                           preparednesss_taxicab_subgoal_graph,
+                                                           option_onboarding='generic')
+    preparedness_agent_taxicab_none.load(filenames_taxicab['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent_taxicab_generic.load(filenames_taxicab['agents'] + '/preparedness_base_agent.json')
+    betweenness_agent_taxicab = BetweennessAgent(taxicab.possible_actions, 0.9, 0.15, 0.9,
+                                                 taxicab.state_shape, taxicab.state_dtype,
+                                                 state_transition_graph_taxicab, 30)
+    betweenness_agent_taxicab.load(filenames_taxicab['agents'] + '/betweenness_base_agent.json')
+    louvain_agent_taxicab = LouvainAgent(taxicab.possible_actions, state_transition_graph_taxicab,
+                                         taxicab.state_dtype, taxicab.state_shape,
+                                         0.9, 0.15, 0.9,
+                                         min_hierarchy_level=0)
+    louvain_agent_taxicab.load(filenames_taxicab['agents'] + '/louvain_base_agent.json')
+
+    preparedness_agent_tinytown_none = PreparednessAgent(tinytown.possible_actions,
+                                                         0.9, 0.15, 0.9,
+                                                         tinytown.state_dtype, tinytown.state_shape,
+                                                         state_transition_graph_tinytown,
+                                                         preparednesss_tinytown_subgoal_graph,
+                                                         option_onboarding='none')
+    preparedness_agent_tinytown_generic = PreparednessAgent(tinytown.possible_actions,
+                                                            0.9, 0.15, 0.9,
+                                                            tinytown.state_dtype, tinytown.state_shape,
+                                                            state_transition_graph_tinytown,
+                                                            preparednesss_tinytown_subgoal_graph,
+                                                            option_onboarding='generic')
+    preparedness_agent_tinytown_specific = PreparednessAgent(tinytown.possible_actions,
+                                                             0.9, 0.15, 0.9,
+                                                             tinytown.state_dtype, tinytown.state_shape,
+                                                             state_transition_graph_tinytown,
+                                                             preparednesss_tinytown_subgoal_graph,
+                                                             option_onboarding='specific')
+    preparedness_agent_tinytown_none.load(filenames_tinytown['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent_tinytown_generic.load(filenames_tinytown['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent_tinytown_specific.load(filenames_tinytown['agents'] + '/preparedness_base_agent.json')
+    betweenness_agent_tinytown = BetweennessAgent(tinytown.possible_actions, 0.9, 0.15, 0.9,
+                                                  tinytown.state_shape, tinytown.state_dtype,
+                                                  state_transition_graph_tinytown, 30)
+    betweenness_agent_tinytown.load(filenames_tinytown['agents'] + '/betweenness_base_agent.json')
+    louvain_agent_tinytown = LouvainAgent(tinytown.possible_actions, state_transition_graph_tinytown,
+                                          tinytown.state_dtype, tinytown.state_shape,
+                                          0.9, 0.15, 0.9,
+                                          min_hierarchy_level=0)
+    louvain_agent_tinytown.load(filenames_tinytown['agents'] + '/louvain_base_agent.json')
+
+    preparedness_agent_lavaflow_none = PreparednessAgent(lavaflow.possible_actions,
+                                                         0.9, 0.15, 0.9,
+                                                         lavaflow.state_dtype, lavaflow.state_shape,
+                                                         state_transition_graph_lavaflow,
+                                                         preparednesss_lavaflow_subgoal_graph,
+                                                         option_onboarding='none')
+    preparedness_agent_lavaflow_generic = PreparednessAgent(lavaflow.possible_actions,
+                                                            0.9, 0.15, 0.9,
+                                                            lavaflow.state_dtype, lavaflow.state_shape,
+                                                            state_transition_graph_lavaflow,
+                                                            preparednesss_lavaflow_subgoal_graph,
+                                                            option_onboarding='generic')
+    preparedness_agent_lavaflow_specific = PreparednessAgent(lavaflow.possible_actions,
+                                                             0.9, 0.15, 0.9,
+                                                             lavaflow.state_dtype, lavaflow.state_shape,
+                                                             state_transition_graph_lavaflow,
+                                                             preparednesss_lavaflow_subgoal_graph,
+                                                             option_onboarding='specific')
+    preparedness_agent_lavaflow_none.load(filenames_lavaflow['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent_lavaflow_generic.load(filenames_lavaflow['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent_lavaflow_specific.load(filenames_lavaflow['agents'] + '/preparedness_base_agent.json')
+    betweenness_agent_lavaflow = BetweennessAgent(lavaflow.possible_actions, 0.9, 0.15, 0.9,
+                                                  lavaflow.state_shape, lavaflow.state_dtype,
+                                                  state_transition_graph_lavaflow, 30)
+    betweenness_agent_lavaflow.load(filenames_lavaflow['agents'] + '/betweenness_base_agent.json')
+    louvain_agent_lavaflow = LouvainAgent(lavaflow.possible_actions, state_transition_graph_lavaflow,
+                                          lavaflow.state_dtype, lavaflow.state_shape,
+                                          0.9, 0.15, 0.9,
+                                          min_hierarchy_level=0)
+    louvain_agent_lavaflow.load(filenames_lavaflow['agents'] + '/louvain_base_agent.json')
+
+    graph_multiple_skill_count([
+        [preparedness_agent_lavaflow_none,
+         preparedness_agent_lavaflow_generic,
+         preparedness_agent_lavaflow_specific,
+         betweenness_agent_lavaflow,
+         louvain_agent_lavaflow],
+        [preparedness_agent_taxicab_none,
+         preparedness_agent_taxicab_generic,
+         betweenness_agent_taxicab,
+         louvain_agent_taxicab],
+        [preparedness_agent_tinytown_none,
+         preparedness_agent_tinytown_generic,
+         preparedness_agent_tinytown_specific,
+         betweenness_agent_tinytown,
+         louvain_agent_tinytown],
+    ],
+        [['Preparedness',
+          'Preparedness\nGeneric\nOnboarding',
+          'Preparedness\nSpecific\nOnboarding',
+          'Betweenness',
+          'Louvain'
+          ],
+         ['Preparedness',
+          'Preparedness\nGeneric\nOnboarding',
+          'Betweenness',
+          'Louvain',
+          ],
+         ['Preparedness',
+          'Preparedness\nGeneric\nOnboarding',
+          'Preparedness\nSpecific\nOnboarding',
+          'Betweenness',
+          'Louvain'
+          ],
+         ],
+        [
+            'Lavaflow',
+            'Taxicab',
+            'Tinytown'
+        ],
+        "Number of Skills Discovered",
+        y_lims=[
+            [0, 500],
+            [0, 700],
+            [0, 550]
+        ],
+        y_ticks=[
+            100,
+            100,
+            100
+        ],
+        legend_axes=2,
+        legend_location='lower right',
+        colours=[
+            '#332288',
+            '#117733',
+            '#88CCEE',
+            '#DDCC77',
+            '#CC6677',
+            '#AA4499',
+            '#555555',
+            '#EE3377'
+        ]
+    )
+    exit()
+
+    print("TinyTown Louvain Training Options")
+    louvain_agent = LouvainAgent(tinytown.possible_actions,
+                                 state_transition_graph,
                                  tinytown.state_dtype, tinytown.state_shape,
-                                 0.9, 0.15, 0.9,
                                  min_hierarchy_level=0)
+    print("Applying Louvain")
+    louvain_agent.apply_louvain(first_levels_to_skip=2)
     louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
+    louvain_agent.train_options_value_iteration(0.001, tinytown, 1, False, True)
+    # louvain_agent.train_options(options_training_timesteps,
+    #                             tinytown, False, True)
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+    exit()
+
+    graph_subgoal_count(
+        tinytown,
+        [
+            'preparedness subgoal level',
+            'frequency entropy  subgoal level',
+            'structural entropy  subgoal level',
+            'node betweenness subgoal',
+            'cluster'
+        ],
+        [
+            True,
+            True,
+            True,
+            False,
+            True
+        ],
+        [
+            False,
+            False,
+            False,
+            False,
+            True
+        ],
+        True,
+        labels=[
+             'Preparedness',
+             'Frequency Entropy',
+             'Neighbourhood Entropy',
+             'Betweenness',
+             'Louvain'
+         ],
+        graph_name="TinyTown Percentage Subgoals/Clusters",
+        legend=True,
+        y_lim=[0, 10.5],
+        colours=[
+                 '#332288',
+                 '#117733',
+                 '#88CCEE',
+                 '#DDCC77',
+                 '#CC6677',
+                 '#AA4499',
+                 '#555555',
+                 '#EE3377'
+             ]
+    )
+    exit()
+
+    print("Labeling frequency entropy subgoals")
+    state_transition_graph, stg_values, frequency_entropy_subgoals = label_subgoals(
+        adj_matrix,
+        state_transition_graph,
+        stg_values,
+        'frequency entropy ',
+        min_level=1
+    )
+    print("Labeling neighbourhood entropy subgoals")
+    state_transition_graph, stg_values, neighbourhood_entropy_subgoals = label_subgoals(
+        adj_matrix,
+        state_transition_graph,
+        stg_values,
+        'structural entropy ',
+        min_level=1
+    )
+
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+
+    print("Creating frequency entropy subgoal graph")
+    state_transition_graph, frequency_subgoal_graph, stg_values = create_subgoal_graph(
+        state_transition_graph,
+        stg_values,
+        frequency_entropy_subgoals
+    )
+    nx.write_gexf(frequency_subgoal_graph, filenames['frequency entropy subgoal graph'])
+    print("Creating neighbourhood entropy subgoal graph")
+    state_transition_graph, neighbourhood_subgoal_graph, stg_values = create_subgoal_graph(
+        state_transition_graph,
+        stg_values,
+        neighbourhood_entropy_subgoals
+    )
+    nx.write_gexf(neighbourhood_subgoal_graph, filenames['neighbourhood entropy subgoal graph'])
+
+    visual_graph = nx.read_graphml("lavaflow_room_visual_graph.graphml")
+    nx.set_node_attributes(visual_graph, stg_values)
+    nx.write_graphml(visual_graph, "lavaflow_room_visual_graph.graphml")
+    exit()
+
+    stg_values = preparedness_efficient(adj_matrix, 0.5,
+                                        max_num_hops=8,
+                                        compressed_matrix=True,
+                                        existing_stg_values=stg_values,
+                                        computed_hops_range=[1, 6], progress_bar=True)
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
 
     graph_skill_count(
         [
@@ -2165,10 +2530,8 @@ if __name__ == "__main__":
             'Louvain'
 
         ],
-        "TinyTown Number of Skills Discovered",
-        True,
-
-        y_lim=[0, 500],
+        "Taxicab Number of Skills Discovered",
+        "upper left",
         colours=[
             '#332288',
             '#117733',
@@ -2196,61 +2559,6 @@ if __name__ == "__main__":
     print("Creating Options")
     louvain_agent.create_options()
     print("Saving Agent")
-    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
-    exit()
-
-    graph_multiple_subgoal_count([lavaflow, taxicab, tinytown],
-                                 [
-                                     'Lavaflow',
-                                     'Taxicab',
-                                     'TinyTown'
-                                 ],
-                                 [
-                                     'preparedness subgoal level',
-                                     'node betweenness subgoal',
-                                     'cluster'
-                                 ],
-                                 [
-                                     True,
-                                     False,
-                                     True
-                                 ],
-                                 [
-                                     False,
-                                     False,
-                                     True
-                                 ],
-                                 True,
-                                 [
-                                     'Preparedness',
-                                     'Betweenness',
-                                     'Louvain'
-                                 ],
-                                 "Percentage Subgoal States/Clusters",
-                                 y_lim=[0, 6],
-                                 colours=[
-                                     '#332288',
-                                     '#117733',
-                                     '#88CCEE',
-                                     '#DDCC77',
-                                     '#CC6677',
-                                     '#AA4499',
-                                     '#555555',
-                                     '#EE3377'
-                                 ]
-                                 )
-    exit()
-
-    print("TinyTown Louvain Training Options")
-    louvain_agent = LouvainAgent(tinytown.possible_actions,
-                                 state_transition_graph,
-                                 tinytown.state_dtype, tinytown.state_shape,
-                                 min_hierarchy_level=0)
-    print("Applying Louvain")
-    louvain_agent.apply_louvain(first_levels_to_skip=2)
-    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
-    louvain_agent.train_options(options_training_timesteps,
-                                tinytown, False, True)
     louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
     exit()
 
