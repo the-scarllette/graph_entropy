@@ -118,6 +118,15 @@ class EigenOptionAgent(OptionsAgent):
         self.current_option_index = None
         return
 
+    def count_available_skills(self, state: np.ndarray, possible_actions: None|List[int]=None) -> int:
+        num_available_skills = 0
+
+        for i in range(self.num_options):
+            if self.options[i].initiated(state):
+                num_available_skills += 1
+
+        return num_available_skills
+
     def find_options(self, progress_bar: bool=False):
         laplacian = sparse.csgraph.laplacian(self.adjacency_matrix, True)
         _, eigenvectors = sparse.linalg.eigs(laplacian, self.num_options, which='SR')
