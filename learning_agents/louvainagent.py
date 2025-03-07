@@ -6,7 +6,7 @@ import leidenalg as la
 import networkx as nx
 import numpy as np
 import random as rand
-from typing import Dict
+from typing import Dict, List
 
 from environments.environment import Environment
 from learning_agents.optionsagent import OptionsAgent, Option
@@ -214,6 +214,22 @@ class LouvainAgent(MultiLevelGoalAgent):
         self.current_option_index = rand.choice(ops)
         return self.get_option_from_index(self.current_option_index)
 
+    def count_available_skills(self, state: np.ndarray, possible_actions: None|List[int]=None) -> int:
+        num_available_skills = 0
+        state_str = np.array2string(state)
+
+        try:
+            available_options = self.available_options[state_str]
+        except KeyError:
+            self.get_available_options(state, possible_actions)
+
+        for option_index in available_options:
+            option = self.options[int(option_index)]
+            if option.has_policy():
+                num_available_skills += 1
+
+        return num_available_skills
+
     def count_skills(self) -> Dict[int, int]:
         skills_count = {}
 
@@ -281,7 +297,7 @@ class LouvainAgent(MultiLevelGoalAgent):
 
         return
 
-    def get_available_options(self, state, possible_actions=None):
+    def get_available_options(self, state: np.ndarray, possible_actions: None|List[int]=None) -> List[str]:
         state_str = np.array2string(state)
 
         try:
