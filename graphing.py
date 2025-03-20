@@ -156,6 +156,7 @@ def graph_reward_per_epoch(data: List[List[List[float]]], graphing_window: int=1
     n = min([len(agent_data[i]) for agent_data in data for i in range(num_samples)])
 
     adjusted_data = [[[] for _ in range(num_samples)] for _ in range(num_agents)]
+
     for i in range(n):
         all_average = sum([data[agent][sample][i] for agent in range(num_agents)
                            for sample in range(num_samples)])
@@ -223,15 +224,15 @@ def graph_reward_per_timestep(data, window=10, evaluate_window=1, name=None, lab
 
 
 def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=None, xlim=None, ylim=None,
-                   fill_data=None, colours: None | List[str]=None):
+                   fill_data=None, colours: None | List[str]=None, y_tick: None|int=None, x_tick: None|int=None,
+                   no_xticks: bool=False):
     plt.style.use('ggplot')
 
     data_len = len(data)
 
-    if x is None:
-        x = list(range(len(data[0])))
-
     fig, ax = plt.subplots()
+
+    x_to_plot = x
 
     if x_label is not None:
         ax.set_xlabel(x_label)
@@ -248,7 +249,10 @@ def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=N
         if labels is not None:
             label = labels[i]
 
-        ax.plot(x, y, label=label, color=colour)
+        if x is None:
+            x_to_plot = list(range(len(data[i])))
+
+        ax.plot(x_to_plot, y, label=label, color=colour)
         if fill_data is not None:
             ax.fill_between(x, fill_data[i][0], fill_data[i][1], color=colour, alpha=0.3)
 
@@ -261,8 +265,18 @@ def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=N
 
     if xlim is not None:
         ax.set_xlim(xlim)
+        if x_tick is not None:
+            x_ticks = np.arange(xlim[0], xlim[1] + x_tick, x_tick)
+            ax.set_xticks(x_ticks)
     if ylim is not None:
         ax.set_ylim(ylim)
+        if y_tick is not None:
+            y_ticks =  np.arange(ylim[0], ylim[1] + y_tick, y_tick)
+            ax.set_yticks(y_ticks)
+
+    if no_xticks:
+        ax.set_xticks([])
+        ax.set_xticklabels([])
 
     plt.show()
     return
@@ -295,7 +309,14 @@ def graph_multiple_stacked_barchart(data: List[Dict[str, np.ndarray]],
             colour = None
             if colours is not None:
                 colour = colours[j]
-            bar_charts[ax_position] = axes[ax_position].barh(labels[ax_position], values, width, label=label, left=bottom, color=colour)
+            bar_charts[ax_position] = axes[ax_position].barh(
+                labels[ax_position],
+                values,
+                width,
+                label=label,
+                left=bottom,
+                color=colour
+            )
             bottom += values
             j += 1
 
@@ -305,7 +326,7 @@ def graph_multiple_stacked_barchart(data: List[Dict[str, np.ndarray]],
             axes[ax_position].set_xlim(copy.deepcopy(y_lims[ax_position]))
             y_tick = np.arange(y_lims[ax_position][0], y_lims[ax_position][1] + y_ticks[ax_position],
                                y_ticks[ax_position])
-            y_labels = [str(round(y, 0)) for y in y_tick]
+            y_labels = [str(round(y, 2)) for y in y_tick]
             if percentage:
                 y_labels = [str(round(y, 1)) + "%" for y in y_tick]
             axes[ax_position].set_xticks(copy.deepcopy(y_tick))

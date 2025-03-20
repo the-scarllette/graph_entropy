@@ -702,6 +702,174 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
     return connected_nodes
 
 
+def graph_available_skills(env: Environment, agents: List[OptionsAgent],
+                           agent_labels: List[str],
+                           all_actions_valid: bool=False,
+                           graph_name: None|str=None,
+                           colours: None|List[str]=None,
+                           save_data_path: None|str=None,
+                           verbose: bool=True):
+    agents_len = len(agents)
+    possible_actions = env.possible_actions
+    env_filenames = get_filenames(env)
+    with open(env_filenames['state transition graph values'], 'r') as f:
+        env_state_values = json.load(f)
+    plot_data = [[] for _ in range(agents_len)]
+
+    if verbose:
+        print("Counting Skills")
+        num_nodes = len(env_state_values)
+
+    for i in range(agents_len):
+        agent = agents[i]
+
+        if verbose:
+            print("Counting " + agent_labels[i] + " skills")
+
+        for node in env_state_values:
+            if verbose:
+                print_progress_bar(int(node), num_nodes, agent_labels[i], 'Complete')
+
+            state_str = env_state_values[node]['state']
+            state = agent.state_str_to_state(state_str)
+            if not all_actions_valid:
+                possible_actions = env.get_possible_actions(state)
+
+            plot_data[i].append(agent.count_available_skills(state, possible_actions))
+
+    if verbose:
+        print("Plotting data")
+
+    graphing.graph_multiple(plot_data,
+                            name=graph_name,
+                            labels=agent_labels,
+                            x_label="State",
+                            y_label="Number of Available Skills",
+                            colours=colours,
+                            no_xticks=True)
+
+    if save_data_path is not None:
+        if os.path.exists(save_data_path):
+            with open(save_data_path, 'r') as f:
+                save_data = json.load(f)
+                for i in range(agents_len):
+                    save_data[agent_labels[i]] = plot_data[i]
+        else:
+            save_data = {agent_labels[i]: plot_data[i] for i in range(agents_len)}
+        with open(save_data_path, 'w') as save_data_file:
+            json.dump(save_data, save_data_file)
+    return
+
+def graph_available_skills_from_file(skills_filepath: str,
+                                     agent_labels: List[str],
+                                     graph_name: None|str=None,
+                                     legend: bool=True,
+                                     colours: None|List[str]=None,
+                                     y_lim: None|List[int]=None,
+                                     y_tick: None|int=None,
+                                     log_plot: bool=False,
+                                     smoothing_window: None|int=None):
+    with open(skills_filepath, 'r') as skills_file:
+        skills_data = json.load(skills_file)
+    plot_data = []
+
+    for agent_label in agent_labels:
+        num_skills = skills_data[agent_label]
+        to_plot = []
+
+        if not log_plot:
+            to_plot = num_skills
+        else:
+            for skill_count in num_skills:
+                if skill_count <= 0:
+                    to_plot.append(0)
+                    continue
+                to_plot.append(np.log(skill_count))
+
+        if smoothing_window is not None:
+            smoothed_data = []
+            current_sum = 0
+            i = 1
+            for elm in to_plot:
+                current_sum += elm
+                if i >= smoothing_window:
+                    smoothed_data.append(current_sum / smoothing_window)
+                    current_sum -= to_plot[i - smoothing_window]
+                i += 1
+            to_plot = smoothed_data
+
+        plot_data.append(to_plot)
+
+    y_label = "Number of Available Skills"
+    if log_plot:
+        y_label = "Log Number of Available Skills"
+    if smoothing_window is not None:
+        y_label = "Average " + y_label
+
+    if not legend:
+        agent_labels = None
+
+    graphing.graph_multiple(
+        plot_data,
+        name=graph_name,
+        labels=agent_labels,
+        x_label="State",
+        y_label=y_label,
+        colours=colours,
+        ylim=y_lim,
+        y_tick=y_tick,
+        no_xticks=True
+    )
+    return
+
+def graph_average_available_skills_from_file(skills_filepaths: List[str],
+                                             agent_labels: List[str],
+                                             presentation_labels: List[str],
+                                             env_names: List[str],
+                                             graph_name: None|str=None,
+                                             width: float=0.5,
+                                             y_lims: None|List[List[int]]=None, y_ticks: None|int=None,
+                                             colours: None|List[str]=None,
+                                             ):
+    num_envs = len(env_names)
+    num_agents = len(agent_labels)
+    plot_data = [{"Level 1": np.zeros(num_agents)} for _ in range(num_envs)]
+
+    for i in range(num_envs):
+        with open(skills_filepaths[i], 'r') as skills_file:
+            skills_data = json.load(skills_file)
+        num_states = None
+
+        for j in range(num_agents):
+            agent_label = agent_labels[j]
+
+            try:
+                skills_per_state = skills_data[agent_label]
+            except KeyError:
+                continue
+
+            if num_states is None:
+                num_states = len(skills_per_state)
+
+            plot_data[i]["Level 1"][j] = sum(skills_per_state) / num_states
+
+    x_label = "Average Number of Available Skills"
+
+    graphing.graph_multiple_stacked_barchart(
+        plot_data,
+        [tuple(presentation_labels) for _ in range(num_envs)],
+        env_names,
+        width,
+        x_label,
+        "Agent",
+        y_lims, y_ticks,
+        name=graph_name,
+        colours=colours
+    )
+
+    return
+
+
 def graph_multiple_skill_count(agents: List[List[OptionsAgent]],
                                agent_labels: List[List[str]], env_names: List[str],
                                graph_name: None|str=None,
@@ -1667,6 +1835,7 @@ def train_betweenness_agents(base_agent_save_path: str,
                              progress_bar=False):
     all_agent_training_returns = {str(i): [] for i in range(num_agents)}
     all_agent_returns = {str(i): [] for i in range(num_agents)}
+    filenames = get_filenames(environment)
     agent_training_results_file = filenames['results'] + '/betweenness_training_returns.json'
     agent_results_file = filenames['results'] + '/betweenness_epoch_returns.json'
     stg = nx.read_gexf(filenames['state transition graph'])
@@ -2106,6 +2275,7 @@ def update_graph_attributes(environment: Environment,
 # TODO: fix run agent for DADS and DIAYN so not learning on evaluation steps
 
 if __name__ == "__main__":
+
     '''
     board = np.array([[3, 3, 3, 3, 3, 3, 3, 3],
                       [3, 0, 0, 0, 0, 0, 0, 3],
@@ -2144,8 +2314,8 @@ if __name__ == "__main__":
     tinytown = TinyTown(2, 3, pick_every=1)
 
     option_onboarding = 'specific'
-    # Taxicab=25, tinytown2x2=25
-    graphing_window = 25
+    # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
+    graphing_window = 50
     evaluate_policy_window = 10
     hops = 5
     min_num_hops = 1
@@ -2170,18 +2340,200 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # _ - EE3377 - 8
 
-    filenames_lavaflow = get_filenames(lavaflow)
-    adj_matrix_lavaflow = sparse.load_npz(filenames_lavaflow['adjacency matrix'])
-    preparednesss_lavaflow_subgoal_graph = nx.read_gexf(filenames_lavaflow['preparedness aggregate graph'])
-    state_transition_graph_lavaflow = nx.read_gexf(filenames_lavaflow['state transition graph'])
-    filenames_taxicab = get_filenames(taxicab)
-    adj_matrix_taxicab = sparse.load_npz(filenames_taxicab['adjacency matrix'])
-    preparednesss_taxicab_subgoal_graph = nx.read_gexf(filenames_taxicab['preparedness aggregate graph'])
-    state_transition_graph_taxicab = nx.read_gexf(filenames_taxicab['state transition graph'])
+    graph_average_available_skills_from_file(
+        [
+            "lavaflow_num_available_skills.json",
+            "taxicab_num_available_skills.json",
+            "tinytown2x3_num_available_skills.json"
+        ],
+        [
+            'Preparedness (No Onboarding)',
+            'Preparedness (Generic Onboarding)',
+            'Preparedness (Specific Onboarding)',
+            'Betweenness',
+            'Louvain',
+        ],
+        [
+            'Preparedness',
+            'Preparedness\nGeneric\nOnboarding',
+            'Preparedness\nSpecific\nOnboarding',
+            'Betweenness',
+            'Louvain',
+        ],
+        [
+            "Lavaflow",
+            "Taxicab",
+            "Tinytown"
+        ],
+        "Average Available Skills",
+        y_lims=[
+            [0, 1],
+            [0, 30],
+            [0, 3]
+        ],
+        y_ticks=[
+            0.2,
+            5,
+            0.5
+        ],
+        colours=[
+            '#332288',
+            '#117733',
+            '#88CCEE',
+            '#CC6677',
+            '#AA4499',
+        ]
+    )
+    exit()
+
     filenames_tinytown = get_filenames(tinytown)
+
+    plotting_colours = ['#332288',
+                        '#117733',
+                        '#88CCEE',
+                        '#DDCC77',
+                        '#CC6677',
+                        '#AA4499',
+                        '#555555',
+                        '#EE3377']
+    graph_available_skills_from_file(
+        'tinytown2x3_num_available_skills.json',
+        [
+            'Preparedness (No Onboarding)',
+            'Preparedness (Generic Onboarding)',
+            'Preparedness (Specific Onboarding)',
+            'Betweenness',
+            'Louvain',
+        ],
+        'Taxicab Available Skills',
+        True,
+        [
+            '#332288',
+            '#117733',
+            '#88CCEE',
+            '#CC6677',
+            '#AA4499',
+        ],
+        log_plot=True,
+        smoothing_window=100
+    )
+    exit()
+
+    print("Training tinytown Louvain Agents")
+    train_louvain_agents(tinytown, tinytown.environment_name,
+                         filenames_tinytown['agents'], filenames_tinytown['results'],
+                         training_timesteps, 3, evaluate_policy_window,
+                         initial_load_path=filenames_tinytown['agents'] + '/louvain_base_agent.json',
+                         all_actions_valid=False,
+                         overwrite_existing_agents=False,
+                         total_eval_steps=total_evaluation_steps,
+                         state_dtype=tinytown.state_dtype, state_shape=tinytown.state_shape, progress_bar=True)
+
+    exit()
+
+    filenames_lavaflow = get_filenames(lavaflow)
+    filenames_taxicab = get_filenames(taxicab)
+    data = graphing.extract_data(
+        filenames_tinytown['results'],
+        [
+            'preparedness_agent_returns_none_onboarding.json',
+            'preparedness_agent_returns_generic_onboarding.json',
+            'preparedness_agent_returns_specific_onboarding.json',
+            'eigenoptions_epoch_returns.json',
+            # 'louvain agent returns.json',
+            'betweenness_epoch_returns.json',
+            'q_learning_epoch_returns.json'
+        ]
+    )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='TinyTown',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        labels=[
+            'No Onboarding',
+            'Generic Onboarding',
+            'Specific Onboarding',
+            'Eigenoptions',
+            # 'Louvain',
+            'Betweenness',
+            'Primitives'
+        ],
+        colours=['#332288',
+                 '#117733',
+                 '#88CCEE',
+                 '#DDCC77',
+                 # '#CC6677',
+                 '#AA4499',
+                 '#555555'
+                 ]
+    )
+    exit()
+
+    print("Betweenness agent " + tinytown.environment_name + " agent training")
+    train_betweenness_agents('/betweenness_base_agent.json', tinytown,
+                             training_timesteps, 5, evaluate_policy_window,
+                             False, total_evaluation_steps, False,
+                             True,
+                             0.9, 0.1, 0.9, 30, True)
+    print("Betweenness agent " + tinytown.environment_name + " agent training")
+    exit()
+
     adj_matrix_tinytown = sparse.load_npz(filenames_tinytown['adjacency matrix'])
     preparednesss_tinytown_subgoal_graph = nx.read_gexf(filenames_tinytown['preparedness aggregate graph'])
     state_transition_graph_tinytown = nx.read_gexf(filenames_tinytown['state transition graph'])
+
+    print("Preparedness None Agent loading")
+    preparedness_agent_tinytown_none = PreparednessAgent(tinytown.possible_actions,
+                                                         0.9, 0.15, 0.9,
+                                                         tinytown.state_dtype, tinytown.state_shape,
+                                                         state_transition_graph_tinytown,
+                                                         preparednesss_tinytown_subgoal_graph,
+                                                         option_onboarding='none')
+    preparedness_agent_tinytown_none.load(filenames_tinytown['agents'] + '/preparedness_agent_none_0')
+    print("Preparedness Generic Agent loading")
+    preparedness_agent_tinytown_generic = PreparednessAgent(tinytown.possible_actions,
+                                                            0.9, 0.15, 0.9,
+                                                            tinytown.state_dtype, tinytown.state_shape,
+                                                            state_transition_graph_tinytown,
+                                                            preparednesss_tinytown_subgoal_graph,
+                                                            option_onboarding='generic')
+    preparedness_agent_tinytown_generic.load(filenames_tinytown['agents'] + '/preparedness_agent_generic_0')
+    print("Preparedness Specific Agent loading")
+    preparedness_agent_tinytown_specific = PreparednessAgent(tinytown.possible_actions,
+                                                             0.9, 0.15, 0.9,
+                                                             tinytown.state_dtype, tinytown.state_shape,
+                                                             state_transition_graph_tinytown,
+                                                             preparednesss_tinytown_subgoal_graph,
+                                                             option_onboarding='specific')
+    preparedness_agent_tinytown_specific.load(filenames_tinytown['agents'] + '/preparedness_agent_specific_0')
+
+    graph_available_skills(
+        tinytown,
+        [
+            preparedness_agent_tinytown_none,
+            preparedness_agent_tinytown_generic,
+            preparedness_agent_tinytown_specific
+        ],
+        [
+            'Preparedness (No Onboarding)',
+            'Preparedness (Generic Onboarding)',
+            'Preparedness (Specific Onboarding)'
+        ],
+        False,
+        "TinyTown Available Skills",
+        [
+            '#332288',
+            '#117733',
+            '#88CCEE'
+        ],
+        "tinytown2x3_num_available_skills.json",
+        True
+    )
+    exit()
 
     graph_multiple_subgoal_count([lavaflow, taxicab, tinytown, tinytown],
                                  [
@@ -2252,92 +2604,6 @@ if __name__ == "__main__":
                                  ]
                                  )
     exit()
-
-    preparedness_agent_taxicab_none = PreparednessAgent(taxicab.possible_actions,
-                                                        0.9, 0.15, 0.9,
-                                                        taxicab.state_dtype, taxicab.state_shape,
-                                                        state_transition_graph_taxicab,
-                                                        preparednesss_taxicab_subgoal_graph,
-                                                        option_onboarding='none')
-    preparedness_agent_taxicab_generic = PreparednessAgent(taxicab.possible_actions,
-                                                           0.9, 0.15, 0.9,
-                                                           taxicab.state_dtype, taxicab.state_shape,
-                                                           state_transition_graph_taxicab,
-                                                           preparednesss_taxicab_subgoal_graph,
-                                                           option_onboarding='generic')
-    preparedness_agent_taxicab_none.load(filenames_taxicab['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent_taxicab_generic.load(filenames_taxicab['agents'] + '/preparedness_base_agent.json')
-    betweenness_agent_taxicab = BetweennessAgent(taxicab.possible_actions, 0.9, 0.15, 0.9,
-                                                 taxicab.state_shape, taxicab.state_dtype,
-                                                 state_transition_graph_taxicab, 30)
-    betweenness_agent_taxicab.load(filenames_taxicab['agents'] + '/betweenness_base_agent.json')
-    louvain_agent_taxicab = LouvainAgent(taxicab.possible_actions, state_transition_graph_taxicab,
-                                         taxicab.state_dtype, taxicab.state_shape,
-                                         0.9, 0.15, 0.9,
-                                         min_hierarchy_level=0)
-    louvain_agent_taxicab.load(filenames_taxicab['agents'] + '/louvain_base_agent.json')
-
-    preparedness_agent_tinytown_none = PreparednessAgent(tinytown.possible_actions,
-                                                         0.9, 0.15, 0.9,
-                                                         tinytown.state_dtype, tinytown.state_shape,
-                                                         state_transition_graph_tinytown,
-                                                         preparednesss_tinytown_subgoal_graph,
-                                                         option_onboarding='none')
-    preparedness_agent_tinytown_generic = PreparednessAgent(tinytown.possible_actions,
-                                                            0.9, 0.15, 0.9,
-                                                            tinytown.state_dtype, tinytown.state_shape,
-                                                            state_transition_graph_tinytown,
-                                                            preparednesss_tinytown_subgoal_graph,
-                                                            option_onboarding='generic')
-    preparedness_agent_tinytown_specific = PreparednessAgent(tinytown.possible_actions,
-                                                             0.9, 0.15, 0.9,
-                                                             tinytown.state_dtype, tinytown.state_shape,
-                                                             state_transition_graph_tinytown,
-                                                             preparednesss_tinytown_subgoal_graph,
-                                                             option_onboarding='specific')
-    preparedness_agent_tinytown_none.load(filenames_tinytown['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent_tinytown_generic.load(filenames_tinytown['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent_tinytown_specific.load(filenames_tinytown['agents'] + '/preparedness_base_agent.json')
-    betweenness_agent_tinytown = BetweennessAgent(tinytown.possible_actions, 0.9, 0.15, 0.9,
-                                                  tinytown.state_shape, tinytown.state_dtype,
-                                                  state_transition_graph_tinytown, 30)
-    betweenness_agent_tinytown.load(filenames_tinytown['agents'] + '/betweenness_base_agent.json')
-    louvain_agent_tinytown = LouvainAgent(tinytown.possible_actions, state_transition_graph_tinytown,
-                                          tinytown.state_dtype, tinytown.state_shape,
-                                          0.9, 0.15, 0.9,
-                                          min_hierarchy_level=0)
-    louvain_agent_tinytown.load(filenames_tinytown['agents'] + '/louvain_base_agent.json')
-
-    preparedness_agent_lavaflow_none = PreparednessAgent(lavaflow.possible_actions,
-                                                         0.9, 0.15, 0.9,
-                                                         lavaflow.state_dtype, lavaflow.state_shape,
-                                                         state_transition_graph_lavaflow,
-                                                         preparednesss_lavaflow_subgoal_graph,
-                                                         option_onboarding='none')
-    preparedness_agent_lavaflow_generic = PreparednessAgent(lavaflow.possible_actions,
-                                                            0.9, 0.15, 0.9,
-                                                            lavaflow.state_dtype, lavaflow.state_shape,
-                                                            state_transition_graph_lavaflow,
-                                                            preparednesss_lavaflow_subgoal_graph,
-                                                            option_onboarding='generic')
-    preparedness_agent_lavaflow_specific = PreparednessAgent(lavaflow.possible_actions,
-                                                             0.9, 0.15, 0.9,
-                                                             lavaflow.state_dtype, lavaflow.state_shape,
-                                                             state_transition_graph_lavaflow,
-                                                             preparednesss_lavaflow_subgoal_graph,
-                                                             option_onboarding='specific')
-    preparedness_agent_lavaflow_none.load(filenames_lavaflow['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent_lavaflow_generic.load(filenames_lavaflow['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent_lavaflow_specific.load(filenames_lavaflow['agents'] + '/preparedness_base_agent.json')
-    betweenness_agent_lavaflow = BetweennessAgent(lavaflow.possible_actions, 0.9, 0.15, 0.9,
-                                                  lavaflow.state_shape, lavaflow.state_dtype,
-                                                  state_transition_graph_lavaflow, 30)
-    betweenness_agent_lavaflow.load(filenames_lavaflow['agents'] + '/betweenness_base_agent.json')
-    louvain_agent_lavaflow = LouvainAgent(lavaflow.possible_actions, state_transition_graph_lavaflow,
-                                          lavaflow.state_dtype, lavaflow.state_shape,
-                                          0.9, 0.15, 0.9,
-                                          min_hierarchy_level=0)
-    louvain_agent_lavaflow.load(filenames_lavaflow['agents'] + '/louvain_base_agent.json')
 
     graph_multiple_skill_count([
         [preparedness_agent_lavaflow_none,
@@ -2567,18 +2833,6 @@ if __name__ == "__main__":
     louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
     exit()
 
-    print("Training tinytown Louvain Agents")
-    train_louvain_agents(tinytown, tinytown.environment_name,
-                         filenames['agents'], filenames['results'],
-                         training_timesteps, 5, evaluate_policy_window,
-                         initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
-                         all_actions_valid=False,
-                         overwrite_existing_agents=True,
-                         total_eval_steps=total_evaluation_steps,
-                         state_dtype=tinytown.state_dtype, state_shape=tinytown.state_shape, progress_bar=True)
-
-    exit()
-
     graph_subgoal_count(lavaflow, ['preparedness subgoal level',
                                    # 'frequency entropy  subgoal level',
                                    # 'structural entropy  subgoal level',
@@ -2628,46 +2882,6 @@ if __name__ == "__main__":
                                          state_transition_graph, 30)
     stg_values = betweenness_agent.find_betweenness_subgoals(stg_values)
     update_graph_attributes(tinytown, stg_values)
-    exit()
-
-    data = graphing.extract_data(
-        filenames['results'],
-        [
-            'preparedness_agent_returns_none_onboarding.json',
-            'preparedness_agent_returns_generic_onboarding.json',
-            'preparedness_agent_returns_specific_onboarding.json',
-            'eigenoptions_epoch_returns.json',
-            # 'louvain agent returns',
-            'betweenness_epoch_returns.json',
-            'q_learning_epoch_returns.json'
-        ]
-    )
-    graphing.graph_reward_per_epoch(
-        data,
-        graphing_window,
-        evaluate_policy_window,
-        name='TinyTown (2x3)',
-        x_label='Timesteps',
-        y_label='Average Epoch Return',
-        error_bars=True,
-        labels=[
-            'No Onboarding',
-            'Generic Onboarding',
-            'Specific Onboarding',
-            'Eigenoptions',
-            # 'Louvain',
-            'Betweenness',
-            'Primitives'
-        ],
-        colours=['#332288',
-                 '#117733',
-                 '#88CCEE',
-                 '#DDCC77',
-                 # '#CC6677',
-                 '#AA4499',
-                 '#555555'
-                 ]
-    )
     exit()
 
     print("Labeling frequency entropy subgoals")
@@ -2785,15 +2999,6 @@ if __name__ == "__main__":
                              continue_training=False,
                              overwrite_existing_agents=True,
                              progress_bar=True)
-    exit()
-
-    print("Betweenness agent " + tinytown.environment_name + " agent training")
-    train_betweenness_agents('/betweenness_base_agent.json', tinytown,
-                             training_timesteps, 2, evaluate_policy_window,
-                             False, total_evaluation_steps, False,
-                             False,
-                             0.9, 0.1, 0.9, 30, True)
-    print("Betweenness agent " + tinytown.environment_name + " agent training")
     exit()
 
     print("Training eigenoptions taxicab options")

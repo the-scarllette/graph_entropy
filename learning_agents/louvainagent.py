@@ -170,7 +170,11 @@ class LouvainAgent(MultiLevelGoalAgent):
             nodes_in_target_cluster = self.get_nodes_in_cluster(hierarchy_level, target_cluster)
             can_initiate = False
             for target_node in nodes_in_target_cluster:
-                if nx.has_path(self.stg_nx, str(node), str(target_node)):
+                try:
+                    path_exists = nx.has_path(self.stg_nx, str(node), str(target_node))
+                except nx.exception.NodeNotFound:
+                    path_exists = False
+                if path_exists:
                     can_initiate = True
                     break
             try:
@@ -221,10 +225,10 @@ class LouvainAgent(MultiLevelGoalAgent):
         try:
             available_options = self.available_options[state_str]
         except KeyError:
-            self.get_available_options(state, possible_actions)
+            available_options = self.get_available_options(state, possible_actions)
 
         for option_index in available_options:
-            option = self.options[int(option_index)]
+            option = self.get_option_from_index(option_index)
             if option.has_policy():
                 num_available_skills += 1
 
