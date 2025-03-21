@@ -5,10 +5,6 @@ from typing import List, Tuple
 
 from environments.environment import Environment
 
-# Given n rooms, generates a starting lavaflow board that has that many roms.
-def generate_n_room_board(n: int) -> np.ndarray:
-    pass
-
 # Agent appears in a maze with 1 or more squares of lava
 # agent can move (N, S, E, W), place a block (N, S, E, W) or terminate the environment
 # each timestep all lava spreads to adjacent squares, not through walls or blocks
@@ -113,6 +109,24 @@ class LavaFlow(Environment):
 
     def cord_node_key(self, i: int, j: int) -> int:
         return (self.state_shape[0] * j) + i
+
+    # Given n rooms, generates a starting lavaflow board that has that many roms.
+    @staticmethod
+    def generate_n_room_board(n: int) -> np.ndarray:
+        num_squares = np.ceil(np.sqrt(n))
+        state_len = (4 * num_squares) + 1
+
+        board = np.zeros((state_len, state_len))
+        board.fill(LavaFlow.block_tile)
+
+        i = 0
+        j = 0
+        while n > 0:
+            start_i = 1 + (4 * i)
+            start_j = 1 + (4 * j)
+            board[start_i: start_i + 4, start_j: start_j + 1] = LavaFlow.empty_tile
+
+        return board
 
     def get_agent_cords(self, state: np.ndarray | None = None) -> Tuple[int, int] | Tuple[None, None]:
         if state is None:
