@@ -5,6 +5,10 @@ from typing import List, Tuple
 
 from environments.environment import Environment
 
+# Given n rooms, generates a starting lavaflow board that has that many roms.
+def generate_n_room_board(n: int) -> np.ndarray:
+    pass
+
 # Agent appears in a maze with 1 or more squares of lava
 # agent can move (N, S, E, W), place a block (N, S, E, W) or terminate the environment
 # each timestep all lava spreads to adjacent squares, not through walls or blocks
@@ -17,8 +21,6 @@ from environments.environment import Environment
 #   -0.1 for an illegal action (placing a block on an occupied square, moving into a wall)
 #   -1.0 for entering lava or terminating when lava can reach the agent
 #   when terminating and lava can no loner reach agent, +1.0 for each empty square the agent could reach
-
-# TODO: Agent appears in random empty square instead of pre-defined location
 class LavaFlow(Environment):
     north_action = 0
     south_action = 1
