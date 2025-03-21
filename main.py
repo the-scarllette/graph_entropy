@@ -827,6 +827,7 @@ def graph_average_available_skills_from_file(skills_filepaths: List[str],
                                              presentation_labels: List[str],
                                              env_names: List[str],
                                              graph_name: None|str=None,
+                                             error_bars: bool=False,
                                              width: float=0.5,
                                              y_lims: None|List[List[int]]=None, y_ticks: None|int=None,
                                              colours: None|List[str]=None,
@@ -834,6 +835,7 @@ def graph_average_available_skills_from_file(skills_filepaths: List[str],
     num_envs = len(env_names)
     num_agents = len(agent_labels)
     plot_data = [{"Level 1": np.zeros(num_agents)} for _ in range(num_envs)]
+    errors = [np.zeros(num_agents) for _ in range(num_envs)]
 
     for i in range(num_envs):
         with open(skills_filepaths[i], 'r') as skills_file:
@@ -851,9 +853,20 @@ def graph_average_available_skills_from_file(skills_filepaths: List[str],
             if num_states is None:
                 num_states = len(skills_per_state)
 
-            plot_data[i]["Level 1"][j] = sum(skills_per_state) / num_states
+            mean = sum(skills_per_state) / num_states
+            plot_data[i]["Level 1"][j] = mean
+
+            standard_dev = 0
+            for value in skills_per_state:
+                standard_dev += np.square(value - mean)
+            errors[i][j] = standard_dev/num_states
+        print(plot_data[i]["Level 1"])
+        print(errors[i])
 
     x_label = "Average Number of Available Skills"
+
+    if not error_bars:
+        errors = None
 
     graphing.graph_multiple_stacked_barchart(
         plot_data,
@@ -863,6 +876,7 @@ def graph_average_available_skills_from_file(skills_filepaths: List[str],
         x_label,
         "Agent",
         y_lims, y_ticks,
+        errors=errors,
         name=graph_name,
         colours=colours
     )
@@ -2366,6 +2380,7 @@ if __name__ == "__main__":
             "Tinytown"
         ],
         "Average Available Skills",
+        error_bars=False,
         y_lims=[
             [0, 1],
             [0, 30],

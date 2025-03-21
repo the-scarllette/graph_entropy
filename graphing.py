@@ -287,6 +287,7 @@ def graph_multiple_stacked_barchart(data: List[Dict[str, np.ndarray]],
                                     width: float=0.5,
                                     x_label: None|str=None, y_label: None|str=None, y_lims: None|List[List[int]]=None,
                                     y_ticks: None|List[int] = None,
+                                    errors: None|List[np.ndarray]=None,
                                     legend_axes: None|int=None, legend_location: str="upper right",
                                     name: None|str=None,
                                     percentage: bool=False, colours: None|List[str]=None):
@@ -309,13 +310,17 @@ def graph_multiple_stacked_barchart(data: List[Dict[str, np.ndarray]],
             colour = None
             if colours is not None:
                 colour = colours[j]
+            xerr = None
+            if errors is not None:
+                xerr = errors[ax_position]
             bar_charts[ax_position] = axes[ax_position].barh(
                 labels[ax_position],
                 values,
                 width,
                 label=label,
                 left=bottom,
-                color=colour
+                color=colour,
+                xerr=xerr
             )
             bottom += values
             j += 1
