@@ -120,16 +120,29 @@ def get_standard_error(data, average=None):
     return standard_error
 
 
-def graph(y, name=None, label=None):
-    x = list(range(len(y)))
+def graph(y: List[float|int], x: List[float|int]|None=None, x_ticks: List[float|int]|None=None,
+          name: str|None=None, label: str|None=None, y_label: None|str=None, x_label: None|str=None,
+          marker: str|None=None, linestyle: str='-'):
+    plt.style.use('ggplot')
+
+    if x is None:
+        x = list(range(len(y)))
 
     if label is None:
-        plt.plot(x, y)
+        plt.plot(x, y, ls=linestyle, marker=marker)
     else:
-        plt.plot(x, y, label=label)
+        plt.plot(x, y, ls=linestyle, label=label)
+
+    if x_ticks is not None:
+        plt.xticks(x_ticks)
 
     if name is not None:
         plt.title(name)
+
+    if y_label is not None:
+        plt.ylabel(y_label)
+    if x_label is not None:
+        plt.xlabel(x_label)
 
     if label is not None:
         plt.legend()

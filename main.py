@@ -1048,6 +1048,39 @@ def graph_skill_count(agents: List[OptionsAgent], agent_labels: List[str],
                                     )
     return
 
+def graph_skill_count_by_state_size(agents: List[PreparednessAgent],
+                                    name: str|None=None,
+                                    verbose: bool=False):
+    y = []
+    x = []
+
+    if verbose:
+        num_agents = str(len(agents))
+        i = 1
+
+    for agent in agents:
+        if verbose:
+            print("Counting Skills agent: " + str(i) + "/" + num_agents)
+            i += 1
+
+        y.append(sum(agent.count_skills().values()))
+
+        num_states = agent.state_transition_graph.number_of_nodes()
+        x.append(num_states)
+
+    graphing.graph(
+        y,
+        x,
+        x,
+        name,
+        y_label="Number of Skills",
+        x_label="Number of States",
+        marker='o',
+        linestyle=':'
+    )
+
+    return
+
 def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multiple_levels: List[bool],
                         clusters: None|List[bool]=None,
                         plot_percentage: bool=False,
@@ -1111,7 +1144,6 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
                                     y_label,
                                     "Subgoal Method",
                                     y_lim,
-                                    percentage,
                                     legend,
                                     graph_name,
                                     colours
@@ -1177,13 +1209,13 @@ def label_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
             stg_values[node][subgoal_key] = is_subgoal_str
 
             if is_subgoal_str == 'True':
-                subgoals_found = True
+                subgoal_found = True
                 subgoals[level].append(node)
                 stg_values[node][subgoal_level_key] = str(level)
             elif level == min_level:
                 stg_values[node][subgoal_level_key] = 'None'
 
-        if level > min_level and subgoals_found and subgoals[level - 1] == subgoals[level]:
+        if level > min_level and subgoal_found and subgoals[level - 1] == subgoals[level]:
             break
 
     subgoals[level - 1] = subgoals[level].copy()
@@ -2289,43 +2321,14 @@ def update_graph_attributes(environment: Environment,
 # TODO: fix run agent for DADS and DIAYN so not learning on evaluation steps
 
 if __name__ == "__main__":
-
-    '''
-    board = np.array([[3, 3, 3, 3, 3, 3, 3, 3],
-                      [3, 0, 0, 0, 0, 0, 0, 3],
-                      [3, 3, 3, 0, 3, 3, 3, 2],
-                      [3, 3, 3, 0, 0, 0, 0, 0],
-                      [3, 0, 0, 0, 0, 0, 3, 3],
-                      [3, 0, 3, 0, 0, 0, 2, 3],
-                      [3, 0, 3, 3, 1, 3, 3, 3],
-                      [3, 3, 3, 3, 3, 3, 3, 3]])
-    board_name = 'three_corridor'
-
-    board = np.array([[3, 3, 3, 3, 3, 3, 3, 3    # TODO: Add output that flags untrained options],
-                      [3, 0, 0, 0, 2, 3, 2, 3],
-                      [3, 0, 3, 0, 3, 3, 0, 3],
-                      [3, 1, 0, 0, 0, 0, 0, 3],
-                      [3, 0, 3, 0, 3, 0, 3, 3],
-                      [3, 0, 0, 0, 0, 0, 0, 3],
-                      [3, 3, 3, 3, 3, 3, 3, 3]
-                      ])
-    board_name = "pipes"
-    '''
-
-    board = np.array([[3, 3, 3, 3, 3, 3, 3],
-                      [3, 0, 0, 0, 0, 0, 3],
-                      [3, 0, 3, 0, 3, 0, 3],
-                      [3, 0, 0, 0, 2, 0, 3],
-                      [3, 0, 3, 0, 3, 0, 3],
-                      [3, 0, 0, 0, 0, 0, 3],
-                      [3, 3, 3, 3, 3, 3, 3]
-                      ])
-    board_name = 'blocks'
-
-    lavaflow = LavaFlow(None, None, (0, 0))
-    taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72],
-                       continuous=True)
-    tinytown = TinyTown(2, 3, pick_every=1)
+    # lavaflow = LavaFlow(None, None, (0, 0))
+    # taxicab = TaxiCab(
+    #       False,
+    #       False,
+    #       [0.25, 0.01, 0.01, 0.01, 0.72],
+    #       continuous=True
+    #)
+    # tinytown = TinyTown(2, 3, pick_every=1)
 
     option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
@@ -2353,6 +2356,111 @@ if __name__ == "__main__":
     # Betweenness - AA4499 - 6
     # Primitives - 555555 - 7
     # _ - EE3377 - 8
+
+    start_n = 1
+    end_n = 5
+
+    lavaflow_envs = [LavaFlow(LavaFlow.generate_n_room_board(n), str(n) + "_square", (0, 0))
+                     for n in range(start_n, end_n + 1)]
+    lavaflow_agents = []
+    n = start_n
+    for lavaflow_env in lavaflow_envs:
+        print(n)
+        filenames = get_filenames(lavaflow_env)
+
+        adj_matrix, stg, stg_values = lavaflow_env.get_adjacency_matrix(
+            probability_weights=True,
+            progress_bar=True,
+            compressed_matrix=True
+        )
+        print("Num states: " + str(adj_matrix.shape[0]))
+
+        sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+        nx.set_node_attributes(stg, stg_values)
+        with open(filenames['state transition graph values'], 'w') as f:
+            json.dump(stg_values, f)
+        nx.write_gexf(stg, filenames['state transition graph'])
+
+        n += 1
+
+    exit()
+
+    stg_values = preparedness_efficient(adj_matrix, 0.5,
+                                        max_num_hops=4,
+                                        compressed_matrix=True,
+                                        existing_stg_values=stg_values,
+                                        progress_bar=True)
+    nx.set_node_attributes(stg, stg_values)
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    nx.write_gexf(stg, filenames['state transition graph'])
+
+    stg, stg_values, subgoals = label_preparedness_subgoals(adj_matrix, stg, stg_values,
+                                                            max_level=3)
+    print(subgoals)
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    nx.write_gexf(stg, filenames['state transition graph'])
+
+    stg, aggregate_graph, stg_values = preparedness_aggregate_graph(
+        lavaflow_env,
+        adj_matrix,
+        stg,
+        stg_values,
+        subgoals,
+        max_hop=3
+    )
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+    nx.write_gexf(stg, filenames['state transition graph'])
+    nx.write_gexf(aggregate_graph, filenames['preparedness aggregate graph'])
+
+    preparedness_agent = PreparednessAgent(
+        lavaflow_env.possible_actions,
+        0.9,
+        0.15,
+        0.9,
+        lavaflow_env.state_dtype,
+        lavaflow_env.state_shape,
+        stg,
+        subgoal_graph,
+        'none'
+    )
+    preparedness_agent.create_options(lavaflow_env)
+
+    lavaflow_agents.append(preparedness_agent)
+
+    n += 1
+
+    print("Counting skills")
+    graph_skill_count_by_state_size(
+        lavaflow_agents,
+        'Preparedness Skill Count by State Space Size',
+        verbose=True
+    )
+    exit()
+
+    filenames = get_filenames(lavaflow_env)
+    stg = nx.read_gexf(filenames['state transition graph'])
+    subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    exit()
+
+    adj_matrix, stg, stg_values = lavaflow.get_adjacency_matrix(
+        True,
+        True,
+        True,
+        progress_bar=True
+    )
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.set_node_attributes(stg, stg_values)
+    nx.write_gexf(stg, filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+
+    exit()
 
     graph_average_available_skills_from_file(
         [

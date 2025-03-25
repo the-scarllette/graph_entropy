@@ -110,11 +110,26 @@ class LavaFlow(Environment):
     def cord_node_key(self, i: int, j: int) -> int:
         return (self.state_shape[0] * j) + i
 
+    @staticmethod
+    def generate_empty_board(n: int) -> np.ndarray:
+        board_size = n + 1
+        mid = int(board_size / 2)
+        board = np.zeros((board_size, board_size))
+        board.fill(LavaFlow.block_tile)
+
+        board[1:n, 1:n] = LavaFlow.empty_tile
+        board[0, mid] = LavaFlow.lava_tile
+        board[n, mid] = LavaFlow.lava_tile
+        board[mid, n] = LavaFlow.lava_tile
+        board[mid, 0] = LavaFlow.lava_tile
+
+        return board
+
     # Given n rooms, generates a starting lavaflow board that has that many roms.
     @staticmethod
     def generate_n_room_board(n: int) -> np.ndarray:
-        num_squares = np.ceil(np.sqrt(n))
-        state_len = (4 * num_squares) + 1
+        num_squares = int(np.ceil(np.sqrt(n)))
+        state_len = int((4 * num_squares) + 1)
 
         board = np.zeros((state_len, state_len))
         board.fill(LavaFlow.block_tile)
@@ -124,7 +139,23 @@ class LavaFlow(Environment):
         while n > 0:
             start_i = 1 + (4 * i)
             start_j = 1 + (4 * j)
-            board[start_i: start_i + 4, start_j: start_j + 1] = LavaFlow.empty_tile
+            board[start_i: start_i + 3, start_j: start_j + 3] = LavaFlow.empty_tile
+            n -= 1
+
+            center_i = 2 + (4 * i)
+            center_j = 2 + (4 * j)
+            corridor_cords = [(center_i + 2, center_j), (center_i, center_j + 2),
+                              (center_i - 2, center_j), (center_i, center_j - 2)]
+            for cord in corridor_cords:
+                tile = LavaFlow.empty_tile
+                if (cord[0] in [0, state_len - 1]) or (cord[1] in [0, state_len - 1]):
+                    tile = LavaFlow.lava_tile
+                board[cord[0]][cord[1]] = tile
+
+            j += 1
+            if j >= num_squares:
+                j = 0
+                i += 1
 
         return board
 
