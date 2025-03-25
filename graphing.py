@@ -238,7 +238,7 @@ def graph_reward_per_timestep(data, window=10, evaluate_window=1, name=None, lab
 
 def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=None, xlim=None, ylim=None,
                    fill_data=None, colours: None | List[str]=None, y_tick: None|int=None, x_tick: None|int=None,
-                   no_xticks: bool=False):
+                   no_xticks: bool=False, linestyle: str='-', marker: str|None=None):
     plt.style.use('ggplot')
 
     data_len = len(data)
@@ -265,7 +265,7 @@ def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=N
         if x is None:
             x_to_plot = list(range(len(data[i])))
 
-        ax.plot(x_to_plot, y, label=label, color=colour)
+        ax.plot(x_to_plot, y, label=label, color=colour, ls=linestyle, marker=marker)
         if fill_data is not None:
             ax.fill_between(x, fill_data[i][0], fill_data[i][1], color=colour, alpha=0.3)
 

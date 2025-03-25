@@ -932,6 +932,50 @@ def graph_multiple_skill_count(agents: List[List[OptionsAgent]],
     )
     return
 
+def graph_multiple_skill_count_by_state_size(agents: List[List[PreparednessAgent]],
+                                             agent_labels: List[str],
+                                             name: str|None=None,
+                                             verbose: bool=False,
+                                             colours: List[str]|None=None):
+    to_plot = []
+    x = []
+
+    if verbose:
+        num_agents = str(len(agents) * len(agent_labels))
+        i = 1
+
+    x_found = False
+
+    for agent_list in agents:
+        y = []
+        for agent in agent_list:
+            if verbose:
+                print("Counting Skills agent: " + str(i) + "/" + num_agents)
+                i += 1
+
+            y.append(sum(agent.count_skills().values()))
+
+            if not x_found:
+                num_states = agent.state_transition_graph.number_of_nodes()
+                x.append(num_states)
+
+        x_found = True
+
+    graphing.graph_multiple(
+        to_plot,
+        x,
+        name,
+        agent_labels,
+        "Number of States",
+        "Number of Skills",
+        colours=colours,
+        x_ticks=x,
+        linestyle=':',
+        marker='o'
+    )
+
+    return
+
 def graph_multiple_subgoal_count(envs: List[Environment], env_names: List[str],
                                  subgoal_keys: List[str], multiple_levels: List[bool],
                                  clusters: None|List[bool]=None,
@@ -1178,9 +1222,6 @@ def label_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
             except KeyError:
                 max_level_found = True
 
-    distance_matrix = sparse.csgraph.dijkstra(adj_matrix, True,
-                                              unweighted=True, limit=max_level)
-
     subgoals = {level: [] for level in range(min_level, max_level + 1)}
     for level in range(min_level, max_level + 1):
         key = get_value_key(level)
@@ -1188,14 +1229,16 @@ def label_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
 
         for node in stg_values:
             is_subgoal_str = 'True'
+            distance_matrix = sparse.csgraph.dijkstra(adj_matrix, True, indices=int(node),
+                                                      unweighted=True)
 
-            in_neighbours = np.where((distance_matrix[:, int(node)] <= level) &
-                                     (0 < distance_matrix[:, int(node)]))[0]
+            in_neighbours = np.where((distance_matrix <= level) &
+                                     (0 < distance_matrix))[0]
 
             if in_neighbours.size <= 0:
                 is_subgoal_str = 'False'
             else:
-                out_neighbours = np.where(distance_matrix[int(node)] <= level)[0]
+                out_neighbours = np.where(distance_matrix <= level)[0]
                 value = float(stg_values[node][key])
                 for neighbour in np.append(out_neighbours, in_neighbours):
                     neighbour_str = str(neighbour)
@@ -2357,80 +2400,53 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # _ - EE3377 - 8
 
-    start_n = 1
-    end_n = 5
+    # found: 5, 6, 7, 8,
+    start_n = 8
+    end_n = 10
 
-    lavaflow_envs = [LavaFlow(LavaFlow.generate_n_room_board(n), str(n) + "_square", (0, 0))
-                     for n in range(start_n, end_n + 1)]
+    lavaflow_envs = [LavaFlow(LavaFlow.generate_scatter_board(n), str(n) + "_scatter", (0, 0))
+                     for n in range(start_n, end_n + 1, 1)]
     lavaflow_agents = []
     n = start_n
     for lavaflow_env in lavaflow_envs:
         print(n)
         filenames = get_filenames(lavaflow_env)
+        adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+        stg = nx.read_gexf(filenames['state transition graph'])
+        with open(filenames['state transition graph values'], 'r') as f:
+            stg_values = json.load(f)
 
-        adj_matrix, stg, stg_values = lavaflow_env.get_adjacency_matrix(
-            probability_weights=True,
-            progress_bar=True,
-            compressed_matrix=True
-        )
-        print("Num states: " + str(adj_matrix.shape[0]))
-
-        sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+        stg_values = preparedness_efficient(adj_matrix, 0.5,
+                                            max_num_hops=4,
+                                            compressed_matrix=True,
+                                            existing_stg_values=stg_values,
+                                            progress_bar=True)
         nx.set_node_attributes(stg, stg_values)
         with open(filenames['state transition graph values'], 'w') as f:
             json.dump(stg_values, f)
         nx.write_gexf(stg, filenames['state transition graph'])
 
+        stg, stg_values, subgoals = label_preparedness_subgoals(adj_matrix, stg, stg_values,
+                                                                max_level=4)
+        print(subgoals)
+        with open(filenames['state transition graph values'], 'w') as f:
+            json.dump(stg_values, f)
+        nx.write_gexf(stg, filenames['state transition graph'])
+
+        stg, aggregate_graph, stg_values = preparedness_aggregate_graph(
+            lavaflow_env,
+            adj_matrix,
+            stg,
+            stg_values,
+            subgoals,
+            max_hop=3
+        )
+        with open(filenames['state transition graph values'], 'w') as f:
+            json.dump(stg_values, f)
+        nx.write_gexf(stg, filenames['state transition graph'])
+        nx.write_gexf(aggregate_graph, filenames['preparedness aggregate graph'])
+
         n += 1
-
-    exit()
-
-    stg_values = preparedness_efficient(adj_matrix, 0.5,
-                                        max_num_hops=4,
-                                        compressed_matrix=True,
-                                        existing_stg_values=stg_values,
-                                        progress_bar=True)
-    nx.set_node_attributes(stg, stg_values)
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
-    nx.write_gexf(stg, filenames['state transition graph'])
-
-    stg, stg_values, subgoals = label_preparedness_subgoals(adj_matrix, stg, stg_values,
-                                                            max_level=3)
-    print(subgoals)
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
-    nx.write_gexf(stg, filenames['state transition graph'])
-
-    stg, aggregate_graph, stg_values = preparedness_aggregate_graph(
-        lavaflow_env,
-        adj_matrix,
-        stg,
-        stg_values,
-        subgoals,
-        max_hop=3
-    )
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
-    nx.write_gexf(stg, filenames['state transition graph'])
-    nx.write_gexf(aggregate_graph, filenames['preparedness aggregate graph'])
-
-    preparedness_agent = PreparednessAgent(
-        lavaflow_env.possible_actions,
-        0.9,
-        0.15,
-        0.9,
-        lavaflow_env.state_dtype,
-        lavaflow_env.state_shape,
-        stg,
-        subgoal_graph,
-        'none'
-    )
-    preparedness_agent.create_options(lavaflow_env)
-
-    lavaflow_agents.append(preparedness_agent)
-
-    n += 1
 
     print("Counting skills")
     graph_skill_count_by_state_size(

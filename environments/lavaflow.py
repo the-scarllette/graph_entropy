@@ -159,6 +159,32 @@ class LavaFlow(Environment):
 
         return board
 
+    @staticmethod
+    def generate_scatter_board(n: int) -> np.ndarray:
+        board_size = n + 2
+
+        board = np.zeros((board_size, board_size))
+        board.fill(LavaFlow.block_tile)
+
+        column_indicies = np.arange(1, board_size, 2)
+
+        k = 1
+        while k <= n:
+            board[k, 1:board_size - 1] = LavaFlow.empty_tile
+            k += 2
+
+        k = 2
+        while k <= n - 1:
+            board[k, column_indicies] = LavaFlow.empty_tile
+            k += 2
+
+        corner_cords = [(1, 1), (1, n),
+                        (n, 1), (n, n)]
+        for corner in corner_cords:
+            board[corner[0], corner[1]] = LavaFlow.lava_tile
+
+        return board
+
     def get_agent_cords(self, state: np.ndarray | None = None) -> Tuple[int, int] | Tuple[None, None]:
         if state is None:
             state = self.current_state
