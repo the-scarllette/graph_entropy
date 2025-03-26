@@ -27,6 +27,7 @@ from learning_agents.optionsagent import Option, OptionsAgent, create_option_goa
     generate_option_to_goal
 from learning_agents.preparednessagent import PreparednessAgent
 from learning_agents.qlearningagent import QLearningAgent
+from learning_agents.subgoalagent import SubgoalAgent
 from progressbar import print_progress_bar
 
 
@@ -1132,7 +1133,31 @@ def graph_skill_count_by_state_size(agents: List[PreparednessAgent],
         marker='o',
         linestyle=':'
     )
+    return
 
+def graph_skill_count_by_state_size_from_file(filepath: str,
+                                              name: str|None=None):
+    with open(filepath, 'r') as f:
+        skill_counts = json.load(f)
+
+    y = []
+    x = []
+
+    for key in skill_counts:
+
+        y.append(skill_counts[key]['count'])
+        x.append(skill_counts[key]['num states'])
+
+    graphing.graph(
+        y,
+        x,
+        x,
+        name,
+        y_label="Number of Skills",
+        x_label="Number of States",
+        marker='o',
+        linestyle=':'
+    )
     return
 
 def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multiple_levels: List[bool],
@@ -2394,7 +2419,7 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
     total_evaluation_steps = 35
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 10_000
+    options_training_timesteps = 500_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 200_000
@@ -2410,47 +2435,84 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # _ - EE3377 - 8
 
+    # found: 5, 6, 7, 8, 9
+    start_n = 5
+    end_n = 9
+
+    lavaflow_envs = [LavaFlow(LavaFlow.generate_scatter_board(n), str(n) + "_scatter", (0, 0))
+                     for n in range(start_n, end_n + 1, 1)]
+    lavaflow_agents = []
+    skill_counts = {}
+
+    print("Creating Agents")
+    n = start_n
+    for lavaflow_env in lavaflow_envs:
+        print("Creating Agent " + str(n) + "/" + str(end_n))
+
+        filenames = get_filenames(lavaflow_env)
+        stg = nx.read_gexf(filenames['state transition graph'])
+        with open(filenames['state transition graph values'], 'r') as f:
+            stg_values = json.load(f)
+        subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+
+        preparedness_agent = PreparednessAgent(
+            lavaflow_env.possible_actions,
+            0.9,
+            0.15,
+            0.9,
+            lavaflow_env.state_dtype,
+            lavaflow_env.state_shape,
+            stg,
+            subgoal_graph,
+            'none'
+        )
+        preparedness_agent.create_options(lavaflow_env)
+        skill_counts[str(n)] = {
+            'count': sum(preparedness_agent.count_skills().values()),
+            'num states': stg.number_of_nodes()
+        }
+        with open("skill_counts_scaing.json", 'w') as f:
+            json.dump(skill_counts, f)
+
+        n += 1
+
+    exit()
+
+    print("Counting skills")
+    graph_skill_count_by_state_size(
+        lavaflow_agents,
+        'Preparedness Skill Count by State Space Size',
+        verbose=True
+    )
+    exit()
+
     filenames = get_filenames(taxicab)
+    stg = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
-    print(find_flat_subgoals(stg_values, 'preparedness subgoal level'))
-    exit()
 
-    filenames_tinytown = get_filenames(tinytown)
-    data = graphing.extract_data(
-        filenames_tinytown['results'],
-        [
-            'preparedness_agent_returns_none_onboarding.json',
-            'preparedness_agent_returns_generic_onboarding.json',
-            'preparedness_agent_returns_specific_onboarding.json',
-            'eigenoptions_epoch_returns.json',
-            'louvain agent returns',
-            'betweenness_epoch_returns.json',
-            'q_learning_epoch_returns.json'
-        ]
+    preparedness_flat_agent = SubgoalAgent(
+        taxicab.possible_actions,
+        0.9,
+        0.15,
+        0.9,
+        taxicab.state_shape,
+        taxicab.state_dtype,
+        stg,
+        find_flat_subgoals(stg_values, 'preparedness subgoal level'),
+        30
     )
-    graphing.graph_reward_per_epoch(
-        data,
-        graphing_window,
-        evaluate_policy_window,
-        name='TinyTown',
-        x_label='Timesteps',
-        y_label='Average Epoch Return',
-        error_bars=True,
-        colours=['#332288',
-                 '#117733',
-                 '#88CCEE',
-                 '#DDCC77',
-                 '#CC6677',
-                 '#AA4499',
-                 '#555555'
-                 ]
+    preparedness_flat_agent.load(filenames['agents'] + '/preparedness_flat_agent.json')
+    print("Training TaxiCab Preparedness Flat Agent")
+    preparedness_flat_agent.train_options(
+        taxicab,
+        options_training_timesteps,
+        True,
+        True
     )
-    exit()
+    preparedness_flat_agent.save(filenames['agents'] + '/preparedness_flat_agent.json')
 
-    # found: 5, 6, 7, 8, 9
-    start_n = 9
-    end_n = 10
+    exit()
 
     lavaflow_envs = [LavaFlow(LavaFlow.generate_scatter_board(n), str(n) + "_scatter", (0, 0))
                      for n in range(start_n, end_n + 1, 1)]
@@ -2496,11 +2558,35 @@ if __name__ == "__main__":
 
         n += 1
 
-    print("Counting skills")
-    graph_skill_count_by_state_size(
-        lavaflow_agents,
-        'Preparedness Skill Count by State Space Size',
-        verbose=True
+    filenames_tinytown = get_filenames(tinytown)
+    data = graphing.extract_data(
+        filenames_tinytown['results'],
+        [
+            'preparedness_agent_returns_none_onboarding.json',
+            'preparedness_agent_returns_generic_onboarding.json',
+            'preparedness_agent_returns_specific_onboarding.json',
+            'eigenoptions_epoch_returns.json',
+            'louvain agent returns',
+            'betweenness_epoch_returns.json',
+            'q_learning_epoch_returns.json'
+        ]
+    )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='TinyTown',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        colours=['#332288',
+                 '#117733',
+                 '#88CCEE',
+                 '#DDCC77',
+                 '#CC6677',
+                 '#AA4499',
+                 '#555555'
+                 ]
     )
     exit()
 
