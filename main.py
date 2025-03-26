@@ -2371,7 +2371,7 @@ if __name__ == "__main__":
     #       [0.25, 0.01, 0.01, 0.01, 0.72],
     #       continuous=True
     #)
-    # tinytown = TinyTown(2, 3, pick_every=1)
+    tinytown = TinyTown(2, 3, pick_every=1)
 
     option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
@@ -2400,8 +2400,40 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # _ - EE3377 - 8
 
-    # found: 5, 6, 7, 8,
-    start_n = 8
+    filenames_tinytown = get_filenames(tinytown)
+    data = graphing.extract_data(
+        filenames_tinytown['results'],
+        [
+            'preparedness_agent_returns_none_onboarding.json',
+            'preparedness_agent_returns_generic_onboarding.json',
+            'preparedness_agent_returns_specific_onboarding.json',
+            'eigenoptions_epoch_returns.json',
+            'louvain agent returns',
+            'betweenness_epoch_returns.json',
+            'q_learning_epoch_returns.json'
+        ]
+    )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='TinyTown',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        colours=['#332288',
+                 '#117733',
+                 '#88CCEE',
+                 '#DDCC77',
+                 '#CC6677',
+                 '#AA4499',
+                 '#555555'
+                 ]
+    )
+    exit()
+
+    # found: 5, 6, 7, 8, 9
+    start_n = 9
     end_n = 10
 
     lavaflow_envs = [LavaFlow(LavaFlow.generate_scatter_board(n), str(n) + "_scatter", (0, 0))
@@ -2568,48 +2600,6 @@ if __name__ == "__main__":
                          total_eval_steps=total_evaluation_steps,
                          state_dtype=tinytown.state_dtype, state_shape=tinytown.state_shape, progress_bar=True)
 
-    exit()
-
-    filenames_lavaflow = get_filenames(lavaflow)
-    filenames_taxicab = get_filenames(taxicab)
-    data = graphing.extract_data(
-        filenames_tinytown['results'],
-        [
-            'preparedness_agent_returns_none_onboarding.json',
-            'preparedness_agent_returns_generic_onboarding.json',
-            'preparedness_agent_returns_specific_onboarding.json',
-            'eigenoptions_epoch_returns.json',
-            # 'louvain agent returns.json',
-            'betweenness_epoch_returns.json',
-            'q_learning_epoch_returns.json'
-        ]
-    )
-    graphing.graph_reward_per_epoch(
-        data,
-        graphing_window,
-        evaluate_policy_window,
-        name='TinyTown',
-        x_label='Timesteps',
-        y_label='Average Epoch Return',
-        error_bars=True,
-        labels=[
-            'No Onboarding',
-            'Generic Onboarding',
-            'Specific Onboarding',
-            'Eigenoptions',
-            # 'Louvain',
-            'Betweenness',
-            'Primitives'
-        ],
-        colours=['#332288',
-                 '#117733',
-                 '#88CCEE',
-                 '#DDCC77',
-                 # '#CC6677',
-                 '#AA4499',
-                 '#555555'
-                 ]
-    )
     exit()
 
     print("Betweenness agent " + tinytown.environment_name + " agent training")
