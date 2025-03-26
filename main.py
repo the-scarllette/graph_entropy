@@ -403,6 +403,16 @@ def extract_graph_entropy_values(values_dict):
                                  for node in values_dict}
     return extracted_graph_entropies
 
+def find_flat_subgoals(stg_values: Dict[str, Dict[str, str|float]],
+                       subgoal_key: str) -> List[str]:
+    subgoals = []
+
+    for node in stg_values:
+        if stg_values[node][subgoal_key] != "None":
+            subgoals.append(node)
+
+    return subgoals
+
 
 def find_local_maxima(adjacency_matrix, values, num_hops=1, key=None, progress_bar_prefix=None):
     nodes = range(adjacency_matrix.shape[0])
@@ -2365,13 +2375,13 @@ def update_graph_attributes(environment: Environment,
 
 if __name__ == "__main__":
     # lavaflow = LavaFlow(None, None, (0, 0))
-    # taxicab = TaxiCab(
-    #       False,
-    #       False,
-    #       [0.25, 0.01, 0.01, 0.01, 0.72],
-    #       continuous=True
-    #)
-    tinytown = TinyTown(2, 3, pick_every=1)
+    taxicab = TaxiCab(
+          False,
+          False,
+          [0.25, 0.01, 0.01, 0.01, 0.72],
+          continuous=True
+    )
+    # tinytown = TinyTown(2, 3, pick_every=1)
 
     option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
@@ -2399,6 +2409,12 @@ if __name__ == "__main__":
     # Betweenness - AA4499 - 6
     # Primitives - 555555 - 7
     # _ - EE3377 - 8
+
+    filenames = get_filenames(taxicab)
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+    print(find_flat_subgoals(stg_values, 'preparedness subgoal level'))
+    exit()
 
     filenames_tinytown = get_filenames(tinytown)
     data = graphing.extract_data(
