@@ -1143,10 +1143,17 @@ def graph_skill_count_by_state_size_from_file(filepath: str,
     y = []
     x = []
 
-    for key in skill_counts:
+    n = 1
+    while True:
+        try:
+            counts = skill_counts[str(n)]
+        except KeyError:
+            break
 
-        y.append(skill_counts[key]['count'])
-        x.append(skill_counts[key]['num states'])
+        y.append(counts['count'])
+        x.append(counts['num states'])
+
+        n += 1
 
     graphing.graph(
         y,
@@ -2299,6 +2306,108 @@ def train_preparedness_agents(base_agent_save_path: str,
 
     return
 
+def train_preparedness_flat_agents(base_agent_save_path: str,
+                                   environment: Environment,
+                                   alpha: float, epsilon: float, gamma: float,
+                                   num_agents: int,
+                                   evaluate_policy_window: int,
+                                   training_timesteps: int,
+                                   total_eval_steps: int,
+                                   all_actions_valid: bool=False,
+                                   continue_training: bool=False, overwrite_existing_agents: bool=False,
+                                   progress_bar: bool=False
+                                   ):
+    all_agent_training_returns = {str(i): [] for i in range(num_agents)}
+    all_agent_returns = {str(i): [] for i in range(num_agents)}
+    filenames = get_filenames(environment)
+    agent_training_results_file = filenames['results'] + '/preparedness_flat_training_returns.json'
+    agent_results_file = filenames['results'] + '/preparedness_flat_epoch_returns.json'
+    stg = nx.read_gexf(filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    directories_to_make = [filenames['agents'], filenames['results']]
+    for directory in directories_to_make:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+
+    existing_results = False
+    if continue_training or not overwrite_existing_agents:
+        if os.path.exists(agent_results_file):
+            existing_results = True
+            with open(agent_results_file, 'r') as f:
+                all_agent_returns = json.load(f)
+        if os.path.exists(agent_training_results_file):
+            existing_results = True
+            with open(agent_training_results_file, 'r') as f:
+                all_agent_training_returns = json.load(f)
+
+    agent_start_index = 0
+    existing_agents_index = 0
+    if (not overwrite_existing_agents) and existing_results:
+        existing_agents_index = len(all_agent_training_returns)
+        num_agents += existing_agents_index
+        for i in range(existing_agents_index, num_agents):
+            all_agent_returns[str(i)] = []
+            all_agent_training_returns[str(i)] = []
+        if not continue_training:
+            agent_start_index = existing_agents_index
+
+    subgoals = find_flat_subgoals(stg_values, "preparedness subgoal level")
+
+    base_agent = SubgoalAgent(
+        environment.possible_actions,
+        alpha,
+        epsilon,
+        gamma,
+        environment.state_shape,
+        environment.state_dtype,
+        stg,
+        subgoals
+    )
+    base_agent.load(filenames['agents'] + '/' + base_agent_save_path)
+
+    # Training Agent
+    for i in range(agent_start_index, num_agents):
+        if progress_bar:
+            print("Training preparedness flat agent " + str(i))
+        agent_filename = '/preparedness_flat_agent_' + str(i) + '.json'
+        agent = SubgoalAgent(
+            environment.possible_actions,
+            alpha,
+            epsilon,
+            gamma,
+            environment.state_shape,
+            environment.state_dtype,
+            stg,
+            subgoals
+        )
+        if continue_training and (i < existing_agents_index):
+            agent.load(filenames['agents'] + '/' + agent_filename)
+        else:
+            agent.copy_agent(base_agent)
+
+        # Train Agent
+        agent, agent_training_returns, agent_returns = train_agent(environment, agent, training_timesteps,
+                                                                   evaluate_policy_window,
+                                                                   all_actions_valid,
+                                                                   agent_save_path=(filenames['agents'] +
+                                                                                    agent_filename),
+                                                                   total_eval_steps=total_eval_steps,
+                                                                   copy_agent=True,
+                                                                   progress_bar=progress_bar)
+
+        all_agent_training_returns[str(i)] += agent_training_returns
+        all_agent_returns[str(i)] += agent_returns
+
+        # Saving Results
+        with open(agent_training_results_file, 'w') as f:
+            json.dump(all_agent_training_returns, f)
+        with open(agent_results_file, 'w') as f:
+            json.dump(all_agent_returns, f)
+
+    return
+
 
 def train_q_learning_agent(environment: Environment,
                            training_timesteps, num_agents, evaluate_policy_window=10,
@@ -2400,13 +2509,13 @@ def update_graph_attributes(environment: Environment,
 
 if __name__ == "__main__":
     # lavaflow = LavaFlow(None, None, (0, 0))
-    taxicab = TaxiCab(
-          False,
-          False,
-          [0.25, 0.01, 0.01, 0.01, 0.72],
-          continuous=True
-    )
-    # tinytown = TinyTown(2, 3, pick_every=1)
+    # taxicab = TaxiCab(
+    #       False,
+    #       False,
+    #       [0.25, 0.01, 0.01, 0.01, 0.72],
+    #       continuous=True
+    #)
+    tinytown = TinyTown(2, 3, pick_every=1)
 
     option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
@@ -2419,30 +2528,145 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
     total_evaluation_steps = 35
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 500_000
+    options_training_timesteps = 50_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 200_000
+    training_timesteps = 50_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
 
     # Graph Ordering + Colouring:
     # None Onboarding - 332288 - 1
     # Generic - 117733 - 2
     # Specific - 88CCEE - 3
-    # Eigenoptions - DDCC77 - 4
+    # Eigenoptions/Preparedness Flat - DDCC77 - 4
     # Louvain - CC6677 - 5
     # Betweenness - AA4499 - 6
     # Primitives - 555555 - 7
     # _ - EE3377 - 8
 
-    # found: 5, 6, 7, 8, 9
-    start_n = 5
+    filenames_tinytown = get_filenames(tinytown)
+    data = graphing.extract_data(
+        filenames_tinytown['results'],
+        [
+            'preparedness_agent_returns_none_onboarding.json',
+            'preparedness_agent_returns_generic_onboarding.json',
+            'preparedness_agent_returns_specific_onboarding.json',
+            #'eigenoptions_epoch_returns.json',
+            #'louvain agent returns',
+            #'betweenness_epoch_returns.json',
+            'preparedness_flat_epoch_returns.json',
+            'q_learning_epoch_returns.json'
+        ]
+    )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='TinyTown',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        colours=['#332288',
+                 '#117733',
+                 '#88CCEE',
+                 '#DDCC77',
+                 #'#CC6677',
+                 #'#AA4499',
+                 '#555555'
+                 ]
+    )
+    exit()
+
+    print("Training Preparedness Flat Agent Lavaflow")
+    train_preparedness_flat_agents(
+        '/preparedness_flat_agent.json',
+        lavaflow,
+        0.9,
+        0.15,
+        0.9,
+        5,
+        evaluate_policy_window,
+        training_timesteps,
+        total_evaluation_steps,
+        True,
+        False,
+        False,
+        True
+    )
+    exit()
+
+    filenames = get_filenames(tinytown)
+    stg = nx.read_gexf(filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    preparedness_flat_agent = SubgoalAgent(
+        tinytown.possible_actions,
+        0.9,
+        0.15,
+        0.9,
+        tinytown.state_shape,
+        tinytown.state_dtype,
+        stg,
+        find_flat_subgoals(stg_values, 'preparedness subgoal level'),
+        30
+    )
+
+    preparedness_flat_agent.load(filenames['agents'] + '/preparedness_flat_agent.json')
+    print("Training TinyTown Preparedness Flat Agent")
+    preparedness_flat_agent.train_options(
+        tinytown,
+        options_training_timesteps,
+        False,
+        True
+    )
+    preparedness_flat_agent.save(filenames['agents'] + '/preparedness_flat_agent.json')
+
+    exit()
+
+    start_n = 9
     end_n = 9
+
+    lavaflow = LavaFlow(
+        LavaFlow.generate_empty_board(7),
+        "8_square",
+        (0, 0)
+    )
+
+    filenames = get_filenames(lavaflow)
+    stg = nx.read_gexf(filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+    subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+
+    with open("skill_counts_scaling.json", 'r') as f:
+        skill_counts = json.load(f)
+
+    preparedness_agent = PreparednessAgent(
+        lavaflow.possible_actions,
+        0.9,
+        0.15,
+        0.9,
+        lavaflow.state_dtype,
+        lavaflow.state_shape,
+        stg,
+        subgoal_graph,
+        'none'
+    )
+    preparedness_agent.load(filenames['agents'] + '/preparedness_agent.json')
+
+    skill_counts['5'] = {'count': sum(preparedness_agent.count_skills().values()),
+                         'num states': stg.number_of_nodes()}
+    with open("skill_counts_scaling.json", 'w') as f:
+        json.dump(skill_counts, f)
+
+    exit()
 
     lavaflow_envs = [LavaFlow(LavaFlow.generate_scatter_board(n), str(n) + "_scatter", (0, 0))
                      for n in range(start_n, end_n + 1, 1)]
     lavaflow_agents = []
-    skill_counts = {}
+    with open("skill_counts_scaling.json", 'r') as f:
+        skill_counts = json.load(f)
 
     print("Creating Agents")
     n = start_n
@@ -2484,34 +2708,6 @@ if __name__ == "__main__":
         'Preparedness Skill Count by State Space Size',
         verbose=True
     )
-    exit()
-
-    filenames = get_filenames(taxicab)
-    stg = nx.read_gexf(filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
-
-    preparedness_flat_agent = SubgoalAgent(
-        taxicab.possible_actions,
-        0.9,
-        0.15,
-        0.9,
-        taxicab.state_shape,
-        taxicab.state_dtype,
-        stg,
-        find_flat_subgoals(stg_values, 'preparedness subgoal level'),
-        30
-    )
-    preparedness_flat_agent.load(filenames['agents'] + '/preparedness_flat_agent.json')
-    print("Training TaxiCab Preparedness Flat Agent")
-    preparedness_flat_agent.train_options(
-        taxicab,
-        options_training_timesteps,
-        True,
-        True
-    )
-    preparedness_flat_agent.save(filenames['agents'] + '/preparedness_flat_agent.json')
-
     exit()
 
     lavaflow_envs = [LavaFlow(LavaFlow.generate_scatter_board(n), str(n) + "_scatter", (0, 0))
@@ -2557,38 +2753,6 @@ if __name__ == "__main__":
         nx.write_gexf(aggregate_graph, filenames['preparedness aggregate graph'])
 
         n += 1
-
-    filenames_tinytown = get_filenames(tinytown)
-    data = graphing.extract_data(
-        filenames_tinytown['results'],
-        [
-            'preparedness_agent_returns_none_onboarding.json',
-            'preparedness_agent_returns_generic_onboarding.json',
-            'preparedness_agent_returns_specific_onboarding.json',
-            'eigenoptions_epoch_returns.json',
-            'louvain agent returns',
-            'betweenness_epoch_returns.json',
-            'q_learning_epoch_returns.json'
-        ]
-    )
-    graphing.graph_reward_per_epoch(
-        data,
-        graphing_window,
-        evaluate_policy_window,
-        name='TinyTown',
-        x_label='Timesteps',
-        y_label='Average Epoch Return',
-        error_bars=True,
-        colours=['#332288',
-                 '#117733',
-                 '#88CCEE',
-                 '#DDCC77',
-                 '#CC6677',
-                 '#AA4499',
-                 '#555555'
-                 ]
-    )
-    exit()
 
     filenames = get_filenames(lavaflow_env)
     stg = nx.read_gexf(filenames['state transition graph'])
