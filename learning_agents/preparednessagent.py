@@ -1,4 +1,3 @@
-import copy
 import json
 import networkx as nx
 import numpy as np

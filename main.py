@@ -2128,6 +2128,43 @@ def train_eigenoption_agents(base_agent_save_path,
     return
 
 
+def train_incremental_agent(
+        environment: Environment,
+        age
+):
+    # build-rep -> train skills -> train agent
+    # building_representation = True
+    # training_skills = False
+    # training_agent = False
+    # for num_timesteps:
+    #   if num_timesteps % evaluate_policy_window == 0:
+    #       run_epoch with agent
+    #   if num_timesteps % change_mode_window  == 0:
+    #       if build_representation:
+    #           # discover new skills
+    #           # building_representation = False
+    #           # training_skills = True
+    #       elif training_skills:
+    #           # train_skills = False
+    #           # train_agent = True
+    #       elif train_agent:
+    #           # train_agent = False
+    #           # building_representation = True
+    #
+    #   if building_representation:
+    #       agent acts randomly
+    #       agent updates representation
+    #   if training skills:
+    #       agent chooses a skill to train (chosen internally)
+    #       agent acts according to skill
+    #       agent trains skill with internal reward
+    #   if training agent:
+    #       agent acts according to policy
+    #       agent learns based on external reward
+
+    return
+
+
 def train_louvain_agents(environment: Environment, file_name_prefix,
                          agent_directory, results_directory,
                          training_timesteps, num_agents, evaluate_policy_window=10,
