@@ -191,31 +191,6 @@ class PreparednessAgent(OptionsAgent):
         self.action_transition_probs = {}
         return
 
-    def choose_action(self, state, optimal_choice=False, possible_actions=None):
-        if self.current_option is None:
-            self.current_option = self.choose_option(state, optimal_choice, possible_actions)
-            if self.current_option is None:
-                return None
-
-        try:
-            if self.current_option.policy.current_option.terminated(state):
-                self.current_option.policy.current_option = None
-        except AttributeError:
-            ()
-
-        if self.current_option.has_policy():
-            chosen_action = self.current_option.choose_action(state, possible_actions)
-        else:
-            chosen_action = self.current_option.actions[0]
-
-        if chosen_action is None:
-            self.current_option = self.choose_option(state, optimal_choice, possible_actions)
-            self.current_option_step = 0
-            return self.choose_action(state, optimal_choice, possible_actions)
-
-        self.current_option_step += 1
-        return chosen_action
-
     def choose_option(self, state, no_random, possible_actions=None):
         self.current_option_step = 0
         self.option_start_state = state

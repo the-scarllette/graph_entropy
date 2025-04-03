@@ -245,12 +245,12 @@ class OptionsAgent(LearningAgent):
         else:
             chosen_action = self.current_option.actions[self.current_option_step]
 
-        if chosen_action == -1:
+        if chosen_action is None:
             self.current_option = None
             self.current_option_index = None
             self.current_option_step = 0
             self.current_step = 0
-            return self.choose_action(state, optimal_choice)
+            return self.choose_action(state, optimal_choice, possible_actions)
 
         self.current_option_step += 1
         self.current_step += 1
