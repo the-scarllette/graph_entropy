@@ -10,7 +10,7 @@ from typing import Callable, Dict, List, Tuple, Type
 from environments.environment import Environment
 from learning_agents.agentbehaviour import AgentBehaviour
 from learning_agents.optionsagent import Option, OptionsAgent
-from learning_agents.preparednessagent import PreparednessAgent
+from learning_agents.preparednessagent import PreparednessAgent, PreparednessOption
 from learning_agents.qlearningagent import QLearningAgent
 from learning_agents.rodagent import RODAgent
 from progressbar import print_progress_bar
@@ -54,10 +54,13 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
 
         self.options = []
         self.primitive_options = [Option([action]) for action in self.actions]
+        self.generic_onboarding_option = None
+        self.generic_onboarding_index = None
         self.specific_onboarding_options = []
         self.generic_onboarding_subgoal_options = []
         self.specific_onboarding_subgoal_options = []
         self.state_node_lookup = {}
+        self.node_state_lookup = {}
         self.path_lookup = {node: {} for node in self.state_transition_graph.nodes()}
 
         self.current_step = 0
@@ -72,6 +75,27 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         self.state_option_values = {'none': {}, 'generic': {}, 'specific': {}}
         return
 
+    def choose_action(self,
+            state: np.ndarray,
+            optimal_choice: bool = False,
+            possible_actions: None | List[int] = None
+        ) -> int:
+
+        if self.behaviour == AgentBehaviour.EXPLORE:
+            primitive_option = rand.choice(self.primitive_options)
+            return primitive_option.actions[0]
+
+        if self.behaviour == AgentBehaviour.TRAIN_SKILLS:
+            if self.training_skill is None:
+                self.training_skill = self.choose_training_skill(state)
+
+            return self.training_skill.choose_action(state, possible_actions)
+
+        return super(self).choose_action(state, optimal_choice, possible_actions)
+
+    def choose_training_skill(self, state: np.ndarray) -> Option:
+        pass
+
     # TODO: Copy Agent
     def copy_agent(
             self,
@@ -84,12 +108,86 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             self.preparedness(str(node), hop)
         return
 
+    def create_skills_from_subgoal_graph(
+            self,
+            subgoal_graph: nx.MultiDiGraph,
+            use_existing_skills: bool,
+    ) -> (Dict[str, List[PreparednessOption]]|
+          Tuple[List[PreparednessOption], Dict[str, List[PreparednessOption]], List[PreparednessOption]]):
+        subgoal_graph_distances = nx.floyd_warshall(self.subgoal_graph)
+        max_option_level = -np.inf
+
+        for start_node in self.aggregate_graph.nodes(data=False):
+            for end_node in self.aggregate_graph.nodes(data=False):
+                distance = subgoal_graph_distances[start_node][end_node]
+                if distance >= np.inf:
+                    continue
+                if distance > max_option_level:
+                    max_option_level = distance
+        max_option_level = int(max_option_level)
+
+        skills_between_subgoals = {str(i): [] for i in range(1, max_option_level + 1)}
+        options_for_option = []
+
+        # Options Between Subgoals
+        for k in range(1, max_option_level + 1):
+            for start_node in self.agregate_graph.nodes(data=False):
+                start_state = self.node_to_state(start_node)
+                for end_node in self.agregate_graph.nodes(data=False):
+                    if k != subgoal_graph_distances[start_node][end_node]:
+                        continue
+
+                    end_state = self.node_to_state(end_node)
+
+                    skill = self.create_option(
+                        [start_node],
+                        end_node,
+                        [start_state],
+                        end_state,
+                        k,
+                        options_for_option
+                    )
+
+                    skills_between_subgoals[str(k)].append(skill)
+
+            options_for_option += skills_between_subgoals[str(k)]
+
+        return onboarding_skills, skills_between_subgoals, skill_to_subgoals
+
     def create_subgoal_graph(self):
         self.subgoal_graph = nx.MultiDiGraph()
 
-        for level_subgoals in self.subgoals_list:
-            for subgoal in level:
+        max_subgoal_level = len(self.subgoals_list)
 
+        for level in range(max_subgoal_level):
+            for subgoal in self.subgoals_list[level]:
+                self.subgoal_graph.add_node(subgoal, attr={'preparedness subgoal level': level})
+
+                increasing_paths_found = False
+                increasing_level = level - 1
+                while (not increasing_paths_found) and (increasing_level > 0):
+                    for subgoal_hat in self.subgoals_list[increasing_level]:
+                        if nx.has_path(self.state_transition_graph, subgoal, subgoal_hat):
+                            increasing_paths_found = True
+                            self.subgoal_graph.add_node(
+                                subgoal_hat,
+                                attr={'preparedness subgoal level': increasing_level}
+                            )
+                            self.subgoal_graph.add_edge(subgoal, subgoal_hat)
+                    increasing_level -= 1
+
+                decreasing_paths_found = False
+                decreasing_level = level + 1
+                while (not decreasing_paths_found) and (decreasing_level < max_subgoal_level):
+                    for subgoal_hat in self.subgoals_list[decreasing_level]:
+                        if nx.has_path(self.state_transition_graph, subgoal, subgoal_hat):
+                            decreasing_paths_found = True
+                            self.subgoal_graph.add_node(
+                                subgoal_hat,
+                                attr={'preparedness subgoal level': decreasing_level}
+                            )
+                            self.subgoal_graph.add_edge(subgoal, subgoal_hat)
+                    decreasing_level += 1
 
         return
 
@@ -106,10 +204,18 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         # generate new set of skills
         # add set of skills to existing set
 
+        # Generic onboarding:
+        # Just add new subgoals to termination function
+        self.generic_onboarding_option
+
         if self.option_discovery_method == 'update':
             self.subgoals_list = self.find_subgoals()
             if self.subgoals_list is None:
                 return
+
+            self.create_subgoal_graph()
+
+
 
         pass
 
@@ -313,6 +419,18 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             hops: int
     ) -> str:
         return "neighbourhood_entropy " + str(hops) + ' hops'
+
+    def node_to_state(
+            self,
+            node: str
+    ) -> np.ndarray:
+        return self.state_str_to_node(self.node_to_state_str(node))
+
+    def node_to_state_str(
+            self,
+            node: str
+    ) -> str:
+        return self.node_state_lookup[node]
 
     def policy_learn(
             self,
