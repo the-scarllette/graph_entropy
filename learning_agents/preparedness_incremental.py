@@ -46,6 +46,7 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         self.preparedness_values = {}
         self.state_transition_graph = nx.MultiDiGraph()
         self.subgoal_graph = nx.MultiDiGraph()
+        self.subgoals_list = None
 
         self.max_subgoal_height = max_subgoal_height
         self.option_onboarding = option_onboarding
@@ -79,6 +80,17 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         pass
 
     def compute_graph_preparedness(self, hop: int):
+        for node in self.state_transition_graph.nodes():
+            self.preparedness(str(node), hop)
+        return
+
+    def create_subgoal_graph(self):
+        self.subgoal_graph = nx.MultiDiGraph()
+
+        for level_subgoals in self.subgoals_list:
+            for subgoal in level:
+
+
         return
 
     def discover_skills(self):
@@ -93,6 +105,12 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         # add subgoals onto existing subgoal graph
         # generate new set of skills
         # add set of skills to existing set
+
+        if self.option_discovery_method == 'update':
+            self.subgoals_list = self.find_subgoals()
+            if self.subgoals_list is None:
+                return
+
         pass
 
     @staticmethod
@@ -107,10 +125,86 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             entropy -= prob * np.emath.logn(log_base, prob)
         return entropy
 
-    def find_subgoals(self):
+    def find_subgoals(self) -> None|List[List[str]]:
         # Look for subgoals up to the max height
         self.adjacency_matrix = nx.to_scipy_sparse_array(self.state_transition_graph)
-        pass
+
+        subgoals = {}
+        subgoals_complete = False
+        hop = 1
+        while (hop <= self.max_subgoal_height) and not subgoals_complete:
+            hop_subgoals = []
+
+            self.compute_graph_preparedness(hop)
+
+            distances = sparse.csgraph.dijkstra(
+                self.adjacency_matrix,
+                True,
+                unweighted=True,
+                limit=hop + 1
+            )
+
+            for node in self.state_transition_graph.nodes():
+                is_subgoal = True
+                in_neighbours = np.where(
+                    (distances[:, int(node)] <= hop) & (0 < distances[: int(node)])[0]
+                )
+                if in_neighbours.size <= 0:
+                    is_subgoal = False
+                else:
+                    out_neighbours = np.where(distances[int(node), :] <= hop)[0]
+                    value = self.preparedness_values[node][self.preparedness_key(hop)]
+                    for neighbour in np.append(in_neighbours, out_neighbours):
+                        neighbour_str = str(neighbour)
+                        if neighbour_str == node:
+                            continue
+                        neighbour_value = self.preparedness_values[neighbour_str][self.preparedness_key(hop)]
+                        if neighbour_value >= value:
+                            is_subgoal = False
+                            continue
+                is_subgoal_str = "False"
+                if is_subgoal:
+                    is_subgoal_str = "True"
+                self.preparedness_values[node][self.subgoal_key(hop)] = is_subgoal_str
+
+                if is_subgoal:
+                    hop_subgoals.append(node)
+
+            subgoals[hop] = hop_subgoals.copy()
+
+            if (hop <= 2) and (subgoals[hop] == subgoals[hop - 1]):
+                subgoals_complete = True
+
+            hop += 1
+
+        if not subgoals_complete:
+            return None
+
+        max_subgoal_hop = hop - 1
+        pruned_subgoals = {hop: [] for hop in range(1, max_subgoal_hop + 1)}
+        found_subgoals = []
+        for hop in range(1, max_subgoal_hop + 1):
+            for subgoal in subgoals[hop]:
+                if subgoal in found_subgoals:
+                    continue
+
+                subgoal_pruned = False
+                for i in range(max_subgoal_hop, hop, -1):
+                    if subgoal in subgoals[i]:
+                        pruned_subgoals[i].append(subgoal)
+                        found_subgoals.append(subgoal)
+                        subgoal_pruned = True
+                        break
+                if not subgoal_pruned:
+                    pruned_subgoals[hop].append(subgoal)
+
+        subgoals_no_empty = []
+        for i in range(1, max_subgoal_hop + 1):
+            if not pruned_subgoals[i]:
+                continue
+            subgoals_no_empty.append(pruned_subgoals[i])
+
+        return subgoals_no_empty
 
     def frequency_entropy(
             self,
@@ -270,6 +364,12 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             save_path: str
     ):
         pass
+
+    @staticmethod
+    def subgoal_key(
+            hop: int
+    ) -> str:
+        return 'preparedness subgoal ' + str(hop) + " hops"
 
     def train_skill(
             self,
