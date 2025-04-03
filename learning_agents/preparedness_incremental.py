@@ -9,14 +9,17 @@ from typing import Callable, Dict, List, Tuple, Type
 from environments.environment import Environment
 from learning_agents.agentbehaviour import AgentBehaviour
 from learning_agents.optionsagent import Option, OptionsAgent
+from learning_agents.preparednessagent import PreparednessAgent
 from learning_agents.qlearningagent import QLearningAgent
+from learning_agents.rodagent import RODAgent
 from progressbar import print_progress_bar
 
-class PreparednessIncremental(OptionsAgent):
+class PreparednessIncremental(RODAgent, PreparednessAgent):
 
     def __init__(
             self,
             actions: List[int],
+            skill_training_window: int,
             alpha: float,
             epsilon: float,
             gamma: float,
@@ -53,6 +56,8 @@ class PreparednessIncremental(OptionsAgent):
         self.last_possible_actions = None
         self.total_option_reward = 0
         self.current_option_step = 0
+        self.current_skill_training_step = 0
+        self.skill_training_window = skill_training_window
         self.state_option_values = {'none': {}, 'generic': {}, 'specific': {}}
         return
 
@@ -61,36 +66,62 @@ class PreparednessIncremental(OptionsAgent):
         optimal_choice: bool=False,
         possible_actions: None|List[int]=None
     ) -> int:
+        pass
 
-        if possible_actions is None:
-            possible_actions = self.actions
+    def choose_option(
+            self,
+            state: np.ndarray,
+            no_random: bool,
+            possible_actions: None|List[int]=None
+    ):
+        pass
 
-        if self.behaviour_mode == Behaviour.EXPLORE:
-            return rand.choice(possible_actions)
+    def copy_agent(
+            self,
+            copy_from: 'PreparednessIncremental'
+    ):
+        pass
 
+    def count_skills(self) -> Dict[int, int]:
+        pass
 
+    def discover_skills(self):
+        pass
 
-        return None
+    def policy_learn(
+            self,
+            state: np.ndarray,
+            action: int,
+            reward: float,
+            next_state: np.ndarray,
+            terminal: bool | None = None,
+            next_state_possible_actions: List[int] | None = None
+    ):
+        pass
 
-    def set_explore_behaviour(self):
+    def save_representation(
+            self,
+            save_path: str
+    ):
+        pass
 
-    def learn(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray,
-              terminal: bool|None=None, next_state_possible_actions: List[int]|None=None):
-        # Update state transition graph
+    def train_skill(
+            self,
+            skill: Option,
+            state: np.ndarray,
+            action: int,
+            reward: float,
+            next_state: np.ndarray,
+            terminal: bool | None = None
+    ):
+        pass
 
-        # If count % learn_skills_epoch == 0:
-        #   find new preparedness values
-        #   if REPLACE SKILLS:
-        #       Find new subgoals
-        #       build new subgoal graph
-        #       Find new skills
-        #       Generate new skill hierarchy
-        #   if UPDATE SKILLS:
-        #       find new subgoals
-        #       add new subgoals to subgoal graph
-        #       remove non-existing skills based on subgoal graph
-        #       add new skills based on subgoal graph
-        #       re-define skills based on subgoal graph
-
-        #
-        return
+    def update_representation(
+            self,
+            state: np.ndarray,
+            action: int,
+            reward: float,
+            next_state: np.ndarray,
+            terminal: bool | None = None
+    ):
+        pass

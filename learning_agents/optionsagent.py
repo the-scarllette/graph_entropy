@@ -7,6 +7,7 @@ from scipy import sparse
 from typing import Dict, List, Tuple
 
 from environments.environment import Environment
+from learning_agents.learningagent import LearningAgent
 from learning_agents.qlearningagent import QLearningAgent
 from progressbar import print_progress_bar
 
@@ -195,7 +196,7 @@ class Option:
         return self.terminating_func(state)
 
 
-class OptionsAgent:
+class OptionsAgent(LearningAgent):
 
     def __init__(self, alpha, epsilon, gamma, options, step_size=None, state_dtype=int,
                  termination_func=None, intra_option=True):

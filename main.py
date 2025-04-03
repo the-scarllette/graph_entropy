@@ -18,6 +18,7 @@ from environments.taxicab import TaxiCab
 from environments.tinytown import TinyTown
 from environments.waterbucket import WaterBucket
 import graphing
+from learning_agents.agentbehaviour import AgentBehaviour
 from learning_agents.betweennessagent import BetweennessAgent
 from learning_agents.eigenoptionagent import EigenOptionAgent
 from learning_agents.learningagent import LearningAgent
@@ -27,6 +28,7 @@ from learning_agents.optionsagent import Option, OptionsAgent, create_option_goa
     generate_option_to_goal
 from learning_agents.preparednessagent import PreparednessAgent
 from learning_agents.qlearningagent import QLearningAgent
+from learning_agents.rodagent import RODAgent
 from learning_agents.subgoalagent import SubgoalAgent
 from progressbar import print_progress_bar
 
@@ -2127,7 +2129,6 @@ def train_eigenoption_agents(base_agent_save_path,
             json.dump(all_agent_returns, f)
     return
 
-
 def train_incremental_agent(
         environment: Environment,
         age
@@ -2515,6 +2516,87 @@ def train_q_learning_agent(environment: Environment,
             json.dump(all_agent_training_returns, f)
 
     return
+
+def train_rod_agent(
+        environment: Environment,
+        rod_agent: RODAgent,
+        training_steps: int,
+        behaviour_window: int,
+        total_eval_steps: int,
+        evaluate_policy_window: int=10,
+        all_actions_valid: bool=False,
+        file_prefix: str='rod_agent',
+        checkpoint: None|int=None,
+        save_representation: bool=False,
+        progress_bar: bool=False
+) -> Tuple[RODAgent, List[float], List[float]]:
+    behaviours = [
+        AgentBehaviour.EXPLORE,
+        AgentBehaviour.TRAIN_SKILLS,
+        AgentBehaviour.LEARN,
+    ]
+    num_behaviours = len(behaviours)
+    current_behaviour_index = -1
+
+    terminal = True
+    possible_actions = environment.possible_actions
+    evaluate_agent = copy.copy(rod_agent)
+    training_returns = []
+    epoch_returns = []
+
+    for timestep in range(training_steps):
+        print_progress_bar(
+            timestep,
+            training_steps,
+            "Training ROD Agent",
+            "Complete"
+        )
+
+        if terminal:
+            state = environment.reset()
+            if not all_actions_valid:
+                possible_actions = environment.get_possible_actions(state)
+
+        if timestep % behaviour_window == 0:
+            current_behaviour_index = (current_behaviour_index + 1) % num_behaviours
+            rod_agent.set_behaviour(behaviours[current_behaviour_index])
+
+        if timestep % evaluate_policy_window == 0:
+            rod_agent.save(file_prefix + "_current_agent")
+            evaluate_agent.load(file_prefix + "_current_agent")
+            evaluate_agent.set_behaviour(AgentBehaviour.LEARN)
+
+            epoch_return = run_epoch(
+                environment,
+                evaluate_agent,
+                total_eval_steps,
+                timestep,
+                all_actions_valid,
+                progress_bar
+            )
+            epoch_returns.append(epoch_return)
+
+        action = rod_agent.choose_action(
+            state, possible_actions=possible_actions
+        )
+        next_state, reward, terminal, _ = environment.step(action)
+        training_returns.append(reward)
+
+        if not all_actions_valid:
+            possible_actions = environment.get_possible_actions(next_state)
+
+        rod_agent.learn(
+            state,
+            action,
+            reward,
+            next_state,
+            terminal,
+            possible_actions
+        )
+
+        state = next_state
+
+    return rod_agent, training_returns, epoch_returns
 
 def update_graph_attributes(environment: Environment,
                             attributes: Dict[str, Dict[str, str|float]]) -> None:
