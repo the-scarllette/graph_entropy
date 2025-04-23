@@ -2554,6 +2554,7 @@ def train_rod_agent(
 
         if terminal:
             state = environment.reset()
+            rod_agent.add_start_state(state)
             if not all_actions_valid:
                 possible_actions = environment.get_possible_actions(state)
 
@@ -2627,13 +2628,13 @@ def update_graph_attributes(environment: Environment,
 # TODO: fix run agent for DADS and DIAYN so not learning on evaluation steps
 
 if __name__ == "__main__":
-    # lavaflow = LavaFlow(None, None, (0, 0))
-    # taxicab = TaxiCab(
-    #       False,
-    #       False,
-    #       [0.25, 0.01, 0.01, 0.01, 0.72],
-    #       continuous=True
-    #)
+    lavaflow = LavaFlow(None, None, (0, 0))
+    taxicab = TaxiCab(
+          False,
+          False,
+           [0.25, 0.01, 0.01, 0.01, 0.72],
+           continuous=True
+    )
     tinytown = TinyTown(2, 3, pick_every=1)
 
     option_onboarding = 'specific'
@@ -2661,7 +2662,103 @@ if __name__ == "__main__":
     # Louvain - CC6677 - 5
     # Betweenness - AA4499 - 6
     # Primitives - 555555 - 7
-    # _ - EE3377 - 8
+    # Preparedness flat - EE3377 - 8
+
+    filenames_tinytown = get_filenames(lavaflow)
+    data = graphing.extract_data(
+        filenames_tinytown['results'],
+        [
+            'preparedness_agent_returns_none_onboarding.json',
+            # 'preparedness_agent_returns_generic_onboarding.json',
+            # 'preparedness_agent_returns_specific_onboarding.json',
+            # 'eigenoptions_epoch_returns.json',
+            # 'louvain agent returns',
+            # 'betweenness_epoch_returns.json',
+            'preparedness_flat_epoch_returns.json',
+            'q_learning_epoch_returns.json'
+        ]
+    )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='Lavaflow',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        x_lim=[0, 50_000],
+        labels=[
+            'Preparedness (No Onboarding)',
+            # 'Preparedness (Generic Onboarding)',
+            # 'Preparedness (Specific Onboarding)',
+            # 'Eigenoptions',
+            # 'Louvain',
+            # 'Betweenness',
+            'Flat Preparedness',
+            'Primitives'
+        ],
+        colours=['#332288',
+                 # '#117733',
+                 # '#88CCEE',
+                 # '#DDCC77',
+                 # '#CC6677',
+                 # '#AA4499',
+                 '#EE3377',
+                 '#555555'
+                 ]
+    )
+    exit()
+
+    graph_average_available_skills_from_file(
+        [
+            "lavaflow_num_available_skills.json",
+            "taxicab_num_available_skills.json",
+            "tinytown2x3_num_available_skills.json",
+            "tinytown2x3_num_available_skills.json"
+        ],
+        [
+            'Preparedness (No Onboarding)',
+            'Preparedness (Generic Onboarding)',
+            'Preparedness (Specific Onboarding)',
+            'Betweenness',
+            'Louvain',
+        ],
+        [
+            'Preparedness',
+            'Preparedness\nGeneric\nOnboarding',
+            'Preparedness\nSpecific\nOnboarding',
+            'Betweenness',
+            'Louvain',
+        ],
+        [
+            "Lavaflow",
+            "Taxicab",
+            "Tinytown\n(Truncated)",
+            "Tinytown"
+        ],
+        "Average Available Skills",
+        error_bars=False,
+        y_lims=[
+            [0, 1],
+            [0, 30],
+            [0, 0.4],
+            [0, 3]
+        ],
+        y_ticks=[
+            0.2,
+            5,
+            0.1,
+            0.5
+        ],
+        colours=[
+            '#332288',
+            '#117733',
+            '#88CCEE',
+            '#CC6677',
+            '#AA4499',
+        ]
+    )
+    exit()
 
     filenames_tinytown = get_filenames(tinytown)
     data = graphing.extract_data(
@@ -2893,53 +2990,6 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'w') as f:
         json.dump(stg_values, f)
 
-    exit()
-
-    graph_average_available_skills_from_file(
-        [
-            "lavaflow_num_available_skills.json",
-            "taxicab_num_available_skills.json",
-            "tinytown2x3_num_available_skills.json"
-        ],
-        [
-            'Preparedness (No Onboarding)',
-            'Preparedness (Generic Onboarding)',
-            'Preparedness (Specific Onboarding)',
-            'Betweenness',
-            'Louvain',
-        ],
-        [
-            'Preparedness',
-            'Preparedness\nGeneric\nOnboarding',
-            'Preparedness\nSpecific\nOnboarding',
-            'Betweenness',
-            'Louvain',
-        ],
-        [
-            "Lavaflow",
-            "Taxicab",
-            "Tinytown"
-        ],
-        "Average Available Skills",
-        error_bars=False,
-        y_lims=[
-            [0, 1],
-            [0, 30],
-            [0, 3]
-        ],
-        y_ticks=[
-            0.2,
-            5,
-            0.5
-        ],
-        colours=[
-            '#332288',
-            '#117733',
-            '#88CCEE',
-            '#CC6677',
-            '#AA4499',
-        ]
-    )
     exit()
 
     filenames_tinytown = get_filenames(tinytown)

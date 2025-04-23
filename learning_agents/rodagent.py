@@ -31,6 +31,8 @@ class RODAgent(OptionsAgent):
         self.epsilon = epsilon
         self.gamma = gamma
 
+        self.environment_start_states = []
+
         self.current_option = None
         self.current_option_index = None
         self.option_start_state = None
@@ -47,6 +49,15 @@ class RODAgent(OptionsAgent):
         self.behaviour = AgentBehaviour.EXPLORE
 
         self.training_skill = None
+        return
+
+
+    def add_start_state(
+            self,
+            state: np.ndarray,
+    ):
+        if state not in self.environment_start_states:
+            self.environment_start_states.append(state)
         return
 
     def choose_action(self,

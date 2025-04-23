@@ -4,6 +4,8 @@ import networkx as nx
 import numpy as np
 import random as rand
 import sys
+
+from requests import options
 from scipy import sparse
 from typing import Callable, Dict, List, Tuple, Type
 
@@ -15,6 +17,144 @@ from learning_agents.qlearningagent import QLearningAgent
 from learning_agents.rodagent import RODAgent
 from progressbar import print_progress_bar
 
+class PreparednessSkill:
+
+    def __init__(
+            self,
+            skill_options: List['PreparednessSkill']|List[int],
+            start_state: None|np.ndarray,
+            end_state: None|np.ndarray,
+            level: str,
+            pathing_function: Callable[[np.ndarray, np.ndarray], bool],
+            end_states: None|List[np.ndarray]=None
+    ):
+        self.options: List['PreparednessSKill']|List[int] = skill_options
+        self.start_state: None|np.ndarray = start_state
+        self.end_state: None|np.ndarray = end_state
+        self.level: str = level
+        self.pathing_function: Callable[[np.ndarray, np.ndarray], bool] = pathing_function
+        self.end_states: None|List[np.ndarray] = end_states
+
+        self.current_skill: None|'PreparednessSKill' = None
+        return
+
+    def initiated(
+            self,
+            state: np.ndarray
+    ) -> bool:
+        if self.start_state is not None:
+            return np.array_equal(state, self.start_state)
+        return not self.terminated(state)
+
+    def reset_skill(
+            self
+    ):
+        if self.current_skill is not None:
+            self.current_skill.reset_skill()
+            self.current_skill = None
+        return
+
+    def set_skill(
+            self,
+            skill: 'PreparednessSKill'
+    ):
+        if self.current_skill is not None:
+            self.current_skill.reset_skill()
+        self.current_skill = skill
+        return
+
+    def terminated(
+            self,
+            state: np.ndarray
+    ) -> bool:
+        end_states = self.end_states
+        if self.end_state is not None:
+            end_states = [self.end_state]
+
+        for end_state in end_states:
+            if np.array_equal(state, end_state):
+                return True
+            if self.pathing_function(state, end_state):
+                return False
+        return True
+
+class SkillTowardsSubgoal(Option):
+
+    def __init__(
+            self,
+            skill_options: List[Option]|List[int],
+            end_state: np.ndarray,
+            level: int,
+            alpha: float,
+            epsilon: float,
+            gamma: float,
+            state_dtype: Type,
+            pathing_function: Callable[[np.ndarray, np.ndarray], bool]
+    ):
+        self.options = skill_options
+        self.end_state = end_state
+        self.level = level
+        self.pathing_function = pathing_function
+
+        if self.level <= 1:
+            self.policy = QLearningAgent(
+                self.options,
+                alpha,
+                epsilon,
+                gamma
+            )
+        else:
+            self.policy = OptionsAgent(
+                alpha,
+                epsilon,
+                gamma,
+                self.options,
+                state_dtype=state_dtype
+            )
+        return
+
+    def initiated(
+            self,
+            state: np.ndarray
+    ) -> bool:
+        if np.array_equal(state, self.end_state):
+            return False
+        return self.pathing_function(state, self.end_state)
+
+    def terminated(
+            self,
+            state: np.ndarray
+    ) -> bool:
+        return not self.initiated(state)
+
+# Skills are dataclasses:
+#   Hold the behaviour of the skill
+#   What current skill is being followed
+# Agent stores skills
+#   Onboarding skills
+#   Skills between subgoals
+#   Skills towards subgoals
+# Agent holds Q tables for all skills
+# Each skill chooses skills from the agent list of dictionaries
+# When adding or removing skills, done so from master list of skills
+# When agent is acting:
+#   If exploring
+#       Choose random action from primitives
+#   if training skill:
+#       If not following a skill:
+#           choose a skill uniform randomly
+#       act from skill
+#   If training:
+#       if not following a skill:
+#           choose a skill or primitive action greedily
+#       act from chosen skill or action
+# When agent is acting from skill:
+#       If skill acts over primitives:
+#           use intetrnal Q table to find action
+#       else:
+#           If skill is not following an internal skill:
+#               have skill choose an internal skill
+#           act accordind to internal skill
 class PreparednessIncremental(RODAgent, PreparednessAgent):
 
     def __init__(
@@ -25,76 +165,91 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             epsilon: float,
             gamma: float,
             state_dtype: Type,
-            state_shape: Tuple[int, int],
+            state_shape: Tuple[int, ...],
             max_subgoal_height: int,
             option_onboarding: str,
             option_discovery_method: str
     ):
-        assert actions is not None
-        assert option_onboarding == 'none' or option_onboarding == 'specific' or option_onboarding == 'generic'
-        assert option_discovery_method == "update" or "replace"
+        self.actions: List[int] = actions
+        self.skill_training_window: int = skill_training_window
+        self.alpha: float = alpha
+        self.epsilon: float = epsilon
+        self.gamma: float = gamma
+        self.state_dtype: Type = state_dtype
+        self.state_shape: Tuple[int, ...] = state_shape
 
-        self.actions = actions
-        self.alpha = alpha
-        self.epsilon = epsilon
-        self.gamma = gamma
-        self.state_dtype = state_dtype
-        self.state_shape = state_shape
+        self.max_subgoal_height: int = max_subgoal_height
+        self.option_onboarding: str = option_onboarding
+        self.option_discovery_method: str = option_discovery_method
 
-        self.behaviour_mode = AgentBehaviour.EXPLORE
-        self.adjacency_matrix = None
-        self.preparedness_values = {}
-        self.state_transition_graph = nx.MultiDiGraph()
-        self.subgoal_graph = nx.MultiDiGraph()
-        self.subgoals_list = None
+        self.current_skill: None|PreparednessSkill = None
 
-        self.max_subgoal_height = max_subgoal_height
-        self.option_onboarding = option_onboarding
-        self.option_discovery_method = option_discovery_method
 
-        self.options = []
-        self.primitive_options = [Option([action]) for action in self.actions]
-        self.generic_onboarding_option = None
-        self.generic_onboarding_index = None
-        self.specific_onboarding_options = []
-        self.generic_onboarding_subgoal_options = []
-        self.specific_onboarding_subgoal_options = []
-        self.state_node_lookup = {}
-        self.node_state_lookup = {}
-        self.path_lookup = {node: {} for node in self.state_transition_graph.nodes()}
+        # skill: (start_state, end_state, level)
+        # skill -> state -> skill|action -> q-value
+        self.skill_policies: Dict[Tuple[str, str, str], Dict[str, Dict[int|Tuple[str, str, str], float]]] = {}
+        # state -> skill|action -> q-value
+        self.q_values: Dict[str, Dict[str, float]] = {}
 
-        self.current_step = 0
-        self.current_option = None
-        self.current_option_index = None
-        self.option_start_state = None
-        self.last_possible_actions = None
-        self.total_option_reward = 0
-        self.current_option_step = 0
-        self.current_skill_training_step = 0
-        self.skill_training_window = skill_training_window
-        self.state_option_values = {'none': {}, 'generic': {}, 'specific': {}}
+        # skill -> skill_object
+        self.skill_lookup: Dict[Tuple[str, str, str], PreparednessSkill] = {}
+        self.skills: List[PreparednessSkill] = []
+
         return
 
+    def add_start_state(
+            self,
+            state: np.ndarray
+    ):
+        state_str = self.state_to_state_str(state)
+        try:
+            _ = self.state_node_lookup[state_str]
+            return
+        except KeyError:
+            self.num_nodes += 1
+            state_node = self.num_nodes
+            self.state_transition_graph.add_node(state_node, attr={"state": state_str})
+            self.state_node_lookup[state_str] = state_node
+            self.node_state_lookup[state_node] = state_str
+        return
+
+    # TODO
     def choose_action(self,
             state: np.ndarray,
             optimal_choice: bool = False,
             possible_actions: None | List[int] = None
         ) -> int:
+        if possible_actions is None:
+            possible_actions = self.actions
 
         if self.behaviour == AgentBehaviour.EXPLORE:
-            primitive_option = rand.choice(self.primitive_options)
-            return primitive_option.actions[0]
+            return rand.choice(possible_actions)
 
         if self.behaviour == AgentBehaviour.TRAIN_SKILLS:
-            if self.training_skill is None:
-                self.training_skill = self.choose_training_skill(state)
+            if self.current_skill is None:
+                self.current_skill = self.choose_training_skill(state)
 
-            return self.training_skill.choose_action(state, possible_actions)
+            if self.current_skill is None:
+                return rand.choice(possible_actions)
+
+            return self.follow_current_skill(state)
 
         return super(self).choose_action(state, optimal_choice, possible_actions)
 
-    def choose_training_skill(self, state: np.ndarray) -> Option:
-        pass
+    def choose_training_skill(
+            self,
+            state: np.ndarray
+    ) -> None|PreparednessSkill:
+        possible_skills = []
+        for skill in self.skills:
+            if skill.initiated(state):
+                possible_skills.append(skill)
+
+        if len(possible_skills) == 0:
+            return None
+
+        training_skill = rand.choice(possible_skills)
+        return training_skill
 
     # TODO: Copy Agent
     def copy_agent(
@@ -107,6 +262,46 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         for node in self.state_transition_graph.nodes():
             self.preparedness(str(node), hop)
         return
+
+    def create_skill_between_subgoals(
+            self,
+            start_state: np.ndarray,
+            end_state: np.ndarray,
+            level: int,
+            skill_options: List[SkillBetweenSubgoals]|None
+    ) -> 'SkillBetweenSubgoals':
+        if skill_options is None:
+            skill_options = self.actions
+        return SkillBetweenSubgoals(
+            skill_options,
+            start_state,
+            end_state,
+            level,
+            self.alpha,
+            self.epsilon,
+            self.gamma,
+            self.state_dtype,
+            self.has_path_to_state
+        )
+
+    def create_skill_towards_subgoal(
+            self,
+            end_state: np.ndarray,
+            level: int,
+            skill_options: List[Option] | None
+    ) -> 'SkillTowardsSubgoal':
+        if skill_options is None:
+            skill_options = self.actions
+        return SkillTowardsSubgoal(
+            skill_options,
+            end_state,
+            level,
+            self.alpha,
+            self.epsilon,
+            self.gamma,
+            self.state_dtype,
+            self.has_path_to_state
+        )
 
     def create_skills_from_subgoal_graph(
             self,
@@ -131,18 +326,16 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
 
         # Options Between Subgoals
         for k in range(1, max_option_level + 1):
-            for start_node in self.agregate_graph.nodes(data=False):
+            for start_node in self.subgoal_graph.nodes(data=False):
                 start_state = self.node_to_state(start_node)
-                for end_node in self.agregate_graph.nodes(data=False):
+                for end_node in self.subgoal_graph.nodes(data=False):
                     if k != subgoal_graph_distances[start_node][end_node]:
                         continue
 
                     end_state = self.node_to_state(end_node)
 
-                    skill = self.create_option(
-                        [start_node],
-                        end_node,
-                        [start_state],
+                    skill = self.create_skill_between_subgoals(
+                        start_state,
                         end_state,
                         k,
                         options_for_option
@@ -151,6 +344,33 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
                     skills_between_subgoals[str(k)].append(skill)
 
             options_for_option += skills_between_subgoals[str(k)]
+
+        # Generic Onboarding
+        generic_onboarding_skill = Option(
+            policy=OptionsAgent(
+                self.alpha,
+                self.epsilon,
+                self.gamma,
+                self.actions,
+                state_dtype=self.state_dtype
+            ),
+            initiation_func=self.generic_onboarding_initiation,
+            terminating_func=self.generic_onboarding_termination
+        )
+
+        # Specific Onboarding
+        specific_onboarding_skills = []
+        for node in self.subgoal_graph.nodes(data=False):
+            if len(self.subgoal_graph.in_egdes(node)) <= 0
+                specific_onboarding_skills.append(
+                    self.create_skill_towards_subgoal(
+                        self.node_to_state(node),
+                        1,
+                        None
+                    )
+                )
+
+        # Options to Subgoals
 
         return onboarding_skills, skills_between_subgoals, skill_to_subgoals
 
@@ -312,6 +532,30 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
 
         return subgoals_no_empty
 
+    def follow_current_skill(
+            self,
+            state: np.ndarray
+    ) -> int:
+        if self.current_skill is None:
+            raise AttributeError("Must have a current skill to follow")
+
+        current_skill_tuple = self.get_skill_tuple(self.current_skill)
+
+        level = int(self.current_skill.level)
+        skill = self.current_skill
+        while level > 1:
+            if skill.current_skill is not None:
+                skill = skill.current_skill
+            else:
+                next_skill = self.lookup_skill_policy(skill, state)
+                skill.set_skill(next_skill)
+                skill = next_skill
+
+            level = int(skill.level)
+
+        chosen_action = self.lookup_skill_policy(skill, state)
+        return chosen_action
+
     def frequency_entropy(
             self,
             node: str,
@@ -356,6 +600,145 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             hops: int
     ) -> str:
         return 'frequency_entropy ' + str(hops) + ' hops'
+
+    def generic_onboarding_initiation(
+            self,
+            state: np.ndarray
+    ) -> bool:
+        for level in self.subgoals_list:
+            for subgoal in level:
+                subgoal_state = self.node_to_state(subgoal)
+                if np.array_equal(state, subgoal_state):
+                    return False
+        for subgoal_list in self.subgoals_list:
+            for subgoal in subgoal_list:
+                if self.has_path_to_node(state, subgoal):
+                    return True
+        return False
+
+    def generic_onboarding_termination(
+            self,
+            state: np.ndarray
+    ) -> bool:
+        return not self.generic_onboarding_initiation(state)
+
+    def get_skill_tuple(
+            self,
+            skill: PreparednessSkill
+    ) -> Tuple[str, str, str]:
+        skill_start_state = str(None)
+        if skill.start_state is not None:
+            skill_start_state = self.state_to_state_str(skill.start_state)
+
+        skill_end_state = str(None)
+        if skill.end_state is not None:
+            skill_end_state = self.state_to_state_str(skill.end_state)
+
+        return skill_start_state, skill_end_state, skill.level
+
+    def get_skills_for_skill(
+            self,
+            skill: PreparednessSkill
+    ) -> List[Tuple[str, str, str]|int]:
+        # Skills Between Subgoals:
+        #   If level 1:
+        #       primitive actions
+        #   Else:
+        #       all skills between subgoals of < level
+        # Onboarding Skills:
+        #       Primitive actions
+        # Skills Towards Subgoals:
+        #       Onboarding skill + all skills between subgoals
+
+        skill_level = int(skill.level)
+
+        if skill.start_state is not None and skill.end_state is not None:
+            if skill_level <= 1:
+                return self.actions
+            skills = [possible_skill for possible_skill in self.skills if int(possible_skill.level) < skill_level]
+            return skills
+
+        if skill_level <= 1:
+            return self.actions
+
+        skills = [
+            self.get_skill_tuple(possible_skill)
+            for possible_skill in self.skills
+            if int(possible_skill.level) < skill_level
+               and skill.start_state is not None
+               and skill.end_state is not None
+        ]
+
+        if skill.start_state is not None and skill.end_state is not None:
+            return skills
+
+        if skill.start_state is None:
+            for possible_skill in self.skills:
+                if int(possible_skill.level) == 1 and possible_skill.start_state is None:
+                    skills.append(self.get_skill_tuple(possible_skill))
+
+        return skills
+
+    def has_path_to_state(
+            self,
+            start_state: np.ndarray,
+            end_state: np.ndarray
+    ) -> bool:
+        end_node = self.state_to_node(end_state)
+        return self.has_path_to_node(start_state, end_node)
+
+    def has_path_to_node(
+            self,
+            state: np.ndarray,
+            node: str
+    ) -> bool:
+        state_node = self.state_to_node(state)
+        return nx.has_path(self.state_transition_graph, state_node, node)
+
+    def lookup_skill_policy(
+            self,
+            skill: PreparednessSkill,
+            state: np.ndarray,
+    ) -> int|PreparednessSkill:
+        skill_tuple = self.get_skill_tuple(skill)
+        state_str = self.state_to_state_str(state)
+
+        try:
+            skill_values = self.skill_policies[skill_tuple]
+        except KeyError:
+            skills_for_skill = self.get_skills_for_skill(skill)
+            self.skill_policies[skill_tuple] = {
+                state_str: {
+                    skill_for_skill: 0.0 for skill_for_skill in skills_for_skill
+                }
+            }
+            skill_values = self.skill_policies[skill_tuple]
+
+        try:
+            state_values = skill_values[state_str]
+        except KeyError:
+            skills_for_skill = self.get_skills_for_skill(skill)
+            self.skill_policies[skill_tuple][state_str] = {
+                skill_for_skill: 0.0 for skill_for_skill in skills_for_skill
+            }
+            state_values = self.skill_policies[skill_tuple][state_str]
+
+        possible_skills = []
+        max_value = -np.inf
+        for possible_skill in state_values:
+            value = state_values[possible_skill]
+            if value > max_value:
+                possible_skills = [possible_skill]
+                max_value = value
+            elif value == max_value:
+                possible_skills.append(possible_skill)
+
+        chosen_skill_tuple = rand.choice(possible_skills)
+        if type(chosen_skill_tuple) == tuple:
+            chosen_skill = self.skill_lookup[chosen_skill_tuple]
+        else:
+            chosen_skill = int(chosen_skill_tuple)
+        return chosen_skill
 
     def neighbourhood_entropy(
             self,
@@ -424,7 +807,7 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             self,
             node: str
     ) -> np.ndarray:
-        return self.state_str_to_node(self.node_to_state_str(node))
+        return self.state_str_to_state(self.node_to_state_str(node))
 
     def node_to_state_str(
             self,
@@ -483,6 +866,12 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
     ):
         pass
 
+    def state_to_node(
+            self,
+            state: np.ndarray
+    ) -> str:
+        return self.state_to_node_lookup[self.state_to_state_str(state)]
+
     @staticmethod
     def subgoal_key(
             hop: int
@@ -508,4 +897,6 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             next_state: np.ndarray,
             terminal: bool | None = None
     ):
+        # update node to state lookup
+        # update state to node lookup
         pass
