@@ -189,7 +189,7 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         # skill -> state -> skill|action -> q-value
         self.skill_policies: Dict[Tuple[str, str, str], Dict[str, Dict[int|Tuple[str, str, str], float]]] = {}
         # state -> skill|action -> q-value
-        self.q_values: Dict[str, Dict[str, float]] = {}
+        self.q_values: Dict[str, Dict[Tuple[str, str, str]|int, float]] = {}
 
         # skill -> skill_object
         self.skill_lookup: Dict[Tuple[str, str, str], PreparednessSkill] = {}
@@ -232,9 +232,46 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             if self.current_skill is None:
                 return rand.choice(possible_actions)
 
-            return self.follow_current_skill(state)
+            return self.follow_current_skill(state, False, possible_actions)
 
-        return super(self).choose_action(state, optimal_choice, possible_actions)
+        # Agent Behaviour is LEARN
+        if self.current_skill is not None:
+            return self.follow_current_skill(state, True, possible_actions)
+        state_str = self.state_to_state_str(state)
+        if possible_actions is None:
+            possible_actions = self.actions
+
+        try:
+            state_values = self.q_values[state_str]
+        except KeyError:
+            possible_skills = []
+            possible_skills += possible_actions
+            for skill in self.skills:
+                if skill.initiated(state):
+                    possible_skills.append(self.get_skill_tuple(skill))
+            self.q_values[state_str] = {
+                possible_skill: 0.0 for possible_skill in possible_skills
+            }
+            state_values = self.q_values[state_str]
+
+        if (not optimal_choice) and (rand.uniform(0, 1) <= self.epsilon):
+            skill_tuple = rand.choice(list(state_values.keys()))
+        else:
+            chosen_skills = []
+            max_value = -np.inf
+            for skill in state_values:
+                skill_value = state_values[skill]
+                if skill_value > max_value:
+                    max_value = skill_value
+                    chosen_skills = [skill]
+                elif skill_value == max_value:
+                    chosen_skills.append(skill)
+            skill_tuple = rand.choice(chosen_skills)
+
+        if type(skill_tuple) == tuple:
+            self.current_skill = self.skill_lookup[skill_tuple]
+            return self.follow_current_skill(state, True, possible_actions)
+        return int(skill_tuple)
 
     def choose_training_skill(
             self,
@@ -534,12 +571,12 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
 
     def follow_current_skill(
             self,
-            state: np.ndarray
+            state: np.ndarray,
+            optimal_choice: bool=False,
+            possible_actions: None|List[int]=None
     ) -> int:
         if self.current_skill is None:
             raise AttributeError("Must have a current skill to follow")
-
-        current_skill_tuple = self.get_skill_tuple(self.current_skill)
 
         level = int(self.current_skill.level)
         skill = self.current_skill
@@ -547,13 +584,13 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             if skill.current_skill is not None:
                 skill = skill.current_skill
             else:
-                next_skill = self.lookup_skill_policy(skill, state)
+                next_skill = self.lookup_skill_policy(skill, state, optimal_choice, possible_actions)
                 skill.set_skill(next_skill)
                 skill = next_skill
 
             level = int(skill.level)
 
-        chosen_action = self.lookup_skill_policy(skill, state)
+        chosen_action = self.lookup_skill_policy(skill, state, optimal_choice, possible_actions)
         return chosen_action
 
     def frequency_entropy(
@@ -638,7 +675,8 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
 
     def get_skills_for_skill(
             self,
-            skill: PreparednessSkill
+            skill: PreparednessSkill,
+            possible_actions: None | List[int] = None
     ) -> List[Tuple[str, str, str]|int]:
         # Skills Between Subgoals:
         #   If level 1:
@@ -651,10 +689,12 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         #       Onboarding skill + all skills between subgoals
 
         skill_level = int(skill.level)
+        if possible_actions is None:
+            possible_actions = self.actions
 
         if skill.start_state is not None and skill.end_state is not None:
             if skill_level <= 1:
-                return self.actions
+                return possible_actions
             skills = [possible_skill for possible_skill in self.skills if int(possible_skill.level) < skill_level]
             return skills
 
@@ -699,6 +739,8 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             self,
             skill: PreparednessSkill,
             state: np.ndarray,
+            optimal_choice: bool=False,
+            possible_actions: None|List[int]=None
     ) -> int|PreparednessSkill:
         skill_tuple = self.get_skill_tuple(skill)
         state_str = self.state_to_state_str(state)
@@ -706,7 +748,7 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         try:
             skill_values = self.skill_policies[skill_tuple]
         except KeyError:
-            skills_for_skill = self.get_skills_for_skill(skill)
+            skills_for_skill = self.get_skills_for_skill(skill, possible_actions)
             self.skill_policies[skill_tuple] = {
                 state_str: {
                     skill_for_skill: 0.0 for skill_for_skill in skills_for_skill
@@ -723,17 +765,21 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             }
             state_values = self.skill_policies[skill_tuple][state_str]
 
-        possible_skills = []
-        max_value = -np.inf
-        for possible_skill in state_values:
-            value = state_values[possible_skill]
-            if value > max_value:
-                possible_skills = [possible_skill]
-                max_value = value
-            elif value == max_value:
-                possible_skills.append(possible_skill)
+        if (not optimal_choice) and (rand.uniform(0, 1) <= self.epsilon):
+            chosen_skill_tuple = rand.choice(list(state_values.keys()))
+        else:
+            possible_skills = []
+            max_value = -np.inf
+            for possible_skill in state_values:
+                value = state_values[possible_skill]
+                if value > max_value:
+                    possible_skills = [possible_skill]
+                    max_value = value
+                elif value == max_value:
+                    possible_skills.append(possible_skill)
 
-        chosen_skill_tuple = rand.choice(possible_skills)
+            chosen_skill_tuple = rand.choice(possible_skills)
+
         if type(chosen_skill_tuple) == tuple:
             chosen_skill = self.skill_lookup[chosen_skill_tuple]
         else:
