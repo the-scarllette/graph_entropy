@@ -17,7 +17,7 @@ from learning_agents.qlearningagent import QLearningAgent
 from learning_agents.rodagent import RODAgent
 from progressbar import print_progress_bar
 
-class PreparednessSkill:
+class PreparednessSkill(Option):
 
     def __init__(
             self,
@@ -195,10 +195,12 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
 
         self.num_nodes: int = 0
         self.adjacency_matrix: None|sparse.SparseMatrix = None
-        self.state_transition_graph: nx.MultiDiGraph = nx.MultiDiGraph()
-        self.subgoal_graph: None|nx.MultiDiGraph = None
+        self.state_transition_graph: nx.DiGraph = nx.DiGraph()
+        self.subgoal_graph: None|nx.DiGraph = None
         self.state_node_lookup: Dict[str, str] = {}
         self.node_state_lookup: Dict[str, str] = {}
+        # node -> next_node -> num observations
+        self.total_transitions: Dict[str, Dict[str, int]] = {}
         self.subgoals_list: None|List[List[str]] = None
 
         self.current_skill: None|PreparednessSkill = None
@@ -214,20 +216,26 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         self.skills: List[PreparednessSkill] = []
         return
 
-    def add_start_state(
+    def add_node_to_graph(
             self,
-            state: np.ndarray
+            state: np.ndarray,
     ):
         state_str = self.state_to_state_str(state)
         try:
             _ = self.state_node_lookup[state_str]
-            return
         except KeyError:
+            node = str(self.num_nodes)
+            self.state_node_lookup[state_str] = node
+            self.node_state_lookup[node] = state_str
             self.num_nodes += 1
-            state_node = str(self.num_nodes)
-            self.state_transition_graph.add_node(state_node, attr={"state": state_str})
-            self.state_node_lookup[state_str] = state_node
-            self.node_state_lookup[state_node] = state_str
+            self.state_transition_graph.add_node(node, attr={"state": state_str})
+        return
+
+    def add_start_state(
+            self,
+            state: np.ndarray
+    ):
+        self.add_node_to_graph(state)
         return
 
     def choose_action(self,
@@ -535,8 +543,8 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
 
                 new_skills.append(
                     PreparednessSkill(
-                        self.node_state_lookup[subgoal],
-                        self.node_state_lookop[subgoal_hat],
+                        self.node_to_state(subgoal),
+                        self.node_to_state(subgoal_hat),
                         str(level),
                         self.has_path_to_state
                     )
@@ -989,12 +997,6 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
     ) -> np.ndarray:
         return self.state_str_to_state(self.node_to_state_str(node))
 
-    def node_to_state_str(
-            self,
-            node: str
-    ) -> str:
-        return self.node_state_lookup[node]
-
     def policy_learn(
             self,
             state: np.ndarray,
@@ -1058,15 +1060,23 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
     ) -> str:
         return 'preparedness subgoal ' + str(hop) + " hops"
 
+    # TODO
     def train_skill(
             self,
-            skill: Option,
+            skill: PreparednessSkill,
             state: np.ndarray,
             action: int,
             reward: float,
             next_state: np.ndarray,
             terminal: bool | None = None
     ):
+        # Checks if skill is terminal:
+        #   if so sets current skill as none
+        # Finds reward
+        #   Reaching goal - positive
+        #   terminating and not at goal - negative
+        #   neither: small negative
+        # Trains skill policy using Q-learning for primitive and macro Q for hierarchical
         pass
 
     def update_available_skills(
@@ -1160,6 +1170,28 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             next_state: np.ndarray,
             terminal: bool | None = None
     ):
-        # update node to state lookup
-        # update state to node lookup
+        self.add_node_to_graph(state)
+        self.add_node_to_graph(next_state)
+
+        state_node = self.state_to_node(state)
+        next_state_node = self.state_to_node(next_state)
+
+        # update transition observations
+        try:
+            transitions = self.total_transitions[state_node]
+            try:
+                num_transitions = transitions[next_state_node]
+            except KeyError:
+                num_transitions = 0
+        except KeyError:
+            num_transitions = 0
+            self.total_transitions[state_node] = {}
+        self.total_transitions[state_node][next_state_node] = num_transitions + 1
+
+        sum_transitions = sum(self.total_transitions[state_node].values())
+
+        # Update edge weights
+        new_edge_weights = [(state_node, v, self.total_transitions[state_node][v]/sum_transitions)
+                           for v in self.total_transitions[state_node]]
+        self.state_transition_graph.add_weighted_edges_from(new_edge_weights)
         pass
