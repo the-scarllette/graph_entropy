@@ -193,7 +193,7 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         self.option_onboarding: str = option_onboarding
         self.option_discovery_method: str = option_discovery_method
 
-        self.num_nodes = 0
+        self.num_nodes: int = 0
         self.adjacency_matrix: None|sparse.SparseMatrix = None
         self.state_transition_graph: nx.MultiDiGraph = nx.MultiDiGraph()
         self.subgoal_graph: None|nx.MultiDiGraph = None
@@ -212,7 +212,6 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         # skill -> skill_object
         self.skill_lookup: Dict[Tuple[str, str, str], PreparednessSkill] = {}
         self.skills: List[PreparednessSkill] = []
-
         return
 
     def add_start_state(
@@ -487,8 +486,7 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             if self.subgoals_list is None:
                 return
             self.create_subgoal_graph()
-
-        elif self.option_discovery_method == 'replace':
+        elif self.option_discovery_method == 'update':
             new_subgoals = self.find_subgoals()
             new_skills = False
 
@@ -581,18 +579,25 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
                 )
             )
 
-        # Checking which skills already exist, adding the ones that do not
-        for new_skill in new_skills:
-            skill_exists = False
-            for existing_skill in self.skills:
-                if existing_skill == new_skill:
-                    skill_exists = True
-                    break
+        # REPLACE: all new skills are added, only keep a skill if it appears in the set of new skills
+        # UPDATE: all current skills are kept, only add a new skill if it does not appear in current skills
+        if self.option_discovery_method == 'replace':
+            self.skills = new_skills
+            for new_skill in self.skills:
+                self.skill_lookup[self.get_skill_tuple(new_skill)] = new_skill
+        elif self.option_discovery_method == 'update':
+            # Checking which skills already exist, adding the ones that do not
+            for new_skill in new_skills:
+                skill_exists = False
+                for existing_skill in self.skills:
+                    if existing_skill == new_skill:
+                        skill_exists = True
+                        break
 
-            if skill_exists:
-                continue
-            self.skills.append(new_skill)
-            self.skill_lookup[self.get_skill_tuple(new_skill)] = new_skill
+                if skill_exists:
+                    continue
+                self.skills.append(new_skill)
+                self.skill_lookup[self.get_skill_tuple(new_skill)] = new_skill
 
         self.update_available_skills()
         return
@@ -888,12 +893,18 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             }
             state_values = self.skill_policies[skill_tuple][state_str]
 
+        available_skills = []
+        for possible_skill_tuple in state_values:
+            possible_skill = self.skill_lookup[possible_skill_tuple]
+            if possible_skill.initiated(state):
+                available_skills.append(possible_skill_tuple)
+
         if (not optimal_choice) and (rand.uniform(0, 1) <= self.epsilon):
-            chosen_skill_tuple = rand.choice(list(state_values.keys()))
+            chosen_skill_tuple = rand.choice(available_skills)
         else:
             possible_skills = []
             max_value = -np.inf
-            for possible_skill in state_values:
+            for possible_skill in available_skills:
                 value = state_values[possible_skill]
                 if value > max_value:
                     possible_skills = [possible_skill]
@@ -1058,10 +1069,87 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
     ):
         pass
 
-    # TODO
     def update_available_skills(
             self
     ):
+        # updating skill policies
+        for skill_tuple in self.skill_policies:
+            skill = self.skill_lookup[skill_tuple]
+            if int(skill.level) <= 1:
+                continue
+            new_skills = self.get_skills_for_skill(skill)
+            keys_to_add = []
+            keys_to_remove = []
+            state_str = list(self.skill_policies[skill_tuple].keys())[0]
+
+            # REPLACE:
+            # add: all new skills not in existing skills = new_skills \ existing_skills
+            # remove: all existing skills not in new skills = existing_skills \ new_skills
+            if self.option_discovery_method == 'replace':
+                keys_to_add = new_skills.copy()
+                keys_to_remove = list(self.skill_policies[skill_tuple][state_str].keys())
+                for existing_skill_tuple in self.skill_policies[skill_tuple][state_str]:
+                    if existing_skill_tuple in new_skills:
+                        keys_to_add.remove(existing_skill_tuple)
+                        keys_to_remove.remove(existing_skill_tuple)
+            # UPDATE:
+            # add: all new skills not in existing skills
+            elif self.option_discovery_method == 'update':
+                keys_to_add = []
+                existing_skills = list(self.skill_policies[skill_tuple][state_str].keys())
+                for new_skill_tuple in new_skills:
+                    if new_skill_tuple not in existing_skills:
+                        keys_to_add.append(new_skill_tuple)
+
+            # set skill policies so only skills remaining are new keys
+            for state_str in self.skill_policies[skill_tuple]:
+                for key_to_add in keys_to_add:
+                    self.skill_policies[skill_tuple][state_str][key_to_add] = 0.0
+                for key_to_remove in keys_to_remove:
+                    del self.skill_policies[skill_tuple][state_str][key_to_remove]
+
+        # updating agent policy
+        for state_str in self.q_values:
+            skills_to_add = []
+            skills_to_remove = []
+
+            # REPLACE:
+            # add: any skills that can be initiated and not existing
+            # remove: any existing skills no loger existing
+            if self.option_discovery_method == 'replace':
+                for new_skill in self.skills:
+                    new_skill_tuple = self.get_skill_tuple(new_skill)
+                    try:
+                        self.q_values[state_str][new_skill_tuple]
+                    except KeyError:
+                        if new_skill.initiated(self.state_str_to_state(state_str)):
+                            skills_to_add.append(new_skill_tuple)
+
+                for skill_action in self.q_values[state_str]:
+                    if type(skill_action) == int:
+                        continue
+                    try:
+                        self.skill_lookup[skill_action]
+                    except KeyError:
+                        skills_to_remove.append(skill_action)
+                        continue
+
+            # UPDATE:
+            # add: any skills that can now be initiated in the state and not existing
+            elif self.option_discovery_method == 'update':
+                for new_skill in self.skills:
+                    new_skill_tuple = self.get_skill_tuple(new_skill)
+                    try:
+                        self.q_values[state_str][new_skill_tuple]
+                    except KeyError:
+                        if new_skill.initiated(self.state_str_to_state(state_str)):
+                            skills_to_add.append(new_skill_tuple)
+
+            for skill_to_add in skills_to_add:
+                self.q_values[state_str][skill_to_add] = 0.0
+            for skill_to_remove in skills_to_remove:
+                del self.q_values[state_str][skill_to_remove]
+
         return
 
     def update_representation(
