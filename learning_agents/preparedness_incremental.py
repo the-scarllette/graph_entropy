@@ -166,7 +166,11 @@ class SkillTowardsSubgoal(Option):
 #           If skill is not following an internal skill:
 #               have skill choose an internal skill
 #           act accordind to internal skill
-class PreparednessIncremental(RODAgent, PreparednessAgent):
+class PreparednessIncremental(RODAgent):
+
+    skill_training_failure_reward: float = -1.0
+    skill_training_step_reward: float = -0.0001
+    skill_training_success_reward: float = 1.0
 
     def __init__(
             self,
@@ -1054,6 +1058,20 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
     ):
         pass
 
+    @staticmethod
+    def skill_successful(
+            skill: PreparednessSkill,
+            state: np.ndarray
+    ) -> bool:
+        end_states = skill.end_states
+        if skill.end_state is not None:
+            end_states = [skill.end_state]
+
+        for end_state in end_states:
+            if np.array_equal(state, end_state):
+                return True
+        return False
+
     def state_to_node(
             self,
             state: np.ndarray
@@ -1088,6 +1106,10 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         #   terminating and not at goal - negative
         #   neither: small negative
         # Trains skill policy using Q-learning for primitive and macro Q for hierarchical
+
+        reward = self.skill_training_step_reward
+        skill_terminated = False
+        if np.arrays_equal(next_state, self.current_skill.end)
 
         pass
 
