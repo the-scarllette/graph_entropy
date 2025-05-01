@@ -860,7 +860,10 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             start_state: np.ndarray,
             end_state: np.ndarray
     ) -> bool:
-        end_node = self.state_to_node(end_state)
+        try:
+            end_node = self.state_to_node(end_state)
+        except ValueError:
+            return False
         return self.has_path_to_node(start_state, end_node)
 
     def has_path_to_node(
@@ -868,7 +871,10 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             state: np.ndarray,
             node: str
     ) -> bool:
-        state_node = self.state_to_node(state)
+        try:
+            state_node = self.state_to_node(state)
+        except ValueError:
+            return False
         return nx.has_path(self.state_transition_graph, state_node, node)
 
     def lookup_skill_policy(
@@ -1052,7 +1058,12 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
             self,
             state: np.ndarray
     ) -> str:
-        return self.state_to_node_lookup[self.state_to_state_str(state)]
+        state_str = self.state_to_state_str(state)
+        try:
+            node = self.state_node_lookup[state_str]
+            return node
+        except KeyError:
+            raise ValueError("State has not been explored yet")
 
     @staticmethod
     def subgoal_key(
@@ -1077,6 +1088,7 @@ class PreparednessIncremental(RODAgent, PreparednessAgent):
         #   terminating and not at goal - negative
         #   neither: small negative
         # Trains skill policy using Q-learning for primitive and macro Q for hierarchical
+
         pass
 
     def update_available_skills(
