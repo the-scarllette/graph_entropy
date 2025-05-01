@@ -209,6 +209,7 @@ class PreparednessIncremental(RODAgent):
 
         self.current_skill: None|PreparednessSkill = None
 
+        # action: int
         # skill: (start_state, end_state, level)
         # skill -> state -> skill|action -> q-value
         self.skill_policies: Dict[Tuple[str, str, str], Dict[str, Dict[int|Tuple[str, str, str], float]]] = {}
@@ -799,6 +800,36 @@ class PreparednessIncremental(RODAgent):
     ) -> bool:
         return not self.generic_onboarding_initiation(state)
 
+    def get_skill_action_values(
+            self,
+            skill: PreparednessSkill,
+            state: np.ndarray,
+            possible_actions: List[int]|None=None
+    ) -> Dict[int|Tuple[str, str, str], float]:
+        if possible_actions is None:
+            possible_actions = self.actions
+        skill_tuple = self.get_skill_tuple(skill)
+        state_str = self.state_to_state_str(state)
+
+        try:
+            skill_values = self.skill_policies[skill_tuple]
+        except KeyError:
+            self.skill_policies[skill_tuple] = {}
+            skill_values = {}
+
+        try:
+            state_values = skill_values[state_str]
+        except KeyError:
+            skills_for_skill = self.get_skills_for_skill(skill, possible_actions)
+            self.skill_policies[skill_tuple][state_str] = {
+                state_str: {
+                    skill_for_skill: 0.0 for skill_for_skill in skills_for_skill
+                }
+            }
+            state_values = self.skill_policies[skill_tuple][state_str]
+
+        return state_values
+
     def get_skill_tuple(
             self,
             skill: PreparednessSkill
@@ -888,34 +919,16 @@ class PreparednessIncremental(RODAgent):
             optimal_choice: bool=False,
             possible_actions: None|List[int]=None
     ) -> int|PreparednessSkill:
-        skill_tuple = self.get_skill_tuple(skill)
-        state_str = self.state_to_state_str(state)
+        state_values = self.get_skill_action_values(skill, state, possible_actions)
 
-        try:
-            skill_values = self.skill_policies[skill_tuple]
-        except KeyError:
-            skills_for_skill = self.get_skills_for_skill(skill, possible_actions)
-            self.skill_policies[skill_tuple] = {
-                state_str: {
-                    skill_for_skill: 0.0 for skill_for_skill in skills_for_skill
-                }
-            }
-            skill_values = self.skill_policies[skill_tuple]
-
-        try:
-            state_values = skill_values[state_str]
-        except KeyError:
-            skills_for_skill = self.get_skills_for_skill(skill)
-            self.skill_policies[skill_tuple][state_str] = {
-                skill_for_skill: 0.0 for skill_for_skill in skills_for_skill
-            }
-            state_values = self.skill_policies[skill_tuple][state_str]
-
-        available_skills = []
-        for possible_skill_tuple in state_values:
-            possible_skill = self.skill_lookup[possible_skill_tuple]
-            if possible_skill.initiated(state):
-                available_skills.append(possible_skill_tuple)
+        if int(skill.level) > 1:
+            available_skills = []
+            for possible_skill_tuple in state_values:
+                possible_skill = self.skill_lookup[possible_skill_tuple]
+                if possible_skill.initiated(state):
+                    available_skills.append(possible_skill_tuple)
+        else:
+            available_skills = list(state_values.keys())
 
         if (not optimal_choice) and (rand.uniform(0, 1) <= self.epsilon):
             chosen_skill_tuple = rand.choice(available_skills)
@@ -1097,7 +1110,8 @@ class PreparednessIncremental(RODAgent):
             action: int,
             reward: float,
             next_state: np.ndarray,
-            terminal: bool | None = None
+            terminal: bool | None = None,
+            next_state_possible_actions: List[int] | None = None
     ):
         # Checks if skill is terminal:
         #   if so sets current skill as none
@@ -1107,11 +1121,37 @@ class PreparednessIncremental(RODAgent):
         #   neither: small negative
         # Trains skill policy using Q-learning for primitive and macro Q for hierarchical
 
-        reward = self.skill_training_step_reward
+        current_skill_tuple = self.get_skill_tuple(self.current_skill)
+        if next_state_possible_actions is None:
+            next_state_possible_actions = self.actions
+        skill_reward = self.skill_training_step_reward
         skill_terminated = False
-        if np.arrays_equal(next_state, self.current_skill.end)
+        state_str = self.state_to_state_str(state)
 
-        pass
+        if self.skill_successful(self.current_skill, next_state):
+            skill_reward = self.skill_training_success_reward
+            skill_terminated = True
+        elif self.current_skill.terminated(next_state) or terminal:
+            skill_reward = self.skill_training_failure_reward
+            skill_terminated = True
+
+        if int(self.current_skill.level) <= 1:
+            action_values = self.get_skill_action_values(skill, state)
+            next_state_action_values = self.get_skill_action_values(skill, next_state, next_state_possible_actions)
+            action_value = action_values[action]
+            action_value += self.alpha * (
+                    skill_reward + (self.gamma * max(next_state_action_values.values()) - action_value)
+            )
+            self.skill_policies[current_skill_tuple][state_str][action] = action_value
+        else:
+            # TODO
+            pass
+
+        if skill_terminated:
+            self.current_skill.reset_skill()
+            self.current_skill = None
+
+        return
 
     def update_available_skills(
             self

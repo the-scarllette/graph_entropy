@@ -95,7 +95,15 @@ class RODAgent(OptionsAgent):
 
         if self.behaviour == AgentBehaviour.TRAIN_SKILLS:
             self.current_skill_training_step += 1
-            self.train_skill(self.training_skill, state, action, reward, next_state, terminal)
+            self.train_skill(
+                self.training_skill,
+                state,
+                action,
+                reward,
+                next_state,
+                terminal,
+                next_state_possible_actions
+            )
             if self.current_skill_training_step == self.skill_training_window:
                 self.choose_training_skill(state)
                 self.current_skill_training_step = 0
@@ -152,7 +160,8 @@ class RODAgent(OptionsAgent):
             action: int,
             reward: float,
             next_state: np.ndarray,
-            terminal: bool | None = None
+            terminal: bool | None = None,
+            next_state_possible_actions: List[int]|None = None
     ):
         return
 
