@@ -33,13 +33,14 @@ class RODAgent(OptionsAgent):
 
         self.environment_start_states = []
 
-        self.current_option = None
+        self.current_skill = None
         self.current_option_index = None
         self.option_start_state = None
         self.total_option_reward = 0
         self.current_option_step = 0
         self.current_skill_training_step = 0
         self.skill_training_window = skill_training_window
+        self.skill_training_reward_sum = 0
 
         self.state_option_values = {}
         self.intra_state_option_values = {}
@@ -95,16 +96,18 @@ class RODAgent(OptionsAgent):
 
         if self.behaviour == AgentBehaviour.TRAIN_SKILLS:
             self.current_skill_training_step += 1
-            self.train_skill(
-                self.training_skill,
-                state,
-                action,
-                reward,
-                next_state,
-                terminal,
-                next_state_possible_actions
-            )
-            if self.current_skill_training_step == self.skill_training_window:
+            if self.current_skill is not None:
+                self.current_skill(
+                    self.training_skill,
+                    state,
+                    action,
+                    reward,
+                    next_state,
+                    terminal,
+                    next_state_possible_actions
+                )
+            if (self.current_skill is None) or (self.current_skill_training_step == self.skill_training_window):
+                self.skill_training_reward_sum = 0.0
                 self.choose_training_skill(state)
                 self.current_skill_training_step = 0
             return

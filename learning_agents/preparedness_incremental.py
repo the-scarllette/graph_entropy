@@ -208,6 +208,9 @@ class PreparednessIncremental(RODAgent):
         self.subgoals_list: None|List[List[str]] = None
 
         self.current_skill: None|PreparednessSkill = None
+        self.current_skill_training_step: int = 0
+        self.skill_training_reward_sum: float = 0.0
+        self.skill_training_start_state: None|np.ndarray = None
 
         # action: int
         # skill: (start_state, end_state, level)
@@ -256,7 +259,7 @@ class PreparednessIncremental(RODAgent):
 
         if self.behaviour == AgentBehaviour.TRAIN_SKILLS:
             if self.current_skill is None:
-                self.current_skill = self.choose_training_skill(state)
+                self.choose_training_skill(state)
 
             if self.current_skill is None:
                 return rand.choice(possible_actions)
@@ -305,17 +308,18 @@ class PreparednessIncremental(RODAgent):
     def choose_training_skill(
             self,
             state: np.ndarray
-    ) -> None|PreparednessSkill:
+    ):
         possible_skills = []
         for skill in self.skills:
             if skill.initiated(state):
                 possible_skills.append(skill)
 
         if len(possible_skills) == 0:
-            return None
+            return
 
-        training_skill = rand.choice(possible_skills)
-        return training_skill
+        self.training_skill = rand.choice(possible_skills)
+        self.skill_training_start_state = state
+        return
 
     # TODO: Copy Agent
     def copy_agent(
@@ -1065,6 +1069,25 @@ class PreparednessIncremental(RODAgent):
     ) -> str:
         return "preparedness " + str(hops) + ' hops'
 
+    @ staticmethod
+    def reset_internal_skills(
+            skill: PreparednessSkill,
+            state: np.ndarray
+    ):
+        level = int(skill.level)
+        if level <= 1:
+            return
+
+        internal_skill = skill.current_skill
+        while (internal_skill is not None) and (level > 1):
+            if internal_skill.terminated(state):
+                internal_skill.reset_skill()
+                return
+            skill = internal_skill
+            internal_skill = skill.current_skill
+            level = int(skill.level)
+        return
+
     def save_representation(
             self,
             save_path: str
@@ -1103,9 +1126,8 @@ class PreparednessIncremental(RODAgent):
         return 'preparedness subgoal ' + str(hop) + " hops"
 
     # TODO
-    def train_skill(
+    def train_current_skill(
             self,
-            skill: PreparednessSkill,
             state: np.ndarray,
             action: int,
             reward: float,
@@ -1126,7 +1148,13 @@ class PreparednessIncremental(RODAgent):
             next_state_possible_actions = self.actions
         skill_reward = self.skill_training_step_reward
         skill_terminated = False
+        self.skill_training_reward_sum += reward
+        skill_values = self.get_skill_action_values(self.current_skill, state)
         state_str = self.state_to_state_str(state)
+
+        next_state_skill_values = self.get_skill_action_values(self.current_skill, next_state, next_state_possible_actions)
+        if terminal or (not next_state_skill_values):
+            next_state_skill_values = {0: 0.0}
 
         if self.skill_successful(self.current_skill, next_state):
             skill_reward = self.skill_training_success_reward
@@ -1136,19 +1164,26 @@ class PreparednessIncremental(RODAgent):
             skill_terminated = True
 
         if int(self.current_skill.level) <= 1:
-            action_values = self.get_skill_action_values(skill, state)
-            next_state_action_values = self.get_skill_action_values(skill, next_state, next_state_possible_actions)
-            action_value = action_values[action]
+            action_value = skill_values[action]
             action_value += self.alpha * (
-                    skill_reward + (self.gamma * max(next_state_action_values.values()) - action_value)
+                    skill_reward + (self.gamma * max(next_state_skill_values.values()) - action_value)
             )
             self.skill_policies[current_skill_tuple][state_str][action] = action_value
         else:
-            # TODO
-            pass
+            internal_skill_terminal = self.current_skill.current_skill.terminated(next_state)
+            skill_value = 0.0
+            # TODO: Add Intra-option Learning
+
+            if skill_terminated or internal_skill_terminal:
+                self.skill_policies[current_skill_tuple][
+                    self.state_to_state_str(self.skill_training_start_state)
+                ][self.get_skill_tuple(self.current_skill.current_skill)
+                ] += self.alpha * (
+                        self.skill_training_reward_sum + (self.gamma ** self.current_skill_training_step)
+                        * max(next_state_skill_values.values()) - skill_value)
+                self.current_skill.reset_skill()
 
         if skill_terminated:
-            self.current_skill.reset_skill()
             self.current_skill = None
 
         return
