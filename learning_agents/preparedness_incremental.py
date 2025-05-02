@@ -931,6 +931,13 @@ class PreparednessIncremental(RODAgent):
             return False
         return nx.has_path(self.state_transition_graph, state_node, node)
 
+    # TODO: load agent
+    def load(
+            self,
+            save_path: str
+    ):
+        return
+
     def lookup_skill_policy(
             self,
             skill: PreparednessSkill,
@@ -1114,7 +1121,11 @@ class PreparednessIncremental(RODAgent):
 
         pass
 
-    def preparedness(self, node: str, hop: int) -> float:
+    def preparedness(
+            self,
+            node: str,
+            hop: int
+    ) -> float:
         distances = sparse.csgraph.dijkstra(
             self.adjacency_matrix, directed=True, indicies=int(node), unweighted=True, limit=hop+1
         )
@@ -1166,6 +1177,13 @@ class PreparednessIncremental(RODAgent):
             internal_skill = skill.current_skill
             level = int(skill.level)
         return
+
+    # TODO: SAVE AGENT
+    def save(
+            self,
+            save_path: str,
+    ):
+        pass
 
     def save_representation(
             self,

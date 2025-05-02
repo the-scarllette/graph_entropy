@@ -115,12 +115,6 @@ class RODAgent(OptionsAgent):
         self.policy_learn(state, action, reward, next_state, terminal, next_state_possible_actions)
         return
 
-    def load(
-            self,
-            save_path: str
-    ):
-        return
-
     def policy_learn(
             self,
             state: np.ndarray,
