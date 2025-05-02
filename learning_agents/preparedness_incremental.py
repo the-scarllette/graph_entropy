@@ -206,12 +206,14 @@ class PreparednessIncremental(RODAgent):
         # node -> next_node -> num observations
         self.total_transitions: Dict[str, Dict[str, int]] = {}
         self.subgoals_list: None|List[List[str]] = None
+        self.total_reward: float = 0.0
 
         self.current_skill: None|PreparednessSkill = None
         self.current_skill_training_step: int = 0
         self.skill_training_reward_sum: float = 0.0
-        self.skill_training_start_state: None|np.ndarray = None
+        self.current_skill_start_state: None|np.ndarray = None
         self.state_possible_actions: None|List[int] = None
+        self.current_skill_step: int = 0
 
         # action: int
         # skill: (start_state, end_state, level)
@@ -271,20 +273,8 @@ class PreparednessIncremental(RODAgent):
         # Agent Behaviour is LEARN
         if self.current_skill is not None:
             return self.follow_current_skill(state, True, self.state_possible_actions)
-        state_str = self.state_to_state_str(state)
 
-        try:
-            state_values = self.q_values[state_str]
-        except KeyError:
-            possible_skills = []
-            possible_skills += self.state_possible_actions
-            for skill in self.skills:
-                if skill.initiated(state):
-                    possible_skills.append(self.get_skill_tuple(skill))
-            self.q_values[state_str] = {
-                possible_skill: 0.0 for possible_skill in possible_skills
-            }
-            state_values = self.q_values[state_str]
+        state_values = self.get_action_values(state, possible_actions)
 
         if (not optimal_choice) and (rand.uniform(0, 1) <= self.epsilon):
             skill_tuple = rand.choice(list(state_values.keys()))
@@ -300,6 +290,7 @@ class PreparednessIncremental(RODAgent):
                     chosen_skills.append(skill)
             skill_tuple = rand.choice(chosen_skills)
 
+        self.current_skill_start_state = state
         if type(skill_tuple) == tuple:
             self.current_skill = self.skill_lookup[skill_tuple]
             return self.follow_current_skill(state, True, self.state_possible_actions)
@@ -318,7 +309,7 @@ class PreparednessIncremental(RODAgent):
             return
 
         self.training_skill = rand.choice(possible_skills)
-        self.skill_training_start_state = state
+        self.current_skill_start_state = state
         return
 
     # TODO: Copy Agent
@@ -804,6 +795,30 @@ class PreparednessIncremental(RODAgent):
     ) -> bool:
         return not self.generic_onboarding_initiation(state)
 
+    def get_action_values(
+            self,
+            state: np.ndarray,
+            possible_actions: None|List[int]=None
+    ) -> Dict[int|Tuple[str, str, str], float]:
+        possible_skills: List[int|Tuple[str, str, str]]
+        if possible_actions is None:
+            possible_skills = self.actions.copy()
+        else:
+            possible_skills = possible_actions.copy()
+        state_str = self.state_to_state_str(state)
+
+        try:
+            state_values = self.q_values[state_str]
+        except KeyError:
+            for skill in self.skills:
+                possible_skills.append(self.get_skill_tuple(skill))
+            self.q_values[state_str] = {
+                possible_skill: 0.0 for possible_skill in possible_skills
+            }
+            state_values = self.q_values[state_str]
+
+        return state_values
+
     def get_skill_action_values(
             self,
             skill: PreparednessSkill,
@@ -1033,6 +1048,70 @@ class PreparednessIncremental(RODAgent):
             terminal: bool | None = None,
             next_state_possible_actions: List[int] | None = None
     ):
+        self.current_skill_step += 1
+        self.total_reward += reward
+        current_skill_tuple = action
+        if self.current_skill is not None:
+            current_skill_tuple = self.get_skill_tuple(self.current_skill)
+        if next_state_possible_actions is None:
+            next_state_possible_actions = self.actions
+        state_str = self.state_to_state_str(state)
+        skill_terminated = True
+        state_values = self.get_action_values(state, self.state_possible_actions)
+
+        next_state_values = self.get_action_values(next_state, next_state_possible_actions)
+        if terminal or (not next_state_values):
+            next_state_skill_values = {0: 0.0}
+
+        max_next_state_value = max(next_state_values.values())
+
+        if not terminal:
+            skill_terminated = False
+        elif self.current_skill is not None:
+            if not self.current_skill.terminated(next_state):
+                skill_terminated = False
+
+        for skill_tuple in state_values:
+            current_skill_terminated = True
+            if type(skill_tuple) == tuple:
+                skill = self.skill_lookup[skill_tuple]
+                if skill.terminated(state):
+                    continue
+                skill_action = self.skill_choose_action(skill, state, self.state_possible_actions)
+                if skill_action != action:
+                    continue
+                current_skill_terminated = skill.terminated(next_state)
+            else:
+                if skill_tuple != action:
+                    continue
+
+            gamma_product = max_next_state_value
+            if not current_skill_terminated:
+                try:
+                    gamma_product = next_state_values[skill_tuple]
+                except KeyError:
+                    gamma_product = max_next_state_value
+
+            self.q_values[state_str][skill_tuple] += self.alpha * (
+                reward - self.q_values[state_str][skill_tuple] +
+                self.gamma * gamma_product
+            )
+
+
+        if skill_terminated:
+            skill_value = self.q_values[self.state_to_state_str(self.current_skill_start_state)][
+                current_skill_tuple]
+            self.q_values[self.state_to_state_str(self.current_skill_start_state)][
+                current_skill_tuple] += self.alpha * (
+                self.total_reward + (self.gamma ** self.current_skill_step)
+                * max_next_state_value - skill_value
+            )
+
+            self.current_skill_start_state = None
+            self.current_skill = None
+            self.current_skill_step = 0
+            self.total_reward = 0.0
+
         pass
 
     def preparedness(self, node: str, hop: int) -> float:
@@ -1142,7 +1221,6 @@ class PreparednessIncremental(RODAgent):
     ) -> str:
         return 'preparedness subgoal ' + str(hop) + " hops"
 
-    # TODO
     def train_current_skill(
             self,
             state: np.ndarray,
@@ -1165,7 +1243,7 @@ class PreparednessIncremental(RODAgent):
             next_state_possible_actions = self.actions
         skill_reward = self.skill_training_step_reward
         skill_terminated = False
-        self.skill_training_reward_sum += reward
+        self.skill_training_reward_sum += skill_reward
         skill_values = self.get_skill_action_values(self.current_skill, state)
         state_str = self.state_to_state_str(state)
 
@@ -1190,10 +1268,16 @@ class PreparednessIncremental(RODAgent):
             self.skill_policies[current_skill_tuple][state_str][action] = action_value
         else:
             internal_skill_terminal = self.current_skill.current_skill.terminated(next_state)
-            skill_value = 0.0
+            skill_value = self.skill_policies[current_skill_tuple][
+                    self.state_to_state_str(self.current_skill_start_state)
+                ][self.get_skill_tuple(self.current_skill.current_skill)
+                ]
 
             for skill_tuple_hat in skill_values:
                 skill_hat = self.skill_lookup[skill_tuple_hat]
+                if skill_hat.terminated(state):
+                    continue
+
                 skill_action = self.skill_choose_action(skill_hat, state, self.state_possible_actions)
 
                 if skill_action != action:
@@ -1213,7 +1297,7 @@ class PreparednessIncremental(RODAgent):
 
             if skill_terminated or internal_skill_terminal:
                 self.skill_policies[current_skill_tuple][
-                    self.state_to_state_str(self.skill_training_start_state)
+                    self.state_to_state_str(self.current_skill_start_state)
                 ][self.get_skill_tuple(self.current_skill.current_skill)
                 ] += self.alpha * (
                         self.skill_training_reward_sum + (self.gamma ** self.current_skill_training_step)

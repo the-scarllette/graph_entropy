@@ -40,7 +40,8 @@ class RODAgent(OptionsAgent):
         self.current_option_step = 0
         self.current_skill_training_step = 0
         self.skill_training_window = skill_training_window
-        self.skill_training_reward_sum = 0
+        self.skill_training_reward_sum = 0.0
+        self.total_reward = 0.0
 
         self.state_option_values = {}
         self.intra_state_option_values = {}
@@ -97,8 +98,7 @@ class RODAgent(OptionsAgent):
         if self.behaviour == AgentBehaviour.TRAIN_SKILLS:
             self.current_skill_training_step += 1
             if self.current_skill is not None:
-                self.current_skill(
-                    self.training_skill,
+                self.train_current_skill(
                     state,
                     action,
                     reward,
@@ -156,9 +156,8 @@ class RODAgent(OptionsAgent):
     def set_behaviour_train_skills(self):
         return self.set_behaviour(AgentBehaviour.TRAIN_SKILLS)
 
-    def train_skill(
+    def train_current_skill(
             self,
-            skill: Option,
             state: np.ndarray,
             action: int,
             reward: float,
