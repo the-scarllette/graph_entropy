@@ -1189,7 +1189,9 @@ class PreparednessIncremental(RODAgent):
         else:
             save_path += '.json'
         stg_save_path = representation_save_path + '_stg.gexf'
-        subgoal_graph_save_path = representation_save_path + '_subgoal_graph.gexf'
+        subgoal_graph_save_path = stg_save_path[:len(stg_save_path) - 5] + '_subgoal_graph.gexf'
+
+        self.save_representation(stg_save_path)
 
         agent_save_dict = {
             "num_nodes": self.num_nodes,
@@ -1211,7 +1213,29 @@ class PreparednessIncremental(RODAgent):
             self,
             save_path: str
     ):
-        pass
+        len_save_path = len(save_path)
+        subgoal_graph_save_path = save_path
+        if save_path[len_save_path - 5:] != '.gexf':
+            save_path += '.gexf'
+        else:
+            subgoal_graph_save_path = save_path[:len_save_path - 5]
+        subgoal_graph_save_path += "_subgoal_graph.gexf"
+
+        nx.write_gexf(self.state_transition_graph, save_path)
+
+        self.save_subgoal_graph(subgoal_graph_save_path)
+        return
+
+    def save_subgoal_graph(
+            self,
+            save_path: str
+    ):
+        len_save_path = len(save_path)
+        if save_path[len_save_path - 5:] != '.gexf':
+            save_path += '.gexf'
+
+        nx.write_gexf(self.subgoal_graph, save_path)
+        return
 
     def skill_choose_action(
             self,
