@@ -312,12 +312,44 @@ class PreparednessIncremental(RODAgent):
         self.current_skill_start_state = state
         return
 
-    # TODO: Copy Agent
     def copy_agent(
             self,
             copy_from: 'PreparednessIncremental'
     ):
-        pass
+        self.actions = copy_from.actions
+        self.skill_training_window = copy_from.skill_training_window
+        self.alpha = copy_from.alpha
+        self.epsilon = copy_from.epsilon
+        self.gamma = copy_from.gamma
+        self.state_dtype = copy_from.state_dtype
+        self.state_shape = copy_from.state_shape
+
+        self.max_subgoal_height = copy_from.max_subgoal_height
+        self.option_onboarding = copy_from.option_onboarding
+        self.option_discovery_method = copy_from.option_discoery_method
+
+        self.num_nodes = copy_from.num_nodes
+        self.adjacency_matrix = copy_from.adjacency_matrix.copy()
+        self.state_transition_graph = copy_from.state_transition_graph.copy()
+        self.subgoal_graph = copy_from.subgoal_graph.copy()
+        self.total_transitions = copy.copy(copy_from.total_transitions)
+        self.subgoals_list = copy.copy(copy_from.subgoals_list)
+        self.total_reward = copy_from.total_reward
+
+        self.current_skill = None
+        self.current_skill_training_step = 0
+        self.skill_training_reward_sum = 0.0
+        self.current_skill_start_state = None
+        self.state_possible_actions = None
+        self.current_skill_step = 0
+
+        self.skill_policies = copy.copy(copy_from.skill_policies)
+        self.q_values = copy.copy(copy_from.q_values)
+
+        self.skill_lookup = copy.copy(copy_from.skill_lookup)
+        self.skills = copy.copy(copy_from.skills)
+
+        return
 
     def compute_graph_preparedness(self, hop: int):
         for node in self.state_transition_graph.nodes():
