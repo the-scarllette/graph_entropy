@@ -1178,11 +1178,33 @@ class PreparednessIncremental(RODAgent):
             level = int(skill.level)
         return
 
-    # TODO: SAVE AGENT
     def save(
             self,
             save_path: str,
     ):
+        representation_save_path = save_path
+        save_path_len = len(save_path)
+        if representation_save_path[save_path_len - 5:] == '.json':
+            representation_save_path = representation_save_path[:save_path_len - 5]
+        else:
+            save_path += '.json'
+        stg_save_path = representation_save_path + '_stg.gexf'
+        subgoal_graph_save_path = representation_save_path + '_subgoal_graph.gexf'
+
+        agent_save_dict = {
+            "num_nodes": self.num_nodes,
+            "stg_save_path": stg_save_path,
+            "subgoal_graph_save_path": subgoal_graph_save_path,
+            "state_node_lookup": self.state_node_lookup,
+            "node_state_lookup": self.node_state_lookup,
+            "total_transitions": self.total_transitions,
+            "subgoals_list": self.subgoals_list,
+            "skill_policies": self.skill_policies,
+            "q_values": self.q_values,
+            "skills": list(self.skill_lookup.keys())
+        }
+
+        json.dump(agent_save_dict, save_path)
         pass
 
     def save_representation(
