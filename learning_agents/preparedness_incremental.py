@@ -577,13 +577,18 @@ class PreparednessIncremental(RODAgent):
                         )
                     )
         elif self.option_onboarding == 'generic':
+            generic_end_states = [
+                self.state_str_to_state(self.node_state_lookup[s])
+                for subgoal_list in self.subgoals_list
+                for s in subgoal_list
+            ]
             new_skills.append(
                 PreparednessSkill(
                     None,
                     None,
                     '1',
                     self.has_path_to_state,
-                    list(self.subgoal_graph.nodes())
+                    generic_end_states
                 )
             )
 
@@ -931,11 +936,66 @@ class PreparednessIncremental(RODAgent):
             return False
         return nx.has_path(self.state_transition_graph, state_node, node)
 
-    # TODO: load agent
     def load(
             self,
             save_path: str
     ):
+        with open(save_path, 'r') as f:
+            agent_data = json.load(f)
+
+        self.state_transition_graph = nx.read_gexf(agent_data['stg_save_path'])
+        self.subgoal_graph = nx.read_gexf(agent_data['subgoal_graph_save_path'])
+        self.adjacency_matrix = nx.to_scipy_sparse_array(self.state_transition_graph)
+
+        self.num_nodes = agent_data['num_nodes']
+        self.state_node_lookup = agent_data['state_node_lookup']
+        self.node_state_lookup = agent_data['node_state_lookup']
+        self.total_transitions = agent_data['total_transitions']
+        self.subgoals_list = agent_data['subgoals_list']
+        self.skill_policies = agent_data['skill_policies']
+        self.q_values = agent_data['q_values']
+
+        self.skill_lookup = {}
+        self.skills = []
+        for skill_tuple in agent_data['skills']:
+            start_state_str = skill_tuple[0]
+            end_state_str = skill_tuple[1]
+            if start_state_str is not None:
+                start_state_str = self.state_str_to_state(start_state_str)
+
+            if end_state_str is not None:
+                end_state_str = self.state_str_to_state(end_state_str)
+                skill = PreparednessSkill(
+                    start_state_str,
+                    end_state_str,
+                    skill_tuple[2],
+                    self.has_path_to_state
+                )
+            else:
+                end_states = [
+                    self.state_str_to_state(self.node_state_lookup[s])
+                    for subgoal_list in self.subgoals_list
+                    for s in subgoal_list
+                ]
+                skill = PreparednessSkill(
+                    start_state_str,
+                    None,
+                    skill_tuple[2],
+                    self.has_path_to_state,
+                    end_states
+                )
+
+            self.skills.append(skill)
+            self.skill_lookup[skill_tuple] = skill
+
+        self.total_reward = 0.0
+        self.current_skill = None
+        self.current_skill_training_step = 0
+        self.skill_training_reward_sum = 0.0
+        self.current_skill_start_state = None
+        self.state_possible_actions = None
+        self.current_skill_step = 0
+
         return
 
     def lookup_skill_policy(
