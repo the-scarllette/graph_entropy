@@ -27,6 +27,7 @@ from learning_agents.multilevelgoalagent import MultiLevelGoalAgent
 from learning_agents.optionsagent import Option, OptionsAgent, create_option_goal_initiation_func, \
     generate_option_to_goal
 from learning_agents.preparednessagent import PreparednessAgent
+from learning_agents.preparednessincremental import PreparednessIncremental
 from learning_agents.qlearningagent import QLearningAgent
 from learning_agents.rodagent import RODAgent
 from learning_agents.subgoalagent import SubgoalAgent
@@ -2569,7 +2570,7 @@ def train_rod_agent(
                 rod_agent.save_representation(file_prefix + "_representation_" + str(timestep) + "_timesteps")
 
         if timestep % evaluate_policy_window == 0:
-            evaluate_agent.load_agent(file_prefix + "_current_agent")
+            evaluate_agent.copy_agent(rod_agent)
             evaluate_agent.set_behaviour(AgentBehaviour.LEARN)
 
             epoch_return = run_epoch(
@@ -2633,6 +2634,7 @@ def update_graph_attributes(environment: Environment,
 # TODO: fix run agent for DADS and DIAYN so not learning on evaluation steps
 
 if __name__ == "__main__":
+    '''
     lavaflow = LavaFlow(None, None, (0, 0))
     taxicab = TaxiCab(
           False,
@@ -2640,7 +2642,8 @@ if __name__ == "__main__":
            [0.25, 0.01, 0.01, 0.01, 0.72],
            continuous=True
     )
-    tinytown = TinyTown(2, 3, pick_every=1)
+    '''
+    tinytown = TinyTown(2, 2, pick_every=1)
 
     option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
@@ -2658,6 +2661,18 @@ if __name__ == "__main__":
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
     training_timesteps = 50_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
+    behaviour_window =
+
+    incremental_agent = PreparednessIncremental(
+
+    )
+
+    train_rod_agent(
+        tinytown,
+        incremental_agent,
+        training_timesteps,
+
+    )
 
     # Graph Ordering + Colouring:
     # None Onboarding - 332288 - 1

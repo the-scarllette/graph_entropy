@@ -326,7 +326,7 @@ class PreparednessIncremental(RODAgent):
 
         self.max_subgoal_height = copy_from.max_subgoal_height
         self.option_onboarding = copy_from.option_onboarding
-        self.option_discovery_method = copy_from.option_discoery_method
+        self.option_discovery_method = copy_from.option_discovery_method
 
         self.num_nodes = copy_from.num_nodes
         self.adjacency_matrix = copy_from.adjacency_matrix.copy()
@@ -355,117 +355,6 @@ class PreparednessIncremental(RODAgent):
         for node in self.state_transition_graph.nodes():
             self.preparedness(str(node), hop)
         return
-
-    def create_skill_between_subgoals(
-            self,
-            start_state: np.ndarray,
-            end_state: np.ndarray,
-            level: int,
-            skill_options: List[SkillBetweenSubgoals]|None
-    ) -> 'SkillBetweenSubgoals':
-        if skill_options is None:
-            skill_options = self.actions
-        return SkillBetweenSubgoals(
-            skill_options,
-            start_state,
-            end_state,
-            level,
-            self.alpha,
-            self.epsilon,
-            self.gamma,
-            self.state_dtype,
-            self.has_path_to_state
-        )
-
-    def create_skill_towards_subgoal(
-            self,
-            end_state: np.ndarray,
-            level: int,
-            skill_options: List[Option] | None
-    ) -> 'SkillTowardsSubgoal':
-        if skill_options is None:
-            skill_options = self.actions
-        return SkillTowardsSubgoal(
-            skill_options,
-            end_state,
-            level,
-            self.alpha,
-            self.epsilon,
-            self.gamma,
-            self.state_dtype,
-            self.has_path_to_state
-        )
-
-    def create_skills_from_subgoal_graph(
-            self,
-            subgoal_graph: nx.MultiDiGraph,
-            use_existing_skills: bool,
-    ) -> (Dict[str, List[PreparednessOption]]|
-          Tuple[List[PreparednessOption], Dict[str, List[PreparednessOption]], List[PreparednessOption]]):
-        subgoal_graph_distances = nx.floyd_warshall(self.subgoal_graph)
-        max_option_level = -np.inf
-
-        for start_node in self.aggregate_graph.nodes(data=False):
-            for end_node in self.aggregate_graph.nodes(data=False):
-                distance = subgoal_graph_distances[start_node][end_node]
-                if distance >= np.inf:
-                    continue
-                if distance > max_option_level:
-                    max_option_level = distance
-        max_option_level = int(max_option_level)
-
-        skills_between_subgoals = {str(i): [] for i in range(1, max_option_level + 1)}
-        options_for_option = []
-
-        # Options Between Subgoals
-        for k in range(1, max_option_level + 1):
-            for start_node in self.subgoal_graph.nodes(data=False):
-                start_state = self.node_to_state(start_node)
-                for end_node in self.subgoal_graph.nodes(data=False):
-                    if k != subgoal_graph_distances[start_node][end_node]:
-                        continue
-
-                    end_state = self.node_to_state(end_node)
-
-                    skill = self.create_skill_between_subgoals(
-                        start_state,
-                        end_state,
-                        k,
-                        options_for_option
-                    )
-
-                    skills_between_subgoals[str(k)].append(skill)
-
-            options_for_option += skills_between_subgoals[str(k)]
-
-        # Generic Onboarding
-        generic_onboarding_skill = Option(
-            policy=OptionsAgent(
-                self.alpha,
-                self.epsilon,
-                self.gamma,
-                self.actions,
-                state_dtype=self.state_dtype
-            ),
-            initiation_func=self.generic_onboarding_initiation,
-            terminating_func=self.generic_onboarding_termination
-        )
-
-        # Specific Onboarding
-        specific_onboarding_skills = []
-        for node in self.subgoal_graph.nodes(data=False):
-            if len(self.subgoal_graph.in_egdes(node)) <= 0
-                specific_onboarding_skills.append(
-                    self.create_skill_towards_subgoal(
-                        self.node_to_state(node),
-                        1,
-                        None
-                    )
-                )
-
-        # Options to Subgoals
-
-        return onboarding_skills, skills_between_subgoals, skill_to_subgoals
 
     def create_subgoal_graph(
             self
