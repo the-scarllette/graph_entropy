@@ -215,6 +215,8 @@ class PreparednessIncremental(RODAgent):
         self.state_possible_actions: None|List[int] = None
         self.current_skill_step: int = 0
 
+        self.behaviour: AgentBehaviour = AgentBehaviour.LEARN
+
         # action: int
         # skill: (start_state, end_state, level)
         # skill -> state -> skill|action -> q-value
@@ -864,9 +866,16 @@ class PreparednessIncremental(RODAgent):
         with open(save_path, 'r') as f:
             agent_data = json.load(f)
 
-        self.state_transition_graph = nx.read_gexf(agent_data['stg_save_path'])
-        self.subgoal_graph = nx.read_gexf(agent_data['subgoal_graph_save_path'])
-        self.adjacency_matrix = nx.to_scipy_sparse_array(self.state_transition_graph)
+        try:
+            self.state_transition_graph = nx.read_gexf(agent_data['stg_save_path'])
+            self.adjacency_matrix = nx.to_scipy_sparse_array(self.state_transition_graph)
+        except KeyError:
+            self.state_transition_graph = None
+            self.adjacency_matrix = None
+        try:
+            self.subgoal_graph = nx.read_gexf(agent_data['subgoal_graph_save_path'])
+        except KeyError:
+            self.subgoal_graph = None
 
         self.num_nodes = agent_data['num_nodes']
         self.state_node_lookup = agent_data['state_node_lookup']
@@ -1172,12 +1181,8 @@ class PreparednessIncremental(RODAgent):
         stg_save_path = representation_save_path + '_stg.gexf'
         subgoal_graph_save_path = stg_save_path[:len(stg_save_path) - 5] + '_subgoal_graph.gexf'
 
-        self.save_representation(stg_save_path)
-
         agent_save_dict = {
             "num_nodes": self.num_nodes,
-            "stg_save_path": stg_save_path,
-            "subgoal_graph_save_path": subgoal_graph_save_path,
             "state_node_lookup": self.state_node_lookup,
             "node_state_lookup": self.node_state_lookup,
             "total_transitions": self.total_transitions,
@@ -1187,13 +1192,23 @@ class PreparednessIncremental(RODAgent):
             "skills": list(self.skill_lookup.keys())
         }
 
-        json.dump(agent_save_dict, save_path)
+        if self.state_transition_graph is not None:
+            self.save_representation(stg_save_path)
+            agent_save_dict["stg_save_path"] = stg_save_path
+            if self.subgoal_graph is not None:
+                agent_save_dict["subgoal_graph_path"] = subgoal_graph_save_path
+
+        with open(save_path, 'w') as f:
+            json.dump(agent_save_dict, f)
         pass
 
     def save_representation(
             self,
             save_path: str
     ):
+        if self.state_transition_graph is None:
+            return
+
         len_save_path = len(save_path)
         subgoal_graph_save_path = save_path
         if save_path[len_save_path - 5:] != '.gexf':
@@ -1204,6 +1219,9 @@ class PreparednessIncremental(RODAgent):
 
         nx.write_gexf(self.state_transition_graph, save_path)
 
+        if self.subgoal_graph is None:
+            return
+
         self.save_subgoal_graph(subgoal_graph_save_path)
         return
 
@@ -1211,6 +1229,9 @@ class PreparednessIncremental(RODAgent):
             self,
             save_path: str
     ):
+        if self.subgoal_graph is None:
+            return None
+
         len_save_path = len(save_path)
         if save_path[len_save_path - 5:] != '.gexf':
             save_path += '.gexf'

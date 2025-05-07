@@ -27,7 +27,7 @@ from learning_agents.multilevelgoalagent import MultiLevelGoalAgent
 from learning_agents.optionsagent import Option, OptionsAgent, create_option_goal_initiation_func, \
     generate_option_to_goal
 from learning_agents.preparednessagent import PreparednessAgent
-from learning_agents.preparednessincremental import PreparednessIncremental
+from learning_agents.preparedness_incremental import PreparednessIncremental
 from learning_agents.qlearningagent import QLearningAgent
 from learning_agents.rodagent import RODAgent
 from learning_agents.subgoalagent import SubgoalAgent
@@ -2654,25 +2654,43 @@ if __name__ == "__main__":
     max_num_hops = 4
     num_agents = 5
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
-    total_evaluation_steps = 35
+    total_evaluation_steps = 50
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 50_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 50_000
+    training_timesteps = 5_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
-    behaviour_window =
+    behaviour_window = 100
+
+    filenames_tinytown = get_filenames(tinytown)
 
     incremental_agent = PreparednessIncremental(
-
+        tinytown.possible_actions,
+        25,
+        0.9,
+        0.1,
+        0.9,
+        tinytown.state_dtype,
+        tinytown.state_shape,
+        5,
+        'none',
+        'update'
     )
 
     train_rod_agent(
         tinytown,
         incremental_agent,
         training_timesteps,
-
+        behaviour_window,
+        50,
+        all_actions_valid=False,
+        file_prefix=filenames_tinytown['agents'] + '\\preparedness_incremental',
+        checkpoint=500,
+        save_representation=True,
+        progress_bar=True
     )
+    exit()
 
     # Graph Ordering + Colouring:
     # None Onboarding - 332288 - 1
