@@ -331,8 +331,13 @@ class PreparednessIncremental(RODAgent):
         self.option_discovery_method = copy_from.option_discovery_method
 
         self.num_nodes = copy_from.num_nodes
-        self.adjacency_matrix = copy_from.adjacency_matrix.copy()
-        self.state_transition_graph = copy_from.state_transition_graph.copy()
+        self.adjacency_matrix = None
+        if copy_from.adjacency_matrix is not None:
+            self.adjacency_matrix = copy_from.adjacency_matrix.copy()
+        self.state_transition_graph = None
+        if copy_from.state_transition_graph is not None:
+            self.state_transition_graph = copy_from.state_transition_graph.copy()
+        if copy_from.subgoal_graph
         self.subgoal_graph = copy_from.subgoal_graph.copy()
         self.total_transitions = copy.copy(copy_from.total_transitions)
         self.subgoals_list = copy.copy(copy_from.subgoals_list)
