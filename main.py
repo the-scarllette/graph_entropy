@@ -2562,9 +2562,14 @@ def train_rod_agent(
             current_behaviour_index = (current_behaviour_index + 1) % num_behaviours
             rod_agent.set_behaviour(behaviours[current_behaviour_index])
 
+        if checkpoint is not None:
+            if timestep % checkpoint == 0:
+                rod_agent.save(file_prefix + "_checkpoint_" + str(timestep) + "_timesteps")
+            if save_representation:
+                rod_agent.save_representation(file_prefix + "_representation_" + str(timestep) + "_timesteps")
+
         if timestep % evaluate_policy_window == 0:
-            rod_agent.save(file_prefix + "_current_agent")
-            evaluate_agent.load(file_prefix + "_current_agent")
+            evaluate_agent.load_agent(file_prefix + "_current_agent")
             evaluate_agent.set_behaviour(AgentBehaviour.LEARN)
 
             epoch_return = run_epoch(

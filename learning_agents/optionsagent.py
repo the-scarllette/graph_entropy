@@ -474,6 +474,12 @@ class OptionsAgent(LearningAgent):
         self.total_option_reward = 0
         return
 
+    def load(
+            self,
+            save_path: str
+    ):
+        return
+
     def save(self, save_path):
         try:
             f = open(save_path, 'x')
