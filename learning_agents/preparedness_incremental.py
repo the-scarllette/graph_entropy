@@ -905,7 +905,8 @@ class PreparednessIncremental(RODAgent):
 
         self.skill_lookup = {}
         self.skills = []
-        for skill_tuple in agent_data['skills']:
+        for skill_tuple_str in agent_data['skills']:
+            skill_tuple = tuple(skill_tuple_str)
             start_state_str = skill_tuple[0]
             end_state_str = skill_tuple[1]
             if start_state_str is not None:
@@ -1202,6 +1203,8 @@ class PreparednessIncremental(RODAgent):
         stg_save_path = representation_save_path + '_stg.gexf'
         subgoal_graph_save_path = stg_save_path[:len(stg_save_path) - 5] + '_subgoal_graph.gexf'
 
+        skill_tuple_list = [str(skill_tuple) for skill_tuple in self.skill_lookup.keys()]
+
         agent_save_dict = {
             "num_nodes": self.num_nodes,
             "state_node_lookup": self.state_node_lookup,
@@ -1211,7 +1214,7 @@ class PreparednessIncremental(RODAgent):
             "skill_policies": self.skill_policies,
             "q_values": self.q_values,
             "preparedness_values": self.preparedness_values,
-            "skills": list(self.skill_lookup.keys())
+            "skills": skill_tuple_list
         }
 
         if self.state_transition_graph is not None:
