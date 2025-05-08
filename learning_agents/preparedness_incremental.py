@@ -38,10 +38,10 @@ class PreparednessSkill(Option):
             self,
             other: 'PreparednessSkill'
     ) -> bool:
-        if (self.start_state != other.start_state) and (self.level != other.level):
+        if (not np.array_equal(self.start_state, other.start_state)) and (self.level != other.level):
             return False
         if self.end_state is not None:
-            return self.end_states == other.end_state
+            return np.array_equal(self.end_states, other.end_state)
         for end_state in self.end_states:
             if end_state not in other.end_states:
                 return False
@@ -1056,7 +1056,7 @@ class PreparednessIncremental(RODAgent):
             self,
             node: str
     ) -> np.ndarray:
-        return self.state_str_to_state(self.node_to_state_str(node))
+        return self.state_str_to_state(self.node_state_lookup[node])
 
     def policy_learn(
             self,
