@@ -788,9 +788,7 @@ class PreparednessIncremental(RODAgent):
         except KeyError:
             skills_for_skill = self.get_skills_for_skill(skill, possible_actions)
             self.skill_policies[skill_tuple][state_str] = {
-                state_str: {
-                    skill_for_skill: 0.0 for skill_for_skill in skills_for_skill
-                }
+                skill_for_skill: 0.0 for skill_for_skill in skills_for_skill
             }
             state_values = self.skill_policies[skill_tuple][state_str]
 
@@ -1190,6 +1188,7 @@ class PreparednessIncremental(RODAgent):
             level = int(skill.level)
         return
 
+    # TODO: Change skill tuples to a json saveable object
     def save(
             self,
             save_path: str,
