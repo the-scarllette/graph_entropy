@@ -2582,6 +2582,7 @@ def train_rod_agent(
                 progress_bar
             )
             epoch_returns.append(epoch_return)
+            state = environment.reset(state)
 
         action = rod_agent.choose_action(
             state, possible_actions=possible_actions

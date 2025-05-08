@@ -217,6 +217,8 @@ class PreparednessIncremental(RODAgent):
 
         self.behaviour: AgentBehaviour = AgentBehaviour.LEARN
 
+        self.preparedness_values: Dict[str, Dict[str, float]] = {}
+
         # action: int
         # skill: (start_state, end_state, level)
         # skill -> state -> skill|action -> q-value
@@ -337,8 +339,9 @@ class PreparednessIncremental(RODAgent):
         self.state_transition_graph = None
         if copy_from.state_transition_graph is not None:
             self.state_transition_graph = copy_from.state_transition_graph.copy()
-        if copy_from.subgoal_graph
-        self.subgoal_graph = copy_from.subgoal_graph.copy()
+        self.subgoal_graph = None
+        if copy_from.subgoal_graph is not None:
+            self.subgoal_graph = copy_from.subgoal_graph.copy()
         self.total_transitions = copy.copy(copy_from.total_transitions)
         self.subgoals_list = copy.copy(copy_from.subgoals_list)
         self.total_reward = copy_from.total_reward
@@ -349,6 +352,9 @@ class PreparednessIncremental(RODAgent):
         self.current_skill_start_state = None
         self.state_possible_actions = None
         self.current_skill_step = 0
+
+        # Node -> Frequency/Neighbourhood/Preparedness -> Value
+        self.preparedness_values = copy.copy(copy_from.preparedness_values)
 
         self.skill_policies = copy.copy(copy_from.skill_policies)
         self.q_values = copy.copy(copy_from.q_values)
@@ -669,9 +675,9 @@ class PreparednessIncremental(RODAgent):
             neighbours: np.ndarray,
             accuracy: int=4
     ) -> float:
-        if hops > 0 and neighbours.size == 1:
+        if hops > 1 and neighbours.size == 1:
             try:
-                frequency_entropy = self.preparedness_values[node][self.frequency_entropy_key(hops)]
+                frequency_entropy = self.preparedness_values[node][self.frequency_entropy_key(hops - 1)]
                 return frequency_entropy
             except KeyError:
                 ()
@@ -887,6 +893,7 @@ class PreparednessIncremental(RODAgent):
         self.node_state_lookup = agent_data['node_state_lookup']
         self.total_transitions = agent_data['total_transitions']
         self.subgoals_list = agent_data['subgoals_list']
+        self.preparedness_values = agent_data['preparedness_values']
         self.skill_policies = agent_data['skill_policies']
         self.q_values = agent_data['q_values']
 
@@ -1063,7 +1070,7 @@ class PreparednessIncremental(RODAgent):
 
         next_state_values = self.get_action_values(next_state, next_state_possible_actions)
         if terminal or (not next_state_values):
-            next_state_skill_values = {0: 0.0}
+            next_state_values = {0: 0.0}
 
         max_next_state_value = max(next_state_values.values())
 
@@ -1122,7 +1129,7 @@ class PreparednessIncremental(RODAgent):
             hop: int
     ) -> float:
         distances = sparse.csgraph.dijkstra(
-            self.adjacency_matrix, directed=True, indicies=int(node), unweighted=True, limit=hop+1
+            self.adjacency_matrix, directed=True, indices=[int(node)], unweighted=True, limit=hop+1
         )
         neighbours = np.where((0 < distances) & (distances <= hop))[0]
 
@@ -1194,6 +1201,7 @@ class PreparednessIncremental(RODAgent):
             "subgoals_list": self.subgoals_list,
             "skill_policies": self.skill_policies,
             "q_values": self.q_values,
+            "preparedness_values": self.preparedness_values,
             "skills": list(self.skill_lookup.keys())
         }
 
