@@ -2448,6 +2448,104 @@ def train_preparedness_flat_agents(base_agent_save_path: str,
     return
 
 
+def train_preparedness_incremental_agents(
+        base_agent_save_path: str,
+        option_onboarding: str,
+        option_discovery_method: str,
+        environment: Environment,
+        training_timesteps: int,
+        behaviour_window: int,
+        skill_training_window: int,
+        num_agents: int,
+        evaluate_policy_window: int,
+        all_actions_valid: bool=False,
+        continue_training: bool=False,
+        overwrite_existing_agents: bool=False,
+        alpha: float=0.9,
+        epsilon: float=0.1,
+        gamma: float=0.9,
+        max_hierarchy_height: int=10,
+        checkpoint: None|int=None,
+        save_representation: bool=False,
+        progress_bar: bool=False
+):
+    agent_results_file = "preparedness_incremental_agent_returns_" + option_onboarding + "_" + option_discovery_method + ".json"
+    agent_training_results_file = "preparedness_incremental_agent_training_returns_" + option_onboarding + "_" + option_discovery_method + ".json"
+    filenames = get_filenames(environment)
+
+    base_agent = PreparednessIncremental(
+        environment.possible_actions,
+        skill_training_window,
+        alpha,
+        epsilon,
+        gamma,
+        environment.state_dtype,
+        environment.state_shape,
+        max_hierarchy_height,
+        option_onboarding,
+        option_discovery_method
+    )
+    training_agent = PreparednessIncremental(
+        environment.possible_actions,
+        skill_training_window,
+        alpha,
+        epsilon,
+        gamma,
+        environment.state_dtype,
+        environment.state_shape,
+        max_hierarchy_height,
+        option_onboarding,
+        option_discovery_method
+    )
+
+    directories_to_make = [filenames['agents'], filenames['results']]
+    for directory in directories_to_make:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+
+    all_agent_returns = {str(i): [] for i in range(num_agents)}
+    all_agent_training_returns = {str(i): [] for i in range(num_agents)}
+    existing_results = False
+    if continue_training or not overwrite_existing_agents:
+        if os.path.exists(agent_results_file):
+            existing_results = True
+            with open(agent_results_file, 'r') as f:
+                all_agent_returns = json.load(f)
+        if os.path.exists(agent_training_results_file):
+            existing_results = True
+            with open(agent_training_results_file, 'r') as f:
+                all_agent_training_returns = json.load(f)
+
+    agent_start_index = 0
+    existing_agents_index = 0
+    if (not overwrite_existing_agents) and existing_results:
+        existing_agents_index = len(all_agent_training_returns)
+        num_agents += existing_agents_index
+        for i in range(existing_agents_index, num_agents):
+            all_agent_returns[str(i)] = []
+            all_agent_training_returns[str(i)] = []
+        if not continue_training:
+            agent_start_index = existing_agents_index
+
+    for i in range(agent_start_index, num_agents):
+        i_str = str(i)
+        if progress_bar:
+            print("Training Preparedness Incremental agent " + option_onboarding + " onboarding: " +
+                  i_str + '/' + str(num_agents - 1))
+            agent_save_path = "preparedness_incremental_agent_" + option_onboarding + "_" + option_discovery_method + i_str
+
+            if continue_training and (i < existing_agents_index):
+                training_agent.load(agent_save_path)
+            else:
+                training_agent.copy_agent(filenames['agents'] + '/' + base_agent)
+
+            # TODO: train preparedness incremental agent
+            training_agent, agent_training_returns, agent_returns = train_rod_agent(
+            )
+
+    return
+
+
 def train_q_learning_agent(environment: Environment,
                            training_timesteps, num_agents, evaluate_policy_window=10,
                            all_actions_valid=True,

@@ -900,8 +900,27 @@ class PreparednessIncremental(RODAgent):
         self.total_transitions = agent_data['total_transitions']
         self.subgoals_list = agent_data['subgoals_list']
         self.preparedness_values = agent_data['preparedness_values']
-        self.skill_policies = agent_data['skill_policies']
-        self.q_values = agent_data['q_values']
+        skill_policies_from_file = agent_data['skill_policies']
+        q_values_from_file = agent_data['q_values']
+
+        self.skill_policies = {
+            tuple(skill_tuple): {
+                state: {
+                    action if type(action) == int else tuple(action):
+                        skill_policies_from_file[skill_tuple][state][action]
+                    for action in skill_policies_from_file[skill_tuple][state]
+                }
+                for state in skill_policies_from_file[skill_tuple]
+            }
+            for skill_tuple in skill_policies_from_file
+        }
+        self.q_values = {
+            state: {
+                action if type(action) == int else tuple(action): q_values_from_file[state][action]
+                for action in q_values_from_file[state]
+            }
+            for state in q_values_from_file
+        }
 
         self.skill_lookup = {}
         self.skills = []
@@ -1189,7 +1208,6 @@ class PreparednessIncremental(RODAgent):
             level = int(skill.level)
         return
 
-    # TODO: Change skill tuples to a json saveable object
     def save(
             self,
             save_path: str,
@@ -1205,14 +1223,32 @@ class PreparednessIncremental(RODAgent):
 
         skill_tuple_list = [str(skill_tuple) for skill_tuple in self.skill_lookup.keys()]
 
+        skill_policies_to_save = {
+            str(skill_tuple): {
+                state: {
+                    action if type(action) == int else str(action) : self.skill_policies[skill_tuple][state][action]
+                    for action in self.skill_policies[skill_tuple][state]
+                }
+                for state in self.skill_policies[skill_tuple]
+            }
+            for skill_tuple in self.skill_policies
+        }
+        q_values_to_save = {
+            state: {
+                action if type(action) == int else str(action) : self.q_values[state][action]
+                for action in self.q_values[state]
+            }
+            for state in self.q_values
+        }
+
         agent_save_dict = {
             "num_nodes": self.num_nodes,
             "state_node_lookup": self.state_node_lookup,
             "node_state_lookup": self.node_state_lookup,
             "total_transitions": self.total_transitions,
             "subgoals_list": self.subgoals_list,
-            "skill_policies": self.skill_policies,
-            "q_values": self.q_values,
+            "skill_policies": skill_policies_to_save,
+            "q_values": q_values_to_save,
             "preparedness_values": self.preparedness_values,
             "skills": skill_tuple_list
         }
