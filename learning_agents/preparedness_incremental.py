@@ -3,9 +3,7 @@ import json
 import networkx as nx
 import numpy as np
 import random as rand
-import sys
 
-from requests import options
 from scipy import sparse
 from typing import Callable, Dict, List, Tuple, Type
 
@@ -432,7 +430,7 @@ class PreparednessIncremental(RODAgent):
             new_subgoals = self.find_subgoals()
             new_skills = False
 
-            if self.subgoal_list is None:
+            if self.subgoals_list is None:
                 self.subgoals_list = new_subgoals
                 new_skills = True
             else:
@@ -461,8 +459,12 @@ class PreparednessIncremental(RODAgent):
         # Update skill policy and agent policy tables to account for new skills
         new_skills = []
         max_level = -np.inf
-        for subgoal in list(self.subgoal_graph.nodes()):
-            for subgoal_hat in self.subgoals_list[subgoal]:
+        all_subgoals = list(self.subgoal_graph.nodes())
+        for subgoal in all_subgoals:
+            for subgoal_hat in all_subgoals:
+                if subgoal == subgoal_hat:
+                    continue
+
                 try:
                     level = nx.shortest_path_length(
                         self.subgoal_graph,
@@ -565,7 +567,12 @@ class PreparednessIncremental(RODAgent):
             self
     ) -> None|List[List[str]]:
         # Look for subgoals up to the max height
-        self.adjacency_matrix = nx.to_scipy_sparse_array(self.state_transition_graph)
+        self.adjacency_matrix = nx.to_scipy_sparse_array(
+            self.state_transition_graph,
+            weight=None,
+            dtype=np.int32
+        )
+        self.adjacency_matrix = sparse.csr_matrix(self.adjacency_matrix)
 
         subgoals = {}
         subgoals_complete = False
@@ -585,8 +592,8 @@ class PreparednessIncremental(RODAgent):
             for node in self.state_transition_graph.nodes():
                 is_subgoal = True
                 in_neighbours = np.where(
-                    (distances[:, int(node)] <= hop) & (0 < distances[: int(node)])[0]
-                )
+                    distances[:, int(node)] <= hop
+                )[0]
                 if in_neighbours.size <= 0:
                     is_subgoal = False
                 else:
@@ -610,8 +617,9 @@ class PreparednessIncremental(RODAgent):
 
             subgoals[hop] = hop_subgoals.copy()
 
-            if (hop <= 2) and (subgoals[hop] == subgoals[hop - 1]):
-                subgoals_complete = True
+            if hop >= 2:
+                if subgoals[hop] == subgoals[hop - 1]:
+                    subgoals_complete = True
 
             hop += 1
 
@@ -986,6 +994,8 @@ class PreparednessIncremental(RODAgent):
             neighbours: np.ndarray,
             accuracy: int=4
     ) -> float:
+        if neighbours.size == 0:
+            return 0.0
 
         # W_n_i_j
         def weights_out(start_node, hops_away):
@@ -1130,8 +1140,8 @@ class PreparednessIncremental(RODAgent):
     ) -> float:
         distances = sparse.csgraph.dijkstra(
             self.adjacency_matrix, directed=True, indices=[int(node)], unweighted=True, limit=hop+1
-        )
-        neighbours = np.where((0 < distances) & (distances <= hop))[0]
+        )[0]
+        neighbours = np.where(distances <= hop)[0]
 
         frequency_entropy = self.frequency_entropy(
             node,
@@ -1146,12 +1156,12 @@ class PreparednessIncremental(RODAgent):
         node_preparedness = frequency_entropy + neighbourhood_entropy
 
         try:
-            existing_values = self.preparedness_values[node]
+            _ = self.preparedness_values[node]
         except KeyError:
-            existing_values = {}
-        existing_values[self.frequency_entropy_key(hop)] = frequency_entropy
-        existing_values[self.neighbourhood_entropy_key(hop)] = neighbourhood_entropy
-        existing_values[self.preparedness_key(hop)] = node_preparedness
+            self.preparedness_values[node] = {}
+        self.preparedness_values[node][self.frequency_entropy_key(hop)] = frequency_entropy
+        self.preparedness_values[node][self.neighbourhood_entropy_key(hop)] = neighbourhood_entropy
+        self.preparedness_values[node][self.preparedness_key(hop)] = node_preparedness
 
         return node_preparedness
 
