@@ -35,13 +35,26 @@ class PreparednessSkill(Option):
             self,
             other: 'PreparednessSkill'
     ) -> bool:
-        if (not np.array_equal(self.start_state, other.start_state)) and (self.level != other.level):
+        # Same start state and same level
+        if (not np.array_equal(self.start_state, other.start_state)) or (self.level != other.level):
             return False
+
+        # If one end state - same end states
         if self.end_state is not None:
-            return np.array_equal(self.end_states, other.end_state)
+            return np.array_equal(self.end_state, other.end_state)
+
+        # If multiple end states - checking all end states are the same
+        if other.end_states is None:
+            return False
         for end_state in self.end_states:
-            if end_state not in other.end_states:
+            end_state_found = False
+            for other_end_state in other.end_states:
+                if np.array_equal(end_state, other_end_state):
+                    end_state_found = True
+                    break
+            if not end_state_found:
                 return False
+
         return True
 
     def initiated(
@@ -83,55 +96,6 @@ class PreparednessSkill(Option):
             if self.pathing_function(state, end_state):
                 return False
         return True
-
-class SkillTowardsSubgoal(Option):
-
-    def __init__(
-            self,
-            skill_options: List[Option]|List[int],
-            end_state: np.ndarray,
-            level: int,
-            alpha: float,
-            epsilon: float,
-            gamma: float,
-            state_dtype: Type,
-            pathing_function: Callable[[np.ndarray, np.ndarray], bool]
-    ):
-        self.options = skill_options
-        self.end_state = end_state
-        self.level = level
-        self.pathing_function = pathing_function
-
-        if self.level <= 1:
-            self.policy = QLearningAgent(
-                self.options,
-                alpha,
-                epsilon,
-                gamma
-            )
-        else:
-            self.policy = OptionsAgent(
-                alpha,
-                epsilon,
-                gamma,
-                self.options,
-                state_dtype=state_dtype
-            )
-        return
-
-    def initiated(
-            self,
-            state: np.ndarray
-    ) -> bool:
-        if np.array_equal(state, self.end_state):
-            return False
-        return self.pathing_function(state, self.end_state)
-
-    def terminated(
-            self,
-            state: np.ndarray
-    ) -> bool:
-        return not self.initiated(state)
 
 # Skills are dataclasses:
 #   Hold the behaviour of the skill

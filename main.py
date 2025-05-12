@@ -2766,7 +2766,7 @@ if __name__ == "__main__":
     tinytown = TinyTown(2, 2, pick_every=1)
 
     option_discovery_method = 'update'
-    option_onboarding = 'specific'
+    option_onboarding = 'None'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
     graphing_window = 50
     evaluate_policy_window = 10
