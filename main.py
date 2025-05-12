@@ -2685,8 +2685,8 @@ def train_rod_agent(
         if checkpoint is not None:
             if timestep % checkpoint == 0:
                 rod_agent.save(file_prefix + "_checkpoint_" + str(timestep) + "_timesteps")
-            if save_representation:
-                rod_agent.save_representation(file_prefix + "_representation_" + str(timestep) + "_timesteps")
+                if save_representation:
+                    rod_agent.save_representation(file_prefix + "_representation_" + str(timestep) + "_timesteps")
 
         if timestep % evaluate_policy_window == 0:
             evaluate_agent.copy_agent(rod_agent)

@@ -1095,7 +1095,7 @@ class PreparednessIncremental(RODAgent):
         if next_state_possible_actions is None:
             next_state_possible_actions = self.actions
         state_str = self.state_to_state_str(state)
-        skill_terminated = True
+        skill_terminated = False
         state_values = self.get_action_values(state, self.state_possible_actions)
 
         next_state_values = self.get_action_values(next_state, next_state_possible_actions)
@@ -1104,11 +1104,11 @@ class PreparednessIncremental(RODAgent):
 
         max_next_state_value = max(next_state_values.values())
 
-        if not terminal:
-            skill_terminated = False
+        if terminal:
+            skill_terminated = True
         elif self.current_skill is not None:
-            if not self.current_skill.terminated(next_state):
-                skill_terminated = False
+            if self.current_skill.terminated(next_state):
+                skill_terminated = True
 
         for skill_tuple in state_values:
             current_skill_terminated = True
@@ -1146,6 +1146,8 @@ class PreparednessIncremental(RODAgent):
                 * max_next_state_value - skill_value
             )
 
+            if self.current_skill is not None:
+                self.current_skill.reset_skill()
             self.current_skill_start_state = None
             self.current_skill = None
             self.current_skill_step = 0
