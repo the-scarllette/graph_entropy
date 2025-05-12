@@ -507,7 +507,7 @@ class PreparednessIncremental(RODAgent):
                     new_skills.append(
                         PreparednessSkill(
                             None,
-                            self.node_state_lookop[subgoal],
+                            self.node_state_lookup[subgoal],
                             '1',
                             self.has_path_to_state
                         )
@@ -798,13 +798,15 @@ class PreparednessIncremental(RODAgent):
             self,
             skill: PreparednessSkill
     ) -> Tuple[str, str, str]:
-        skill_start_state = str(None)
         if skill.start_state is not None:
             skill_start_state = self.state_to_state_str(skill.start_state)
+        else:
+            skill_start_state = str(None)
 
-        skill_end_state = str(None)
         if skill.end_state is not None:
             skill_end_state = self.state_to_state_str(skill.end_state)
+        else:
+            skill_end_state = str(None)
 
         return skill_start_state, skill_end_state, skill.level
 
