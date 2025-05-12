@@ -202,7 +202,7 @@ class PreparednessIncremental(RODAgent):
             self.state_node_lookup[state_str] = node
             self.node_state_lookup[node] = state_str
             self.num_nodes += 1
-            self.state_transition_graph.add_node(node, attr={"state": state_str})
+            self.state_transition_graph.add_nodes_from([(node, {'state': state_str})])
         return
 
     def add_start_state(
@@ -340,7 +340,9 @@ class PreparednessIncremental(RODAgent):
 
         for level in range(max_subgoal_level):
             for subgoal in self.subgoals_list[level]:
-                self.subgoal_graph.add_node(subgoal, attr={'preparedness subgoal level': level})
+                self.subgoal_graph.add_nodes_from(
+                    [(subgoal, {'preparedness subgoal level': level, 'state': self.node_state_lookup[subgoal]})]
+                )
 
                 increasing_paths_found = False
                 increasing_level = level - 1
@@ -348,9 +350,12 @@ class PreparednessIncremental(RODAgent):
                     for subgoal_hat in self.subgoals_list[increasing_level]:
                         if nx.has_path(self.state_transition_graph, subgoal, subgoal_hat):
                             increasing_paths_found = True
-                            self.subgoal_graph.add_node(
-                                subgoal_hat,
-                                attr={'preparedness subgoal level': increasing_level}
+                            self.subgoal_graph.add_nodes_from(
+                                [(subgoal,
+                                  {
+                                      'preparedness subgoal level': increasing_level,
+                                      'state': self.node_state_lookup[subgoal_hat]
+                                   })]
                             )
                             self.subgoal_graph.add_edge(subgoal, subgoal_hat)
                     increasing_level -= 1
@@ -361,9 +366,12 @@ class PreparednessIncremental(RODAgent):
                     for subgoal_hat in self.subgoals_list[decreasing_level]:
                         if nx.has_path(self.state_transition_graph, subgoal, subgoal_hat):
                             decreasing_paths_found = True
-                            self.subgoal_graph.add_node(
-                                subgoal_hat,
-                                attr={'preparedness subgoal level': decreasing_level}
+                            self.subgoal_graph.add_nodes_from(
+                                [(subgoal,
+                                  {
+                                      'preparedness subgoal level': decreasing_level,
+                                      'state': self.node_state_lookup[subgoal_hat]
+                                  })]
                             )
                             self.subgoal_graph.add_edge(subgoal, subgoal_hat)
                     decreasing_level += 1
