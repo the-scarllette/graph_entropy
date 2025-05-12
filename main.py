@@ -1943,6 +1943,8 @@ def run_epoch(env: Environment,
                 current_possible_actions = env.get_possible_actions(state)
 
         action = agent.choose_action(state, True, current_possible_actions)
+        if action not in current_possible_actions:
+            print("HERE")
 
         next_state, reward, done, _ = env.step(action)
 

@@ -255,7 +255,7 @@ class PreparednessIncremental(RODAgent):
         ) -> int:
         if possible_actions is None:
             possible_actions = self.actions
-        self.state_possible_actions = possible_actions
+        self.state_possible_actions = copy.copy(possible_actions)
 
         if self.behaviour == AgentBehaviour.EXPLORE:
             return rand.choice(self.state_possible_actions)
@@ -271,7 +271,10 @@ class PreparednessIncremental(RODAgent):
 
         # Agent Behaviour is LEARN
         if self.current_skill is not None:
-            return self.follow_current_skill(state, True, self.state_possible_actions)
+            action =  self.follow_current_skill(state, True, self.state_possible_actions)
+            if action not in self.state_possible_actions:
+                print("HERE")
+            return action
 
         state_values = self.get_action_values(state, possible_actions)
 
@@ -833,7 +836,7 @@ class PreparednessIncremental(RODAgent):
             return skills
 
         if skill_level <= 1:
-            return self.actions
+            return possible_actions
 
         skills = [
             self.get_skill_tuple(possible_skill)
