@@ -492,7 +492,7 @@ class PreparednessIncremental(RODAgent):
                 new_skills.append(
                     PreparednessSkill(
                         None,
-                        self.node_state_lookop[subgoal],
+                        self.node_state_lookup[subgoal],
                         str(max_level),
                         self.has_path_to_state
                     )

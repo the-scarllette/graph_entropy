@@ -2449,7 +2449,6 @@ def train_preparedness_flat_agents(base_agent_save_path: str,
 
 
 def train_preparedness_incremental_agents(
-        base_agent_save_path: str,
         option_onboarding: str,
         option_discovery_method: str,
         environment: Environment,
@@ -2764,6 +2763,7 @@ if __name__ == "__main__":
     '''
     tinytown = TinyTown(2, 2, pick_every=1)
 
+    option_discovery_method = 'update'
     option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
     graphing_window = 50
@@ -2778,11 +2778,28 @@ if __name__ == "__main__":
     options_training_timesteps = 50_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 5_000
+    training_timesteps = 1_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
     behaviour_window = 100
 
     filenames_tinytown = get_filenames(tinytown)
+
+    train_preparedness_incremental_agents(
+        option_onboarding,
+        option_discovery_method,
+        tinytown,
+        training_timesteps,
+        behaviour_window,
+        25,
+        5,
+        evaluate_policy_window,
+        False,
+        False,
+        checkpoint=500,
+        save_representation=True,
+        progress_bar=True
+    )
+    exit()
 
     incremental_agent = PreparednessIncremental(
         tinytown.possible_actions,
