@@ -502,7 +502,7 @@ class PreparednessIncremental(RODAgent):
         # Onboarding skills
         if self.option_onboarding == 'specific':
             for subgoal in list(self.subgoal_graph.nodes()):
-                num_in_edges = len(nx.get_in_edges(self.subgoal_graph, subgoal))
+                num_in_edges = len(self.subgoal_graph.in_edges(subgoal))
                 if num_in_edges <= 0:
                     new_skills.append(
                         PreparednessSkill(
