@@ -346,7 +346,7 @@ class PreparednessIncremental(RODAgent):
 
                 increasing_paths_found = False
                 increasing_level = level - 1
-                while (not increasing_paths_found) and (increasing_level > 0):
+                while (not increasing_paths_found) and (increasing_level >= 0):
                     for subgoal_hat in self.subgoals_list[increasing_level]:
                         if nx.has_path(self.state_transition_graph, subgoal, subgoal_hat):
                             increasing_paths_found = True
@@ -564,7 +564,7 @@ class PreparednessIncremental(RODAgent):
             for node in self.state_transition_graph.nodes():
                 is_subgoal = True
                 in_neighbours = np.where(
-                    distances[:, int(node)] <= hop
+                    (distances[:, int(node)] > 0) & (distances[:, int(node)] <= hop)
                 )[0]
                 if in_neighbours.size <= 0:
                     is_subgoal = False
