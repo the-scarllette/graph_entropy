@@ -7,13 +7,10 @@ import random as rand
 from scipy import sparse
 from typing import Callable, Dict, List, Tuple, Type
 
-from environments.environment import Environment
 from learning_agents.agentbehaviour import AgentBehaviour
 from learning_agents.optionsagent import Option, OptionsAgent
-from learning_agents.preparednessagent import PreparednessAgent, PreparednessOption
 from learning_agents.qlearningagent import QLearningAgent
 from learning_agents.rodagent import RODAgent
-from progressbar import print_progress_bar
 
 class PreparednessSkill(Option):
 
@@ -31,7 +28,7 @@ class PreparednessSkill(Option):
         self.pathing_function: Callable[[np.ndarray, np.ndarray], bool] = pathing_function
         self.end_states: None|List[np.ndarray] = end_states
 
-        self.current_skill: None|'PreparednessSKill' = None
+        self.current_skill: 'PreparednessSkill' | None = None
         return
 
     def __eq__(
@@ -65,7 +62,7 @@ class PreparednessSkill(Option):
 
     def set_skill(
             self,
-            skill: 'PreparednessSKill'
+            skill: 'PreparednessSkill'
     ):
         if self.current_skill is not None:
             self.current_skill.reset_skill()
@@ -159,11 +156,11 @@ class SkillTowardsSubgoal(Option):
 #       act from chosen skill or action
 # When agent is acting from skill:
 #       If skill acts over primitives:
-#           use intetrnal Q table to find action
+#           use internal Q table to find action
 #       else:
 #           If skill is not following an internal skill:
 #               have skill choose an internal skill
-#           act accordind to internal skill
+#           act according to internal skill
 class PreparednessIncremental(RODAgent):
 
     skill_training_failure_reward: float = -1.0
@@ -215,7 +212,7 @@ class PreparednessIncremental(RODAgent):
 
         self.behaviour: AgentBehaviour = AgentBehaviour.LEARN
 
-        self.preparedness_values: Dict[str, Dict[str, float]] = {}
+        self.preparedness_values: Dict[str, Dict[str, float|str]] = {}
 
         # action: int
         # skill: (start_state, end_state, level)
@@ -492,7 +489,7 @@ class PreparednessIncremental(RODAgent):
                 new_skills.append(
                     PreparednessSkill(
                         None,
-                        self.node_state_lookup[subgoal],
+                        self.node_to_state(subgoal),
                         str(max_level),
                         self.has_path_to_state
                     )
@@ -507,7 +504,7 @@ class PreparednessIncremental(RODAgent):
                     new_skills.append(
                         PreparednessSkill(
                             None,
-                            self.node_state_lookup[subgoal],
+                            self.node_to_state(subgoal),
                             '1',
                             self.has_path_to_state
                         )
@@ -832,7 +829,7 @@ class PreparednessIncremental(RODAgent):
         if skill.start_state is not None and skill.end_state is not None:
             if skill_level <= 1:
                 return possible_actions
-            skills = [possible_skill for possible_skill in self.skills if int(possible_skill.level) < skill_level]
+            skills = [self.get_skill_tuple(possible_skill) for possible_skill in self.skills if int(possible_skill.level) < skill_level]
             return skills
 
         if skill_level <= 1:
