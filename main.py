@@ -2537,11 +2537,31 @@ def train_preparedness_incremental_agents(
             if continue_training and (i < existing_agents_index):
                 training_agent.load(agent_save_path)
             else:
-                training_agent.copy_agent(filenames['agents'] + '/' + base_agent)
+                training_agent.copy_agent(base_agent)
 
-            # TODO: train preparedness incremental agent
             training_agent, agent_training_returns, agent_returns = train_rod_agent(
+                environment,
+                training_agent,
+                training_timesteps,
+                behaviour_window,
+                total_evaluation_steps,
+                evaluate_policy_window,
+                all_actions_valid,
+                filenames['agents'] + '/' + agent_save_path,
+                checkpoint,
+                save_representation,
+                progress_bar
             )
+
+            all_agent_training_returns[i_str] += agent_training_returns
+            all_agent_returns[i_str] += agent_returns
+
+            training_agent.save(filenames['agents'] + '/' + agent_save_path)
+
+            with open(filenames['results'] + '/' + agent_training_results_file, 'w') as f:
+                json.dump(all_agent_training_returns, f)
+            with open(filenames['results'] + '/' + agent_results_file, 'w') as f:
+                json.dump(all_agent_returns, f)
 
     return
 
