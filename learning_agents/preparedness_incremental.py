@@ -1081,6 +1081,10 @@ class PreparednessIncremental(RODAgent):
         elif self.current_skill is not None:
             if self.current_skill.terminated(next_state):
                 skill_terminated = True
+            else:
+                next_available_skills = self.get_skills_for_skill(self.current_skill, next_state_possible_actions)
+                if len(next_available_skills) == 0:
+                    skill_terminated = True
 
         for skill_tuple in state_values:
             current_skill_terminated = True

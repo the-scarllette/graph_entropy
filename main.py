@@ -2784,7 +2784,15 @@ if __name__ == "__main__":
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
     behaviour_window = 100
 
-    filenames_tinytown = get_filenames(tinytown)
+    # Graph Ordering + Colouring:
+    # None Onboarding - 332288 - 1
+    # Generic - 117733 - 2
+    # Specific - 88CCEE - 3
+    # Eigenoptions/Preparedness Flat - DDCC77 - 4
+    # Louvain - CC6677 - 5
+    # Betweenness - AA4499 - 6
+    # Primitives - 555555 - 7
+    # Preparedness flat - EE3377 - 8
 
     train_preparedness_incremental_agents(
         option_onboarding,
@@ -2801,6 +2809,18 @@ if __name__ == "__main__":
         save_representation=True,
         progress_bar=True
     )
+    exit()
+
+    taxicab_classic = TaxiCab(False, False)
+
+    filenames = get_filenames(taxicab_classic)
+    adj_matrix, stg, stg_values = taxicab_classic.get_adjacency_matrix(True, False, True, progress_bar=True)
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.set_node_attributes(stg, stg_values)
+    nx.write_gexf(stg, filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'w') as f:
+        json.dump(stg_values, f)
+
     exit()
 
     incremental_agent = PreparednessIncremental(
@@ -2829,16 +2849,6 @@ if __name__ == "__main__":
         progress_bar=True
     )
     exit()
-
-    # Graph Ordering + Colouring:
-    # None Onboarding - 332288 - 1
-    # Generic - 117733 - 2
-    # Specific - 88CCEE - 3
-    # Eigenoptions/Preparedness Flat - DDCC77 - 4
-    # Louvain - CC6677 - 5
-    # Betweenness - AA4499 - 6
-    # Primitives - 555555 - 7
-    # Preparedness flat - EE3377 - 8
 
     filenames_tinytown = get_filenames(lavaflow)
     data = graphing.extract_data(
