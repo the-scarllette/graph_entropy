@@ -728,7 +728,8 @@ class PreparednessIncremental(RODAgent):
             state_values = self.q_values[state_str]
         except KeyError:
             for skill in self.skills:
-                possible_skills.append(self.get_skill_tuple(skill))
+                if skill.initiated(state):
+                    possible_skills.append(self.get_skill_tuple(skill))
             self.q_values[state_str] = {
                 possible_skill: 0.0 for possible_skill in possible_skills
             }
