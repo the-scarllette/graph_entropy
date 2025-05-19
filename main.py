@@ -2763,7 +2763,11 @@ if __name__ == "__main__":
            continuous=True
     )
     '''
-    tinytown = TinyTown(2, 2, pick_every=1)
+    # tinytown = TinyTown(2, 2, pick_every=1)
+    taxicab_classic = TaxiCab(
+        False,
+        False
+    )
 
     option_discovery_method = 'update'
     option_onboarding = 'None'
@@ -2774,8 +2778,8 @@ if __name__ == "__main__":
     min_num_hops = 1
     max_num_hops = 4
     num_agents = 5
-    # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50
-    total_evaluation_steps = 50
+    # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, taxicab_classic = 25
+    total_evaluation_steps = 25
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 50_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
@@ -2797,7 +2801,7 @@ if __name__ == "__main__":
     train_preparedness_incremental_agents(
         option_onboarding,
         option_discovery_method,
-        tinytown,
+        taxicab_classic,
         training_timesteps,
         behaviour_window,
         25,

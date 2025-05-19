@@ -1531,4 +1531,4 @@ class PreparednessIncremental(RODAgent):
         new_edge_weights = [(state_node, v, self.total_transitions[state_node][v]/sum_transitions)
                            for v in self.total_transitions[state_node]]
         self.state_transition_graph.add_weighted_edges_from(new_edge_weights)
-        pass
+        return
