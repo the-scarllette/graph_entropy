@@ -236,8 +236,6 @@ class PreparednessIncremental(RODAgent):
         # Agent Behaviour is LEARN
         if self.current_skill is not None:
             action =  self.follow_current_skill(state, True, self.state_possible_actions)
-            if action not in self.state_possible_actions:
-                print("HERE")
             return action
 
         state_values = self.get_action_values(state, possible_actions)
