@@ -2465,7 +2465,7 @@ def train_preparedness_incremental_agents(
         alpha: float=0.9,
         epsilon: float=0.1,
         gamma: float=0.9,
-        max_hierarchy_height: int=10,
+        max_hierarchy_height: int=5,
         checkpoint: None|int=None,
         save_representation: bool=False,
         progress_bar: bool=False
@@ -2772,7 +2772,7 @@ if __name__ == "__main__":
     option_discovery_method = 'update'
     option_onboarding = 'None'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
-    graphing_window = 50
+    graphing_window = 5
     evaluate_policy_window = 10
     hops = 5
     min_num_hops = 1
@@ -2783,10 +2783,10 @@ if __name__ == "__main__":
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 50_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
-    #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000
-    training_timesteps = 1_000
+    #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
+    training_timesteps = 100 # 100_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
-    behaviour_window = 100
+    behaviour_window = 25
 
     # Graph Ordering + Colouring:
     # None Onboarding - 332288 - 1
@@ -2804,14 +2804,71 @@ if __name__ == "__main__":
         taxicab_classic,
         training_timesteps,
         behaviour_window,
-        25,
+        5,
         5,
         evaluate_policy_window,
+        True,
         False,
-        False,
-        checkpoint=500,
+        checkpoint=5_000,
         save_representation=True,
         progress_bar=True
+    )
+    exit()
+
+    print("Training taxicab primitives")
+    train_q_learning_agent(
+        taxicab_classic,
+        training_timesteps,
+        5,
+        continue_training=False,
+        progress_bar=True,
+        overwrite_existing_agents=True,
+        all_actions_valid=True,
+        total_eval_steps=total_evaluation_steps
+    )
+    exit()
+
+    filenames_taxicab = get_filenames(taxicab_classic)
+    data = graphing.extract_data(
+        filenames_taxicab['results'],
+        [
+            # 'preparedness_agent_returns_none_onboarding.json',
+            # 'preparedness_agent_returns_generic_onboarding.json',
+            # 'preparedness_agent_returns_specific_onboarding.json',
+            # 'eigenoptions_epoch_returns.json',
+            # 'louvain agent returns',
+            # 'betweenness_epoch_returns.json',
+            # 'preparedness_flat_epoch_returns.json',
+            'q_learning_epoch_returns.json'
+        ]
+    )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='Taxicab Classic',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        labels=[
+            # 'Preparedness (No Onboarding)',
+            # 'Preparedness (Generic Onboarding)',
+            # 'Preparedness (Specific Onboarding)',
+            # 'Eigenoptions',
+            # 'Louvain',
+            # 'Betweenness',
+            # 'Flat Preparedness',
+            'Primitives'
+        ],
+        colours=['#332288',
+                 # '#117733',
+                 # '#88CCEE',
+                 # '#DDCC77',
+                 # '#CC6677',
+                 # '#AA4499',
+                 '#EE3377',
+                 '#555555'
+                 ]
     )
     exit()
 
@@ -2851,51 +2908,6 @@ if __name__ == "__main__":
         checkpoint=500,
         save_representation=True,
         progress_bar=True
-    )
-    exit()
-
-    filenames_tinytown = get_filenames(lavaflow)
-    data = graphing.extract_data(
-        filenames_tinytown['results'],
-        [
-            'preparedness_agent_returns_none_onboarding.json',
-            # 'preparedness_agent_returns_generic_onboarding.json',
-            # 'preparedness_agent_returns_specific_onboarding.json',
-            # 'eigenoptions_epoch_returns.json',
-            # 'louvain agent returns',
-            # 'betweenness_epoch_returns.json',
-            'preparedness_flat_epoch_returns.json',
-            'q_learning_epoch_returns.json'
-        ]
-    )
-    graphing.graph_reward_per_epoch(
-        data,
-        graphing_window,
-        evaluate_policy_window,
-        name='Lavaflow',
-        x_label='Timesteps',
-        y_label='Average Epoch Return',
-        error_bars=True,
-        x_lim=[0, 50_000],
-        labels=[
-            'Preparedness (No Onboarding)',
-            # 'Preparedness (Generic Onboarding)',
-            # 'Preparedness (Specific Onboarding)',
-            # 'Eigenoptions',
-            # 'Louvain',
-            # 'Betweenness',
-            'Flat Preparedness',
-            'Primitives'
-        ],
-        colours=['#332288',
-                 # '#117733',
-                 # '#88CCEE',
-                 # '#DDCC77',
-                 # '#CC6677',
-                 # '#AA4499',
-                 '#EE3377',
-                 '#555555'
-                 ]
     )
     exit()
 
@@ -3766,16 +3778,6 @@ if __name__ == "__main__":
     eigenoptions_agent.train_options(taxicab, options_training_timesteps,
                                      True, True)
     eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
-    exit()
-
-    print("Training taxicab primitives")
-    train_q_learning_agent(taxicab,
-                           training_timesteps, 5,
-                           continue_training=False,
-                           progress_bar=True,
-                           overwrite_existing_agents=True,
-                           all_actions_valid=True,
-                           total_eval_steps=total_evaluation_steps)
     exit()
 
     print(tinytown.environment_name + " preparedness training options")

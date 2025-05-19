@@ -391,6 +391,9 @@ class PreparednessIncremental(RODAgent):
         # generate new set of skills
         # add set of skills to existing set
 
+        if self.num_nodes == 0:
+            return
+
         if self.option_discovery_method == 'replace':
             self.subgoals_list = self.find_subgoals()
             if self.subgoals_list is None:
@@ -399,6 +402,9 @@ class PreparednessIncremental(RODAgent):
         elif self.option_discovery_method == 'update':
             new_subgoals = self.find_subgoals()
             new_skills = False
+
+            if new_subgoals is None:
+                return
 
             if self.subgoals_list is None:
                 self.subgoals_list = new_subgoals
