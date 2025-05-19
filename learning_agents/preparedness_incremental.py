@@ -1129,7 +1129,7 @@ class PreparednessIncremental(RODAgent):
             self.current_skill_step = 0
             self.total_reward = 0.0
 
-        pass
+        return
 
     def preparedness(
             self,
