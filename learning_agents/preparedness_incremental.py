@@ -8,9 +8,9 @@ from scipy import sparse
 from typing import Callable, Dict, List, Tuple, Type
 
 from learning_agents.agentbehaviour import AgentBehaviour
-from learning_agents.optionsagent import Option, OptionsAgent
-from learning_agents.qlearningagent import QLearningAgent
+from learning_agents.optionsagent import Option
 from learning_agents.rodagent import RODAgent
+from progressbar import print_progress_bar
 
 class PreparednessSkill(Option):
 
@@ -325,8 +325,15 @@ class PreparednessIncremental(RODAgent):
         return
 
     def compute_graph_preparedness(self, hop: int):
+        print("Computing Preparedness")
         for node in self.state_transition_graph.nodes():
             self.preparedness(str(node), hop)
+            print_progress_bar(
+                int(node),
+                self.num_nodes,
+                "   Computing Preparedness hops = " + str(hop),
+                "Complete"
+            )
         return
 
     def create_subgoal_graph(
@@ -393,6 +400,8 @@ class PreparednessIncremental(RODAgent):
 
         if self.num_nodes == 0:
             return
+
+        print("Finding Skills")
 
         if self.option_discovery_method == 'replace':
             self.subgoals_list = self.find_subgoals()

@@ -2681,6 +2681,8 @@ def train_rod_agent(
         if timestep % behaviour_window == 0:
             current_behaviour_index = (current_behaviour_index + 1) % num_behaviours
             rod_agent.set_behaviour(behaviours[current_behaviour_index])
+            if print_progress_bar:
+                print("Setting agent behaviour " + str(behaviours[current_behaviour_index]))
 
         if checkpoint is not None:
             if timestep % checkpoint == 0:
@@ -2772,7 +2774,7 @@ if __name__ == "__main__":
     option_discovery_method = 'update'
     option_onboarding = 'None'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
-    graphing_window = 5
+    graphing_window = 25
     evaluate_policy_window = 10
     hops = 5
     min_num_hops = 1
@@ -2784,9 +2786,9 @@ if __name__ == "__main__":
     options_training_timesteps = 50_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 100 # 100_000
+    training_timesteps = 50_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
-    behaviour_window = 25
+    behaviour_window = 1_000
 
     # Graph Ordering + Colouring:
     # None Onboarding - 332288 - 1
@@ -2804,7 +2806,7 @@ if __name__ == "__main__":
         taxicab_classic,
         training_timesteps,
         behaviour_window,
-        5,
+        100,
         5,
         evaluate_policy_window,
         True,
@@ -2812,19 +2814,6 @@ if __name__ == "__main__":
         checkpoint=5_000,
         save_representation=True,
         progress_bar=True
-    )
-    exit()
-
-    print("Training taxicab primitives")
-    train_q_learning_agent(
-        taxicab_classic,
-        training_timesteps,
-        5,
-        continue_training=False,
-        progress_bar=True,
-        overwrite_existing_agents=True,
-        all_actions_valid=True,
-        total_eval_steps=total_evaluation_steps
     )
     exit()
 
@@ -2849,6 +2838,7 @@ if __name__ == "__main__":
         name='Taxicab Classic',
         x_label='Timesteps',
         y_label='Average Epoch Return',
+        x_lim=[0, 50_000],
         error_bars=True,
         labels=[
             # 'Preparedness (No Onboarding)',
@@ -2860,15 +2850,29 @@ if __name__ == "__main__":
             # 'Flat Preparedness',
             'Primitives'
         ],
-        colours=['#332288',
-                 # '#117733',
-                 # '#88CCEE',
-                 # '#DDCC77',
-                 # '#CC6677',
-                 # '#AA4499',
-                 '#EE3377',
-                 '#555555'
-                 ]
+        colours=[
+            # '#332288',
+            # '#117733',
+            # '#88CCEE',
+            # '#DDCC77',
+            # '#CC6677',
+            # '#AA4499',
+            # '#EE3377',
+            '#555555'
+        ]
+    )
+    exit()
+
+    print("Training taxicab primitives")
+    train_q_learning_agent(
+        taxicab_classic,
+        training_timesteps,
+        5,
+        continue_training=False,
+        progress_bar=True,
+        overwrite_existing_agents=True,
+        all_actions_valid=True,
+        total_eval_steps=total_evaluation_steps
     )
     exit()
 
