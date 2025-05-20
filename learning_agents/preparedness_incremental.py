@@ -302,6 +302,8 @@ class PreparednessIncremental(RODAgent):
         self.subgoal_graph = None
         if copy_from.subgoal_graph is not None:
             self.subgoal_graph = copy_from.subgoal_graph.copy()
+        self.state_node_lookup = copy.copy(copy_from.state_node_lookup)
+        self.node_state_lookup = copy.copy(copy_from.node_state_lookup)
         self.total_transitions = copy.copy(copy_from.total_transitions)
         self.subgoals_list = copy.copy(copy_from.subgoals_list)
         self.total_reward = copy_from.total_reward
@@ -312,6 +314,8 @@ class PreparednessIncremental(RODAgent):
         self.current_skill_start_state = None
         self.state_possible_actions = None
         self.current_skill_step = 0
+
+        self.behaviour = AgentBehaviour.LEARN
 
         # Node -> Frequency/Neighbourhood/Preparedness -> Value
         self.preparedness_values = copy.copy(copy_from.preparedness_values)

@@ -2533,36 +2533,37 @@ def train_preparedness_incremental_agents(
         if progress_bar:
             print("Training Preparedness Incremental agent " + option_onboarding + " onboarding: " +
                   i_str + '/' + str(num_agents - 1))
-            agent_save_path = "preparedness_incremental_agent_" + option_onboarding + "_" + option_discovery_method + i_str
 
-            if continue_training and (i < existing_agents_index):
-                training_agent.load(agent_save_path)
-            else:
-                training_agent.copy_agent(base_agent)
+        agent_save_path = "preparedness_incremental_agent_" + option_onboarding + "_" + option_discovery_method + i_str
 
-            training_agent, agent_training_returns, agent_returns = train_rod_agent(
-                environment,
-                training_agent,
-                training_timesteps,
-                behaviour_window,
-                total_evaluation_steps,
-                evaluate_policy_window,
-                all_actions_valid,
-                filenames['agents'] + '/' + agent_save_path,
-                checkpoint,
-                save_representation,
-                progress_bar
-            )
+        if continue_training and (i < existing_agents_index):
+            training_agent.load(agent_save_path)
+        else:
+            training_agent.copy_agent(base_agent)
 
-            all_agent_training_returns[i_str] += agent_training_returns
-            all_agent_returns[i_str] += agent_returns
+        training_agent, agent_training_returns, agent_returns = train_rod_agent(
+            environment,
+            training_agent,
+            training_timesteps,
+            behaviour_window,
+            total_evaluation_steps,
+            evaluate_policy_window,
+            all_actions_valid,
+            filenames['agents'] + '/' + agent_save_path,
+            checkpoint,
+            save_representation,
+            progress_bar
+        )
 
-            training_agent.save(filenames['agents'] + '/' + agent_save_path)
+        all_agent_training_returns[i_str] += agent_training_returns
+        all_agent_returns[i_str] += agent_returns
 
-            with open(filenames['results'] + '/' + agent_training_results_file, 'w') as f:
-                json.dump(all_agent_training_returns, f)
-            with open(filenames['results'] + '/' + agent_results_file, 'w') as f:
-                json.dump(all_agent_returns, f)
+        training_agent.save(filenames['agents'] + '/' + agent_save_path)
+
+        with open(filenames['results'] + '/' + agent_training_results_file, 'w') as f:
+            json.dump(all_agent_training_returns, f)
+        with open(filenames['results'] + '/' + agent_results_file, 'w') as f:
+            json.dump(all_agent_returns, f)
 
     return
 
@@ -2681,8 +2682,6 @@ def train_rod_agent(
         if timestep % behaviour_window == 0:
             current_behaviour_index = (current_behaviour_index + 1) % num_behaviours
             rod_agent.set_behaviour(behaviours[current_behaviour_index])
-            if print_progress_bar:
-                print("Setting agent behaviour " + str(behaviours[current_behaviour_index]))
 
         if checkpoint is not None:
             if timestep % checkpoint == 0:
@@ -2786,7 +2785,7 @@ if __name__ == "__main__":
     options_training_timesteps = 50_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 50_000
+    training_timesteps = 100
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
     behaviour_window = 1_000
 
@@ -2811,6 +2810,7 @@ if __name__ == "__main__":
         evaluate_policy_window,
         True,
         False,
+        max_hierarchy_height=4,
         checkpoint=5_000,
         save_representation=True,
         progress_bar=True
@@ -2821,6 +2821,7 @@ if __name__ == "__main__":
     data = graphing.extract_data(
         filenames_taxicab['results'],
         [
+            'preparedness_incremental_agent_returns_None_update.json',
             # 'preparedness_agent_returns_none_onboarding.json',
             # 'preparedness_agent_returns_generic_onboarding.json',
             # 'preparedness_agent_returns_specific_onboarding.json',
@@ -2841,6 +2842,7 @@ if __name__ == "__main__":
         x_lim=[0, 50_000],
         error_bars=True,
         labels=[
+            'Update (No Onboarding)',
             # 'Preparedness (No Onboarding)',
             # 'Preparedness (Generic Onboarding)',
             # 'Preparedness (Specific Onboarding)',
@@ -2851,7 +2853,7 @@ if __name__ == "__main__":
             'Primitives'
         ],
         colours=[
-            # '#332288',
+            '#332288',
             # '#117733',
             # '#88CCEE',
             # '#DDCC77',
