@@ -329,7 +329,6 @@ class PreparednessIncremental(RODAgent):
         return
 
     def compute_graph_preparedness(self, hop: int):
-        print("Computing Preparedness")
         for node in self.state_transition_graph.nodes():
             self.preparedness(str(node), hop)
             print_progress_bar(

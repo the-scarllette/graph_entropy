@@ -615,6 +615,7 @@ class PreparednessAgent(OptionsAgent):
 
         self.options_between_subgoals = {}
         options_for_option = []
+        level = '0'
         for level in agent_save_file['options between subgoals']:
             if self.max_hierarchy_height is not None:
                 if int(level) > self.max_hierarchy_height:

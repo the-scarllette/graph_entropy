@@ -2770,8 +2770,8 @@ if __name__ == "__main__":
         False
     )
 
-    option_discovery_method = 'update'
-    option_onboarding = 'None'
+    option_discovery_method = 'replace'
+    option_onboarding = 'none'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
     graphing_window = 25
     evaluate_policy_window = 10
@@ -2785,9 +2785,9 @@ if __name__ == "__main__":
     options_training_timesteps = 50_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 100
+    training_timesteps = 50_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
-    behaviour_window = 1_000
+    behaviour_window = 2_500
 
     # Graph Ordering + Colouring:
     # None Onboarding - 332288 - 1
@@ -2799,29 +2799,78 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # Preparedness flat - EE3377 - 8
 
-    train_preparedness_incremental_agents(
-        option_onboarding,
-        option_discovery_method,
-        taxicab_classic,
-        training_timesteps,
-        behaviour_window,
-        100,
-        5,
-        evaluate_policy_window,
-        True,
-        False,
-        max_hierarchy_height=4,
-        checkpoint=5_000,
-        save_representation=True,
-        progress_bar=True
-    )
+    filenames_taxicab = get_filenames(taxicab_classic)
+    adj_matrix = sparse.load_npz(filenames_taxicab['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames_taxicab['state transition graph'])
+    with open(filenames_taxicab['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+    preparedness_subgoal_graph = nx.read_gexf(filenames_taxicab['preparedness aggregate graph'])
+
+    print("Training " + taxicab_classic.environment_name + " " + option_onboarding + " Preparedness Agent")
+    train_preparedness_agents(filenames_taxicab['agents'] + '/preparedness_base_agent.json',
+                              option_onboarding, taxicab_classic,
+                              training_timesteps, 5, evaluate_policy_window,
+                              True, total_evaluation_steps,
+                              continue_training=False, overwrite_existing_agents=True,
+                              progress_bar=True)
     exit()
 
-    filenames_taxicab = get_filenames(taxicab_classic)
+    preparedness_agent = PreparednessAgent(taxicab_classic.possible_actions,
+                                           0.9, 0.15, 0.9,
+                                           taxicab_classic.state_dtype, taxicab_classic.state_shape,
+                                           state_transition_graph, preparedness_subgoal_graph,
+                                           option_onboarding='none')
+    preparedness_agent.create_options(taxicab_classic)
+    preparedness_agent.save(filenames_taxicab['agents'] + '/preparedness_base_agent.json')
+    preparedness_agent.train_options(taxicab_classic, options_training_timesteps,
+                                     train_between_options=True,
+                                     train_onboarding_options=True,
+                                     train_subgoal_options=True,
+                                     progress_bar=True)
+    preparedness_agent.save(filenames_taxicab['agents'] + '/preparedness_base_agent.json')
+    print(taxicab_classic.environment_name + " preparedness training options")
+    exit()
+
+    print("Preparedness " + taxicab_classic.environment_name + " computing")
+    stg_values = preparedness_efficient(adj_matrix, 0.5,
+                                        max_num_hops=4,
+                                        compressed_matrix=True,
+                                        existing_stg_values=stg_values,
+                                        progress_bar=True)
+    nx.set_node_attributes(state_transition_graph, stg_values)
+    nx.write_gexf(state_transition_graph, filenames_taxicab['state transition graph'])
+    with open(filenames_taxicab["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+
+    print("Labeling preparedness subgoals")
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
+        adj_matrix, state_transition_graph, stg_values, 0.5)
+
+    print("Creating preparedness subgoal graph")
+    state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
+        taxicab_classic, adj_matrix, state_transition_graph, stg_values,
+        preparedness_subgoals
+    )
+    nx.write_gexf(preparedness_subgoal_graph, filenames_taxicab['preparedness aggregate graph'])
+    nx.write_gexf(state_transition_graph, filenames_taxicab['state transition graph'])
+
+    update_graph_attributes(taxicab_classic, stg_values)
+    exit()
+
+    adj_matrix, state_transition_graph, stg_values = taxicab.get_adjacency_matrix(True, True, True, progress_bar=True)
+
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
+        adj_matrix, state_transition_graph, stg_values
+    )
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
     data = graphing.extract_data(
         filenames_taxicab['results'],
         [
             'preparedness_incremental_agent_returns_None_update.json',
+            'preparedness_incremental_agent_returns_None_replace.json',
             # 'preparedness_agent_returns_none_onboarding.json',
             # 'preparedness_agent_returns_generic_onboarding.json',
             # 'preparedness_agent_returns_specific_onboarding.json',
@@ -2843,6 +2892,7 @@ if __name__ == "__main__":
         error_bars=True,
         labels=[
             'Update (No Onboarding)',
+            'Replace (No Onboarding)',
             # 'Preparedness (No Onboarding)',
             # 'Preparedness (Generic Onboarding)',
             # 'Preparedness (Specific Onboarding)',
@@ -2854,7 +2904,7 @@ if __name__ == "__main__":
         ],
         colours=[
             '#332288',
-            # '#117733',
+            '#117733',
             # '#88CCEE',
             # '#DDCC77',
             # '#CC6677',
@@ -2862,6 +2912,25 @@ if __name__ == "__main__":
             # '#EE3377',
             '#555555'
         ]
+    )
+    exit()
+
+    train_preparedness_incremental_agents(
+        option_onboarding,
+        option_discovery_method,
+        taxicab_classic,
+        training_timesteps,
+        behaviour_window,
+        100,
+        5,
+        evaluate_policy_window,
+        True,
+        False,
+        True,
+        max_hierarchy_height=4,
+        checkpoint=5_000,
+        save_representation=True,
+        progress_bar=True
     )
     exit()
 
@@ -3696,49 +3765,6 @@ if __name__ == "__main__":
     nx.write_graphml(holder_graph, 'tinytown_2x2x3_visual_graph.graphml')
     exit()
 
-    print("Preparedness " + tinytown.environment_name + " computing")
-    stg_values = preparedness_efficient(adj_matrix, 0.5,
-                                        max_num_hops=9,
-                                        compressed_matrix=True,
-                                        existing_stg_values=stg_values,
-                                        computed_hops_range=[1, 8],
-                                        progress_bar=True)
-    nx.set_node_attributes(state_transition_graph, stg_values)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
-    exit()
-
-    print("Training " + lavaflow.environment_name + " " + option_onboarding + " Preparedness Agent")
-    train_preparedness_agents(filenames['agents'] + '/preparedness_base_agent.json',
-                              option_onboarding, lavaflow,
-                              training_timesteps, 5, evaluate_policy_window,
-                              True, total_evaluation_steps,
-                              continue_training=False, overwrite_existing_agents=True,
-                              progress_bar=True)
-    exit()
-
-    print("Labeling preparedness subgoals")
-    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
-        adj_matrix, state_transition_graph, stg_values,0.5)
-
-    print("Creating preparedness subgoal graph")
-    state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
-        taxicab, adj_matrix, state_transition_graph, stg_values,
-        preparedness_subgoals
-    )
-
-    adj_matrix, state_transition_graph, stg_values = taxicab.get_adjacency_matrix(True, True, True, progress_bar=True)
-
-    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
-        adj_matrix, state_transition_graph, stg_values
-    )
-    with open(filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
-
-    update_graph_attributes(taxicab, stg_values)
-    exit()
-
     stg_values = preparedness_efficient(adj_matrix, beta=0.5, max_num_hops=4,
                                         compressed_matrix=True,
                                         existing_stg_values=stg_values
@@ -3747,21 +3773,6 @@ if __name__ == "__main__":
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
-    exit()
-
-    preparedness_agent = PreparednessAgent(tinytown.possible_actions,
-                                           0.9, 0.15, 0.9,
-                                           tinytown.state_dtype, tinytown.state_shape,
-                                           state_transition_graph, preparednesss_subgoal_graph,
-                                           option_onboarding='none')
-    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent.train_options(tinytown, options_training_timesteps,
-                                     train_between_options=True,
-                                     train_onboarding_options=True,
-                                     train_subgoal_options=True,
-                                     progress_bar=True)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
-    print(tinytown.environment_name + " preparedness training options")
     exit()
 
     print("Training tinytown eigenoptions agent")
