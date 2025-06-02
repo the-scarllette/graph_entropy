@@ -257,7 +257,14 @@ class PreparednessIncremental(RODAgent):
         self.current_skill_start_state = state
         if type(skill_tuple) == tuple:
             self.current_skill = self.skill_lookup[skill_tuple]
-            return self.follow_current_skill(state, True, self.state_possible_actions)
+            try:
+                action = self.follow_current_skill(state, True, self.state_possible_actions)
+            except IndexError:
+                self.current_skill.reset_skill()
+                self.current_skill = None
+                self.current_skill_start_state = None
+                return self.choose_action(state, False, possible_actions)
+            return action
         return int(skill_tuple)
 
     def choose_training_skill(
@@ -1109,7 +1116,10 @@ class PreparednessIncremental(RODAgent):
                 skill = self.skill_lookup[skill_tuple]
                 if skill.terminated(state):
                     continue
-                skill_action = self.skill_choose_action(skill, state, self.state_possible_actions)
+                try:
+                    skill_action = self.skill_choose_action(skill, state, self.state_possible_actions)
+                except IndexError: # No possible skills for skill
+                    continue
                 if skill_action != action:
                     continue
                 current_skill_terminated = skill.terminated(next_state)

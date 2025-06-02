@@ -2764,14 +2764,14 @@ if __name__ == "__main__":
            continuous=True
     )
     '''
-    # tinytown = TinyTown(2, 2, pick_every=1)
-    taxicab_classic = TaxiCab(
-        False,
-        False
-    )
+    tinytown = TinyTown(2, 2, pick_every=1)
+    # taxicab_classic = TaxiCab(
+    #     False,
+    #     False
+    #)
 
-    option_discovery_method = 'replace'
-    option_onboarding = 'none'
+    option_discovery_method = 'update'
+    option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
     graphing_window = 25
     evaluate_policy_window = 10
@@ -2780,14 +2780,14 @@ if __name__ == "__main__":
     max_num_hops = 4
     num_agents = 5
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, taxicab_classic = 25
-    total_evaluation_steps = 25
+    total_evaluation_steps = np.inf
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 50_000
     #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 50_000
+    training_timesteps = 20_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
-    behaviour_window = 2_500
+    behaviour_window = 500
 
     # Graph Ordering + Colouring:
     # None Onboarding - 332288 - 1
@@ -2798,6 +2798,77 @@ if __name__ == "__main__":
     # Betweenness - AA4499 - 6
     # Primitives - 555555 - 7
     # Preparedness flat - EE3377 - 8
+
+    train_preparedness_incremental_agents(
+        option_onboarding,
+        option_discovery_method,
+        tinytown,
+        training_timesteps,
+        behaviour_window,
+        100,
+        5,
+        evaluate_policy_window,
+        False,
+        False,
+        True,
+        max_hierarchy_height=5,
+        checkpoint=10_000,
+        save_representation=True,
+        progress_bar=True
+    )
+    exit()
+
+    filenames = get_filenames(tinytown)
+
+    data = graphing.extract_data(
+        filenames['results'],
+        [
+            'preparedness_agent_returns_min2_none_onboarding.json',
+            'preparedness_incremental_agent_returns_none_update.json',
+            'preparedness_incremental_agent_returns_none_replace.json',
+            # 'preparedness_agent_returns_none_onboarding.json',
+            # 'preparedness_agent_returns_generic_onboarding.json',
+            # 'preparedness_agent_returns_specific_onboarding.json',
+            # 'eigenoptions_epoch_returns.json',
+            # 'louvain agent returns',
+            # 'betweenness_epoch_returns.json',
+            # 'preparedness_flat_epoch_returns.json',
+            'q_learning_episode_returns.json'
+        ]
+    )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='TinyTown (2x2)',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        labels=[
+            'Preparedness No Onboarding',
+            'Update (No Onboarding)',
+            'Replace (No Onboarding)',
+            # 'Preparedness (No Onboarding)',
+            # 'Preparedness (Generic Onboarding)',
+            # 'Preparedness (Specific Onboarding)',
+            # 'Eigenoptions',
+            # 'Louvain',
+            # 'Betweenness',
+            # 'Flat Preparedness',
+            'Primitives'
+        ],
+        colours=[
+            '#332288',
+            '#117733',
+            '#88CCEE',
+            # '#DDCC77',
+            # '#CC6677',
+            # '#AA4499',
+            # '#EE3377',
+            '#555555'
+        ]
+    )
+    exit()
 
     filenames_taxicab = get_filenames(taxicab_classic)
     adj_matrix = sparse.load_npz(filenames_taxicab['adjacency matrix'])
@@ -2864,74 +2935,6 @@ if __name__ == "__main__":
     )
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
-    exit()
-
-    data = graphing.extract_data(
-        filenames_taxicab['results'],
-        [
-            'preparedness_incremental_agent_returns_None_update.json',
-            'preparedness_incremental_agent_returns_None_replace.json',
-            # 'preparedness_agent_returns_none_onboarding.json',
-            # 'preparedness_agent_returns_generic_onboarding.json',
-            # 'preparedness_agent_returns_specific_onboarding.json',
-            # 'eigenoptions_epoch_returns.json',
-            # 'louvain agent returns',
-            # 'betweenness_epoch_returns.json',
-            # 'preparedness_flat_epoch_returns.json',
-            'q_learning_epoch_returns.json'
-        ]
-    )
-    graphing.graph_reward_per_epoch(
-        data,
-        graphing_window,
-        evaluate_policy_window,
-        name='Taxicab Classic',
-        x_label='Timesteps',
-        y_label='Average Epoch Return',
-        x_lim=[0, 50_000],
-        error_bars=True,
-        labels=[
-            'Update (No Onboarding)',
-            'Replace (No Onboarding)',
-            # 'Preparedness (No Onboarding)',
-            # 'Preparedness (Generic Onboarding)',
-            # 'Preparedness (Specific Onboarding)',
-            # 'Eigenoptions',
-            # 'Louvain',
-            # 'Betweenness',
-            # 'Flat Preparedness',
-            'Primitives'
-        ],
-        colours=[
-            '#332288',
-            '#117733',
-            # '#88CCEE',
-            # '#DDCC77',
-            # '#CC6677',
-            # '#AA4499',
-            # '#EE3377',
-            '#555555'
-        ]
-    )
-    exit()
-
-    train_preparedness_incremental_agents(
-        option_onboarding,
-        option_discovery_method,
-        taxicab_classic,
-        training_timesteps,
-        behaviour_window,
-        100,
-        5,
-        evaluate_policy_window,
-        True,
-        False,
-        True,
-        max_hierarchy_height=4,
-        checkpoint=5_000,
-        save_representation=True,
-        progress_bar=True
-    )
     exit()
 
     print("Training taxicab primitives")
