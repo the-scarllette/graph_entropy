@@ -39,4 +39,6 @@ class SixRoom(FourRoom):
                       for room in self.rooms]
 
         self.encoded_state_len = self.width + self.height
+
+        self.environment_name = "six_room"
         return
