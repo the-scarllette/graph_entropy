@@ -2734,9 +2734,6 @@ def update_graph_attributes(environment: Environment,
 
 # Writing: Related Work, future work
 
-# TODO: get diayn running
-# TODO: fix run agent for DADS and DIAYN so not learning on evaluation steps
-
 if __name__ == "__main__":
     '''
     lavaflow = LavaFlow(None, None, (0, 0))
