@@ -1445,6 +1445,25 @@ def node_structural_entropy(adjacency_matrix: np.matrix, node, num_hops=1,
     return round(compute_entropy(neighbour_probabilities, log_base), accuracy)
 
 
+def normalise_key(
+        stg_values: Dict[str, Dict[str, float|str]],
+        key: str
+) -> Dict[str, Dict[str, float|str]]:
+    reduced_dict = {node: value for node in stg_values for value in stg_values[node][key]}
+    values = reduced_dict.values()
+
+    max_value = max(values)
+    min_value = min(values)
+
+    min_max_diff = max_value - min_value
+
+    for node in stg_values:
+        value = stg_values[node][key]
+        stg_values[node][key] = (value - min_value) / min_max_diff
+
+    return stg_values
+
+
 def outweight_sum(adjacency_matrix: np.matrix, node):
     return adjacency_matrix[node].sum()
 
