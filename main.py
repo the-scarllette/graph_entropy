@@ -1449,7 +1449,7 @@ def normalise_key(
         stg_values: Dict[str, Dict[str, float|str]],
         key: str
 ) -> Dict[str, Dict[str, float|str]]:
-    reduced_dict = {node: value for node in stg_values for value in stg_values[node][key]}
+    reduced_dict = {node: stg_values[node][key] for node in stg_values}
     values = reduced_dict.values()
 
     max_value = max(values)
