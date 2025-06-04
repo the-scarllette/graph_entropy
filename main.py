@@ -2745,16 +2745,17 @@ if __name__ == "__main__":
     )
     '''
 
-    six_room = SixRoom()
+    tinytown = TinyTown(2, 2)
 
-    six_room_filenames = get_filenames(six_room)
+    six_room_filenames = get_filenames(tinytown)
     with open(six_room_filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    stg_values = normalise_key(
-        stg_values,
-        "preparedness - 1 hops - beta = 0.5"
-    )
+    for i in range(1, 9):
+        stg_values = normalise_key(
+            stg_values,
+            "preparedness - " + str(i) + " hops - beta = 0.5"
+        )
     stg = nx.read_gexf(six_room_filenames['state transition graph'])
     nx.set_node_attributes(
         stg,
