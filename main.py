@@ -2768,6 +2768,18 @@ if __name__ == "__main__":
     six_room = SixRoom()
 
     six_room_filenames = get_filenames(six_room)
+    with open(six_room_filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+    stg = nx.read_gexf(six_room_filenames['state transition graph'])
+    nx.set_node_attributes(
+        stg,
+        stg_values
+    )
+    nx.write_gexf(
+        stg,
+        six_room_filenames['state transition graph']
+    )
+    exit()
 
     adj_matrix, state_transition_graph, stg_values = six_room.get_adjacency_matrix(
         True,
