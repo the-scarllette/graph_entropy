@@ -1454,12 +1454,12 @@ def normalise_key(
 
     max_value = max(values)
     min_value = min(values)
+    normalised_key = key + " - normalised"
 
     min_max_diff = max_value - min_value
 
     for node in stg_values:
-        value = stg_values[node][key]
-        stg_values[node][key] = (value - min_value) / min_max_diff
+        stg_values[node][normalised_key] = (stg_values[node][key] - min_value) / min_max_diff
 
     return stg_values
 
@@ -2750,6 +2750,11 @@ if __name__ == "__main__":
     six_room_filenames = get_filenames(six_room)
     with open(six_room_filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
+
+    stg_values = normalise_key(
+        stg_values,
+        "preparedness - 1 hops - beta = 0.5"
+    )
     stg = nx.read_gexf(six_room_filenames['state transition graph'])
     nx.set_node_attributes(
         stg,
