@@ -2735,7 +2735,6 @@ def update_graph_attributes(environment: Environment,
 # Writing: Related Work, future work
 
 if __name__ == "__main__":
-    '''
     lavaflow = LavaFlow(None, None, (0, 0))
     taxicab = TaxiCab(
           False,
@@ -2743,9 +2742,92 @@ if __name__ == "__main__":
            [0.25, 0.01, 0.01, 0.01, 0.72],
            continuous=True
     )
-    '''
 
     tinytown = TinyTown(2, 2)
+
+    option_discovery_method = 'replace'
+    option_onboarding = 'specific'
+    # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
+    graphing_window = 25
+    evaluate_policy_window = 10
+    hops = 5
+    min_num_hops = 1
+    max_num_hops = 4
+    num_agents = 5
+    # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, taxicab_classic = 25
+    total_evaluation_steps = np.inf
+    # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
+    options_training_timesteps = 50_000
+    # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
+    # lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
+    training_timesteps = 20_000
+    # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
+    behaviour_window = 500
+
+    # Graph Ordering + Colouring:
+    # None Onboarding - 332288 - 1
+    # Generic - 117733 - 2
+    # Specific - 88CCEE - 3
+    # Eigenoptions/Preparedness Flat - DDCC77 - 4
+    # Louvain - CC6677 - 5
+    # Betweenness - AA4499 - 6
+    # Primitives - 555555 - 7
+    # Preparedness flat - EE3377 - 8
+
+    filenames = get_filenames(tinytown)
+
+    data = graphing.extract_data(
+        filenames['results'],
+        [
+            'preparedness_agent_returns_none_onboarding.json',
+            # 'preparedness_incremental_agent_returns_specific_update.json',
+            # 'preparedness_incremental_agent_returns_specific_replace.json',
+            # 'preparedness_agent_returns_none_onboarding.json',
+            # 'preparedness_agent_returns_generic_onboarding.json',
+            # 'preparedness_agent_returns_specific_onboarding.json',
+            # 'eigenoptions_epoch_returns.json',
+            'louvain agent returns',
+            'betweenness_epoch_returns.json',
+            # 'preparedness_flat_epoch_returns.json',
+            'q_learning_epoch_returns.json'
+        ]
+    )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='TinyTown',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        labels=[
+            # 'Graph and Mutual Information Skills',
+            # 'Mutual Information Skills',
+            # 'Graph Based Skills',
+            # 'No Skills'
+            # 'Preparedness (No Onboarding)',
+            # 'Preparedness (Specific Onboarding)',
+            # 'Update (No Onboarding)',
+            # 'Replace (No Onboarding)',
+            # 'Preparedness (Generic Onboarding)',
+            # 'Eigenoptions',
+            # 'Louvain',
+            # 'Betweenness',
+            # 'Flat Preparedness',
+            # 'Primitives'
+        ],
+        colours=[
+            '#332288',
+            '#117733',
+            '#88CCEE',
+            # '#DDCC77',
+            # '#CC6677',
+            # '#AA4499',
+            # '#EE3377',
+            '#555555'
+        ]
+    )
+    exit()
 
     six_room_filenames = get_filenames(tinytown)
     with open(six_room_filenames['state transition graph values'], 'r') as f:
@@ -2819,86 +2901,6 @@ if __name__ == "__main__":
     #     False,
     #     False
     #)
-
-    option_discovery_method = 'replace'
-    option_onboarding = 'specific'
-    # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
-    graphing_window = 25
-    evaluate_policy_window = 10
-    hops = 5
-    min_num_hops = 1
-    max_num_hops = 4
-    num_agents = 5
-    # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, taxicab_classic = 25
-    total_evaluation_steps = np.inf
-    # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 50_000
-    #tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
-    #lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 20_000
-    # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
-    behaviour_window = 500
-
-    # Graph Ordering + Colouring:
-    # None Onboarding - 332288 - 1
-    # Generic - 117733 - 2
-    # Specific - 88CCEE - 3
-    # Eigenoptions/Preparedness Flat - DDCC77 - 4
-    # Louvain - CC6677 - 5
-    # Betweenness - AA4499 - 6
-    # Primitives - 555555 - 7
-    # Preparedness flat - EE3377 - 8
-
-    filenames = get_filenames(tinytown)
-
-    data = graphing.extract_data(
-        filenames['results'],
-        [
-            'preparedness_agent_returns_min2_specific_onboarding.json',
-            'preparedness_incremental_agent_returns_specific_update.json',
-            # 'preparedness_incremental_agent_returns_specific_replace.json',
-            # 'preparedness_agent_returns_none_onboarding.json',
-            # 'preparedness_agent_returns_generic_onboarding.json',
-            # 'preparedness_agent_returns_specific_onboarding.json',
-            # 'eigenoptions_epoch_returns.json',
-            # 'louvain agent returns',
-            # 'betweenness_epoch_returns.json',
-            # 'preparedness_flat_epoch_returns.json',
-            'q_learning_episode_returns.json'
-        ]
-    )
-    graphing.graph_reward_per_epoch(
-        data,
-        graphing_window,
-        evaluate_policy_window,
-        name='TinyTown (2x2)',
-        x_label='Timesteps',
-        y_label='Average Epoch Return',
-        error_bars=True,
-        labels=[
-            # 'Preparedness (No Onboarding)',
-            'Preparedness (Specific Onboarding)',
-            'Update (No Onboarding)',
-            # 'Replace (No Onboarding)',
-            # 'Preparedness (Generic Onboarding)',
-            # 'Eigenoptions',
-            # 'Louvain',
-            # 'Betweenness',
-            # 'Flat Preparedness',
-            'Primitives'
-        ],
-        colours=[
-            '#332288',
-            '#117733',
-            '#88CCEE',
-            # '#DDCC77',
-            # '#CC6677',
-            # '#AA4499',
-            # '#EE3377',
-            '#555555'
-        ]
-    )
-    exit()
 
     train_preparedness_incremental_agents(
         option_onboarding,

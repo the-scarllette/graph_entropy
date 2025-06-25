@@ -26,7 +26,8 @@ class FourRoom(Environment):
              {'corner': (6, 0),
               'width': 5,
               'height': 4,
-              'corridors': [(8, 4), (5, 2)]}]
+              'corridors': [(8, 4), (5, 2)]}
+    ]
 
     height = width = 11
 
