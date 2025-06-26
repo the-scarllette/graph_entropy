@@ -14,6 +14,7 @@ from typing import Dict, List, Tuple
 import environments.environment
 from environments.environment import Environment
 from environments.lavaflow import LavaFlow
+from environments.officeworld import OfficeWorld
 from environments.sixroom import SixRoom
 from environments.taxicab import TaxiCab
 from environments.tinytown import TinyTown
@@ -2736,12 +2737,16 @@ def update_graph_attributes(environment: Environment,
 
 if __name__ == "__main__":
     lavaflow = LavaFlow(None, None, (0, 0))
+    office_world = OfficeWorld()
     taxicab = TaxiCab(
           False,
           False,
            [0.25, 0.01, 0.01, 0.01, 0.72],
            continuous=True
     )
+
+    print(office_world.default_floor_map)
+    exit()
 
     tinytown = TinyTown(2, 2)
 
