@@ -284,9 +284,26 @@ class OfficeWorld(Environment):
     def get_successor_state(
             self,
             state: np.ndarray,
-            action: int
-    ) -> np.ndarray:
+            action: int,
+            check_valid_action: bool=False
+    ) -> np.ndarray|Tuple[np.ndarray, bool]:
         state, floor = self.unflatten_state(state)
+        agent_coord = self.get_agent_coord(state)
+        
+        if action == self.NORTH:
+            agent_coord = agent_coord = (agent_coord[0] - 1, agent_coord[1], floor)
+        elif action == self.SOUTH:
+            agent_coord = (agent_coord[0] + 1, agent_coord[1], floor)
+        elif action == self.EAST:
+            agent_coord = (agent_coord[0], agent_coord[1] + 1, floor)
+        elif action == self.WEST:
+            agent_coord = (agent_coord[0], agent_coord[1] - 1, floor)
+        elif action == self.ELEVATOR_UP:
+            agent_coord = (agent_coord[0], agent_coord[1], floor + 1)
+        elif action == self.ELEVATOR_DOWN:
+            agent_coord = (agent_coord[0], agent_coord[1], floor - 1)
+        else:
+            raise ValueError("Invalid action")
 
         pass
 
@@ -301,6 +318,23 @@ class OfficeWorld(Environment):
             state: None|np.ndarray=None
     ) -> bool:
         pass
+
+    def is_valid_agent_coord(
+            self,
+            agent_coord: Tuple[int, int, int],
+            state: np.ndarray
+    ) -> bool:
+        if agent_coord[0] < 0 or agent_coord[0] >= self.unflattened_state_shape[0]:
+            return False
+        if agent_coord[1] < 0 or agent_coord[1] >= self.unflattened_state_shape[1]:
+            return False
+        if agent_coord[2] < 0 or agent_coord[2] >= self.num_floors:
+            return False
+
+        if state[agent_coord[0]][agent_coord[1]] == self.BLOCK:
+            return False
+
+        return True
 
     def step(
             self,
