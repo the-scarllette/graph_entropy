@@ -271,10 +271,26 @@ class OfficeWorld(Environment):
         flattened_state[self.state_shape[0]] = floor
         return flattened_state
 
+    def get_agent_coord(
+            self,
+            state: np.ndarray,
+    ) -> Tuple[int, int]:
+        agent_coord = np.argwhere(state == self.AGENT)
+        return (agent_coord[0][0], agent_coord[0, 1])
+
     def get_start_states(self) -> List[np.ndarray]:
         pass
 
-    def get_success_states(
+    def get_successor_state(
+            self,
+            state: np.ndarray,
+            action: int
+    ) -> np.ndarray:
+        state, floor = self.unflatten_state(state)
+
+        pass
+
+    def get_successor_states(
             self,
             state: np.ndarray,
     ) -> (List[np.ndarray], List[float]):
