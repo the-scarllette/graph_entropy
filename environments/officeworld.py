@@ -283,29 +283,49 @@ class OfficeWorld(Environment):
 
     def get_successor_state(
             self,
-            state: np.ndarray,
+            flattened_state: np.ndarray,
             action: int,
             check_valid_action: bool=False
-    ) -> np.ndarray|Tuple[np.ndarray, bool]:
-        state, floor = self.unflatten_state(state)
+    ) -> None|np.ndarray|Tuple[np.ndarray, bool]:
+        if self.is_terminal(flattened_state):
+            return None
+
+        state, floor = self.unflatten_state(flattened_state)
         agent_coord = self.get_agent_coord(state)
         
         if action == self.NORTH:
-            agent_coord = agent_coord = (agent_coord[0] - 1, agent_coord[1], floor)
+            new_agent_coord = (agent_coord[0] - 1, agent_coord[1], floor)
         elif action == self.SOUTH:
-            agent_coord = (agent_coord[0] + 1, agent_coord[1], floor)
+            new_agent_coord = (agent_coord[0] + 1, agent_coord[1], floor)
         elif action == self.EAST:
-            agent_coord = (agent_coord[0], agent_coord[1] + 1, floor)
+            new_agent_coord = (agent_coord[0], agent_coord[1] + 1, floor)
         elif action == self.WEST:
-            agent_coord = (agent_coord[0], agent_coord[1] - 1, floor)
+            new_agent_coord = (agent_coord[0], agent_coord[1] - 1, floor)
         elif action == self.ELEVATOR_UP:
-            agent_coord = (agent_coord[0], agent_coord[1], floor + 1)
+            new_agent_coord = (agent_coord[0], agent_coord[1], floor + 1)
         elif action == self.ELEVATOR_DOWN:
-            agent_coord = (agent_coord[0], agent_coord[1], floor - 1)
+            new_agent_coord = (agent_coord[0], agent_coord[1], floor - 1)
         else:
             raise ValueError("Invalid action")
 
-        pass
+        is_valid_action = True
+        successor_state = flattened_state
+        if not self.is_valid_agent_coord(new_agent_coord, state):
+            is_valid_action = False
+        elif action in [self.NORTH, self.SOUTH, self.EAST, self.WEST]:
+            successor_state = state
+            successor_state[agent_coord] = self.EMPTY
+            successor_state[new_agent_coord[0]][new_agent_coord[1]] = self.AGENT
+            successor_state = self.flatten_state(successor_state, floor)
+        else:
+            if (new_agent_coord[0], new_agent_coord[1]) == self.elevator_coord:
+                successor_state = self.flatten_state(state, new_agent_coord[2])
+            else:
+                is_valid_action = False
+
+        if check_valid_action:
+            return successor_state, is_valid_action
+        return successor_state
 
     def get_successor_states(
             self,
