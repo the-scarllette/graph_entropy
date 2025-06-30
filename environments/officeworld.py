@@ -302,7 +302,8 @@ class OfficeWorld(Environment):
     def unflatten_state(
             self,
             state: np.ndarray,
-    ) -> np.ndarray:
+    ) -> (np.ndarray, int):
+        floor = state[self.state_shape[0]]
         unflattened_state = np.delete(state, self.state_shape[0])
         unflattened_state = unflattened_state.reshape(self.unflattened_state_shape)
-        return unflattened_state
+        return unflattened_state, floor
