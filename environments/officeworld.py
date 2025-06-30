@@ -241,6 +241,7 @@ class OfficeWorld(Environment):
 
         self.state_dtype: Type = int
         self.state_shape: Tuple[int, ...]=(self.floor_map.flatten().shape[0] + 1,)
+        self.unflattened_state_shape: Tuple[int, ...]=self.floor_map.shape
 
         self.current_floor: None|int=None
         self.current_state: None|np.ndarray=None
@@ -297,3 +298,11 @@ class OfficeWorld(Environment):
             seed: None|int=None
     ) -> np.ndarray:
         pass
+
+    def unflatten_state(
+            self,
+            state: np.ndarray,
+    ) -> np.ndarray:
+        unflattened_state = np.delete(state, self.state_shape[0])
+        unflattened_state = unflattened_state.reshape(self.unflattened_state_shape)
+        return unflattened_state
