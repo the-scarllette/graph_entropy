@@ -1,4 +1,5 @@
 import numpy as np
+from typing import List
 
 from environments.environment import Environment
 
@@ -60,7 +61,16 @@ class SimpleCrafter(Environment):
     MIN_IRON = 1
     MIN_DIAMOND = 1
 
-    default_grid_len = 6
+    default_start_state = np.array(
+        [
+            [EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, STONE],
+            [WOOD, WOOD, EMPTY, EMPTY, EMPTY, STONE],
+            [EMPTY, EMPTY, WOOD, EMPTY, STONE, DIAMOND],
+            [WOOD, EMPTY, EMPTY, STONE, IRON, STONE],
+            [EMPTY, EMPTY, WOOD, STONE, IRON, STONE],
+            [EMPTY, EMPTY, EMPTY, EMPTY, STONE, STONE]
+        ]
+    )
 
     # Terminal when:
     # Has diamond
@@ -82,10 +92,11 @@ class SimpleCrafter(Environment):
 
     def __init__(
             self,
-            grid_len: int=default_grid_len
+            start_state: np.ndarray=default_start_state,
     ):
         self.current_state = None
-        self.grid_len = grid_len
+        self.start_state = start_state
+        self.grid_len = self.start_state.shape[0]
         self.grid_size = self.grid_len * self.grid_len
 
         self.wood_index = self.grid_size
@@ -100,12 +111,45 @@ class SimpleCrafter(Environment):
         self.state_dtype = int
         pass
 
+    def get_start_states(
+            self
+    ) -> List[np.ndarray]:
+        start_state_template = np.zeros(self.state_shape)
+        start_state_template[:self.grid_size] = np.reshape(self.start_state, (self.grid_size, ))
+
+        start_states = []
+        for i in range(self.grid_size):
+            if start_state_template[i] != SimpleCrafter.EMPTY:
+                continue
+
+            new_start_state = start_state_template.copy()
+            new_start_state[i] = SimpleCrafter.AGENT
+            start_states.append(new_start_state)
+
+        return start_states
+
     def unflatten_state(
             self,
             state: np.ndarray
     ) -> np.ndarray:
         unflattened_state = np.reshape(state[:self.grid_size], (self.grid_len, self.grid_len))
-        return unflattened_state
+
+        agent_cords = np.argwhere(unflattened_state==SimpleCrafter.AGENT)[0]
+        agent_y = agent_cords[0]
+        agent_x = agent_cords[1]
+
+        return (
+            unflattened_state,
+            agent_x,
+            agent_y,
+            state[self.wood_index],
+            state[self.stone_index],
+            state[self.iron_index],
+            state[self.diamond_index],
+            state[self.wood_pickaxe_index],
+            state[self.stone_pickaxe_index],
+            state[self.iron_pickaxe_index]
+        )
 
     def reset(
             self,
