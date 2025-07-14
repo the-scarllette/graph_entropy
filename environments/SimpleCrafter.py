@@ -20,7 +20,7 @@ class SimpleCrafter(Environment):
     SOUTH = 1
     EAST = 2
     WEST = 3
-    DO = 4
+    COLLECT = 4
     PLACE_TABLE = 5
     WOOD_PICKAXE = 6
     STONE_PICKAXE = 7
@@ -31,8 +31,8 @@ class SimpleCrafter(Environment):
         SOUTH,
         EAST,
         WEST,
-        DO,
-        PLACE_TABLE,
+        COLLECT, # collect wood, collect stone, collect iron, collect diamond,
+        PLACE_TABLE, # Place table north
         WOOD_PICKAXE,
         STONE_PICKAXE,
         IRON_PICKAXE
@@ -106,6 +106,12 @@ class SimpleCrafter(Environment):
         self.wood_pickaxe_index = self.grid_size + 4
         self.stone_pickaxe_index = self.grid_size + 5
         self.iron_pickaxe_index = self.grid_size + 6
+        self.block_index_lookup = {
+            SimpleCrafter.WOOD: self.wood_index,
+            SimpleCrafter.STONE: self.stone_index,
+            SimpleCrafter.IRON: self.iron_index,
+            SimpleCrafter.DIAMOND: self.diamond_index
+        }
 
         self.state_shape = (self.grid_size + 7,)
         self.state_dtype = int
@@ -128,10 +134,91 @@ class SimpleCrafter(Environment):
 
         return start_states
 
+    def get_successor_states(
+            self,
+            state: np.ndarray,
+            probability_weights: bool=False
+    ) -> (List[np.ndarray], List[np.ndarray]):
+        if self.is_terminal(state):
+            return [], []
+
+        (
+            unflattened_state,
+            agent_x,
+            agent_y,
+            num_wood,
+            num_stone,
+            num_iron,
+            num_diamond,
+            wood_pickaxe,
+            stone_pickaxe,
+            iron_pickaxe
+        ) = self.unflatten_state(state)
+
+        successor_states = []
+        stationary_actions = 0
+        if 0 < agent_y and unflattened_state[agent_y - 1][agent_x] == SimpleCrafter.EMPTY:
+            successor_state = state.copy()
+            successor_state[(agent_y * self.grid_len) + agent_x] = SimpleCrafter.EMPTY
+            successor_state[((agent_y - 1) * self.grid_len) + agent_x] = SimpleCrafter.AGENT
+            successor_states.append(successor_state)
+        else:
+            stationary_actions += 1
+        if agent_y < self.grid_len - 1 and unflattened_state[agent_y + 1][agent_x] == SimpleCrafter.EMPTY:
+            successor_state = state.copy()
+            successor_state[(agent_y * self.grid_len) + agent_x] = SimpleCrafter.EMPTY
+            successor_state[((agent_y + 1) * self.grid_len) + agent_x] = SimpleCrafter.AGENT
+            successor_states.append(successor_state)
+        else:
+            stationary_actions += 1
+        if agent_x < self.grid_len - 1 and unflattened_state[agent_y][agent_x + 1] == SimpleCrafter.EMPTY:
+            successor_state = state.copy()
+            successor_state[(agent_y * self.grid_len) + agent_x] = SimpleCrafter.EMPTY
+            successor_state[(agent_y * self.grid_len) + agent_x + 1] = SimpleCrafter.AGENT
+            successor_states.append(successor_state)
+        else:
+            stationary_actions += 1
+        if 0 < agent_x and unflattened_state[agent_y][agent_x - 1] == SimpleCrafter.EMPTY:
+            successor_state = state.copy()
+            successor_state[(agent_y * self.grid_len) + agent_x] = SimpleCrafter.EMPTY
+            successor_state[(agent_y * self.grid_len) + agent_x - 1] = SimpleCrafter.AGENT
+            successor_states.append(successor_state)
+        else:
+            stationary_actions += 1
+        collectable_blocks = [SimpleCrafter.WOOD]
+        if wood_pickaxe == 1:
+            collectable_blocks.append(SimpleCrafter.STONE)
+        if stone_pickaxe == 1:
+            collectable_blocks.append(SimpleCrafter.IRON)
+        if iron_pickaxe == 1:
+            collectable_blocks.append(SimpleCrafter.DIAMOND)
+        successor_state = state.copy()
+        collect_successor_state = False
+        for adj_cords in [
+            (agent_y - 1, agent_x),
+            (agent_y + 1, agent_x),
+            (agent_y, agent_x + 1),
+            (agent_y, agent_x - 1)
+        ]:
+            if (
+                    0 <= adj_cords[0] < self.grid_len
+                    and 0 <= adj_cords[1] < self.grid_len
+                    and unflattened_state[adj_cords] in collectable_blocks
+            ):
+                collect_successor_state = True
+                successor_state[(adj_cords[0] * self.grid_len) + adj_cords[1]] = SimpleCrafter.EMPTY
+                successor_state[self.block_index_lookup[unflattened_state[adj_cords]]] += 1
+        if not collect_successor_state:
+            stationary_actions += 1
+
+        # TODO: Place table successor state
+
+        pass
+
     def unflatten_state(
             self,
             state: np.ndarray
-    ) -> np.ndarray:
+    ) -> (np.ndarray, int, int, int, int, int, int, int, int, int):
         unflattened_state = np.reshape(state[:self.grid_size], (self.grid_len, self.grid_len))
 
         agent_cords = np.argwhere(unflattened_state==SimpleCrafter.AGENT)[0]
