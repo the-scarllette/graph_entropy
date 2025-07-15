@@ -157,6 +157,15 @@ class SimpleCrafter(Environment):
 
         successor_states = []
         stationary_actions = 0
+        adj_cords = [ adj_cord
+                      for adj_cord in [
+                (agent_y - 1, agent_x),
+                (agent_y + 1, agent_x),
+                (agent_y, agent_x + 1),
+                (agent_y, agent_x - 1)
+            ]
+                      if 0 <= adj_cord[0] < self.grid_len and 0 <= adj_cord[1] < self.grid_len
+        ]
         if 0 < agent_y and unflattened_state[agent_y - 1][agent_x] == SimpleCrafter.EMPTY:
             successor_state = state.copy()
             successor_state[(agent_y * self.grid_len) + agent_x] = SimpleCrafter.EMPTY
@@ -194,20 +203,11 @@ class SimpleCrafter(Environment):
             collectable_blocks.append(SimpleCrafter.DIAMOND)
         successor_state = state.copy()
         collect_successor_state = False
-        for adj_cords in [
-            (agent_y - 1, agent_x),
-            (agent_y + 1, agent_x),
-            (agent_y, agent_x + 1),
-            (agent_y, agent_x - 1)
-        ]:
-            if (
-                    0 <= adj_cords[0] < self.grid_len
-                    and 0 <= adj_cords[1] < self.grid_len
-                    and unflattened_state[adj_cords] in collectable_blocks
-            ):
+        for adj_cord in adj_cords
+            if unflattened_state[adj_cord] in collectable_blocks:
                 collect_successor_state = True
-                successor_state[(adj_cords[0] * self.grid_len) + adj_cords[1]] = SimpleCrafter.EMPTY
-                successor_state[self.block_index_lookup[unflattened_state[adj_cords]]] += 1
+                successor_state[(adj_cord[0] * self.grid_len) + adj_cord[1]] = SimpleCrafter.EMPTY
+                successor_state[self.block_index_lookup[unflattened_state[adj_cord]]] += 1
         if not collect_successor_state:
             stationary_actions += 1
         if 0 < agent_y and 1 <= num_wood and unflattened_state[agent_y - 1][agent_x] == SimpleCrafter.EMPTY:
@@ -217,6 +217,34 @@ class SimpleCrafter(Environment):
             successor_states.append(successor_state)
         else:
             stationary_actions += 1
+
+        table_adjacent = False
+        for adj_cord in adj_cords:
+            if unflattened_state[adj_cord] == SimpleCrafter.TABLE:
+                table_adjacent = True
+        if not table_adjacent:
+            stationary_actions += 3
+        else:
+            if 1 <= num_wood:
+                successor_state = state.copy()
+                successor_state[self.block_index_lookup[SimpleCrafter.WOOD]] -= 1
+                successor_state[self.wood_pickaxe_index] = 1
+            else:
+                stationary_actions += 1
+            if 1 <= num_stone:
+                successor_state = state.copy()
+                successor_state[self.block_index_lookup[SimpleCrafter.STONE]] -= 1
+                successor_state[self.stone_pickaxe_index] = 1
+            else:
+                stationary_actions += 1
+            if 1 <= num_iron:
+                successor_state = state.copy()
+                successor_state[self.block_index_lookup[SimpleCrafter.IRON]] -= 1
+                successor_state[self.iron_pickaxe_index] = 1
+            else:
+                stationary_actions += 1
+
+        # TODO work out final probabilities
 
         pass
 
