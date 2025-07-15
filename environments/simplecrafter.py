@@ -1,4 +1,5 @@
 import numpy as np
+import random
 from typing import List
 
 from environments.environment import Environment
@@ -297,4 +298,16 @@ class SimpleCrafter(Environment):
         self.current_state = start_state
         if self.current_state is not None:
             return self.current_state
-        pass
+
+        unflattened_start_state = self.start_state.copy()
+        agent_placed = False
+        while not agent_placed:
+            agent_y = random.randint(0, self.grid_len - 1)
+            agent_x = random.randint(0, self.grid_len - 1)
+            if unflattened_start_state[agent_y][agent_x] == SimpleCrafter.EMPTY:
+                unflattened_start_state[agent_y][agent_x] = SimpleCrafter.AGENT
+                agent_placed = True
+
+        self.current_state = np.zeros(self.state_shape, dtype=self.state_dtype)
+        self.current_state[:self.grid_size] = np.reshape(unflattened_start_state, (self.grid_size,))
+        return self.current_state
