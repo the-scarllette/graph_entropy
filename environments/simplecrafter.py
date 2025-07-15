@@ -3,6 +3,7 @@ from typing import List
 
 from environments.environment import Environment
 
+
 ## Goal
 # Get diamond in shortest time
 
@@ -15,7 +16,6 @@ from environments.environment import Environment
 # Make iron pickaxe
 
 class SimpleCrafter(Environment):
-
     NORTH = 0
     SOUTH = 1
     EAST = 2
@@ -31,8 +31,8 @@ class SimpleCrafter(Environment):
         SOUTH,
         EAST,
         WEST,
-        COLLECT, # collect wood, collect stone, collect iron, collect diamond,
-        PLACE_TABLE, # Place table north
+        COLLECT,  # collect wood, collect stone, collect iron, collect diamond,
+        PLACE_TABLE,  # Place table north
         WOOD_PICKAXE,
         STONE_PICKAXE,
         IRON_PICKAXE
@@ -92,7 +92,7 @@ class SimpleCrafter(Environment):
 
     def __init__(
             self,
-            start_state: np.ndarray=default_start_state,
+            start_state: np.ndarray = default_start_state,
     ):
         self.current_state = None
         self.start_state = start_state
@@ -121,7 +121,7 @@ class SimpleCrafter(Environment):
             self
     ) -> List[np.ndarray]:
         start_state_template = np.zeros(self.state_shape)
-        start_state_template[:self.grid_size] = np.reshape(self.start_state, (self.grid_size, ))
+        start_state_template[:self.grid_size] = np.reshape(self.start_state, (self.grid_size,))
 
         start_states = []
         for i in range(self.grid_size):
@@ -137,7 +137,7 @@ class SimpleCrafter(Environment):
     def get_successor_states(
             self,
             state: np.ndarray,
-            probability_weights: bool=False
+            probability_weights: bool = False
     ) -> (List[np.ndarray], List[np.ndarray]):
         if self.is_terminal(state):
             return [], []
@@ -210,8 +210,13 @@ class SimpleCrafter(Environment):
                 successor_state[self.block_index_lookup[unflattened_state[adj_cords]]] += 1
         if not collect_successor_state:
             stationary_actions += 1
-
-        # TODO: Place table successor state
+        if 0 < agent_y and 1 <= num_wood and unflattened_state[agent_y - 1][agent_x] == SimpleCrafter.EMPTY:
+            successor_state = state.copy()
+            successor_state[((agent_y - 1) * self.grid_len) + agent_x] = SimpleCrafter.TABLE
+            successor_state[self.block_index_lookup[SimpleCrafter.WOOD]] -= 1
+            successor_states.append(successor_state)
+        else:
+            stationary_actions += 1
 
         pass
 
@@ -221,7 +226,7 @@ class SimpleCrafter(Environment):
     ) -> (np.ndarray, int, int, int, int, int, int, int, int, int):
         unflattened_state = np.reshape(state[:self.grid_size], (self.grid_len, self.grid_len))
 
-        agent_cords = np.argwhere(unflattened_state==SimpleCrafter.AGENT)[0]
+        agent_cords = np.argwhere(unflattened_state == SimpleCrafter.AGENT)[0]
         agent_y = agent_cords[0]
         agent_x = agent_cords[1]
 
@@ -240,8 +245,8 @@ class SimpleCrafter(Environment):
 
     def reset(
             self,
-            start_state: None|np.ndarray=None,
-            seed: None|int=None
+            start_state: None | np.ndarray = None,
+            seed: None | int = None
     ) -> np.ndarray:
         self.current_state = start_state
         if self.current_state is not None:
