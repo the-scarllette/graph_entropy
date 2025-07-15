@@ -94,6 +94,8 @@ class SimpleCrafter(Environment):
             self,
             start_state: np.ndarray = default_start_state,
     ):
+        self.action_space = len(self.possible_actions)
+
         self.current_state = None
         self.start_state = start_state
         self.grid_len = self.start_state.shape[0]
@@ -138,7 +140,7 @@ class SimpleCrafter(Environment):
             self,
             state: np.ndarray,
             probability_weights: bool = False
-    ) -> (List[np.ndarray], List[np.ndarray]):
+    ) -> (List[np.ndarray], List[float]):
         if self.is_terminal(state):
             return [], []
 
@@ -166,6 +168,7 @@ class SimpleCrafter(Environment):
             ]
                       if 0 <= adj_cord[0] < self.grid_len and 0 <= adj_cord[1] < self.grid_len
         ]
+
         if 0 < agent_y and unflattened_state[agent_y - 1][agent_x] == SimpleCrafter.EMPTY:
             successor_state = state.copy()
             successor_state[(agent_y * self.grid_len) + agent_x] = SimpleCrafter.EMPTY
@@ -173,6 +176,7 @@ class SimpleCrafter(Environment):
             successor_states.append(successor_state)
         else:
             stationary_actions += 1
+
         if agent_y < self.grid_len - 1 and unflattened_state[agent_y + 1][agent_x] == SimpleCrafter.EMPTY:
             successor_state = state.copy()
             successor_state[(agent_y * self.grid_len) + agent_x] = SimpleCrafter.EMPTY
@@ -180,6 +184,7 @@ class SimpleCrafter(Environment):
             successor_states.append(successor_state)
         else:
             stationary_actions += 1
+
         if agent_x < self.grid_len - 1 and unflattened_state[agent_y][agent_x + 1] == SimpleCrafter.EMPTY:
             successor_state = state.copy()
             successor_state[(agent_y * self.grid_len) + agent_x] = SimpleCrafter.EMPTY
@@ -187,6 +192,7 @@ class SimpleCrafter(Environment):
             successor_states.append(successor_state)
         else:
             stationary_actions += 1
+
         if 0 < agent_x and unflattened_state[agent_y][agent_x - 1] == SimpleCrafter.EMPTY:
             successor_state = state.copy()
             successor_state[(agent_y * self.grid_len) + agent_x] = SimpleCrafter.EMPTY
@@ -194,6 +200,7 @@ class SimpleCrafter(Environment):
             successor_states.append(successor_state)
         else:
             stationary_actions += 1
+
         collectable_blocks = [SimpleCrafter.WOOD]
         if wood_pickaxe == 1:
             collectable_blocks.append(SimpleCrafter.STONE)
@@ -203,13 +210,16 @@ class SimpleCrafter(Environment):
             collectable_blocks.append(SimpleCrafter.DIAMOND)
         successor_state = state.copy()
         collect_successor_state = False
-        for adj_cord in adj_cords
+        for adj_cord in adj_cords:
             if unflattened_state[adj_cord] in collectable_blocks:
                 collect_successor_state = True
                 successor_state[(adj_cord[0] * self.grid_len) + adj_cord[1]] = SimpleCrafter.EMPTY
                 successor_state[self.block_index_lookup[unflattened_state[adj_cord]]] += 1
-        if not collect_successor_state:
+        if collect_successor_state:
+            successor_states.append(successor_state)
+        else:
             stationary_actions += 1
+
         if 0 < agent_y and 1 <= num_wood and unflattened_state[agent_y - 1][agent_x] == SimpleCrafter.EMPTY:
             successor_state = state.copy()
             successor_state[((agent_y - 1) * self.grid_len) + agent_x] = SimpleCrafter.TABLE
@@ -229,24 +239,32 @@ class SimpleCrafter(Environment):
                 successor_state = state.copy()
                 successor_state[self.block_index_lookup[SimpleCrafter.WOOD]] -= 1
                 successor_state[self.wood_pickaxe_index] = 1
+                successor_states.append(successor_state)
             else:
                 stationary_actions += 1
             if 1 <= num_stone:
                 successor_state = state.copy()
                 successor_state[self.block_index_lookup[SimpleCrafter.STONE]] -= 1
                 successor_state[self.stone_pickaxe_index] = 1
+                successor_states.append(successor_state)
             else:
                 stationary_actions += 1
             if 1 <= num_iron:
                 successor_state = state.copy()
                 successor_state[self.block_index_lookup[SimpleCrafter.IRON]] -= 1
                 successor_state[self.iron_pickaxe_index] = 1
+                successor_states.append(successor_state)
             else:
                 stationary_actions += 1
 
-        # TODO work out final probabilities
-
-        pass
+        if stationary_actions > 0:
+            successor_states.append(state.copy())
+        if not probability_weights:
+            return successor_states, [0.0 for _ in successor_states]
+        prob_weights = [1/self.action_space for _ in successor_states]
+        if stationary_actions > 0:
+            prob_weights.append(stationary_actions / self.action_space)
+        return successor_states, prob_weights
 
     def unflatten_state(
             self,
