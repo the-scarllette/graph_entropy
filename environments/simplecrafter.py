@@ -118,6 +118,8 @@ class SimpleCrafter(Environment):
 
         self.state_shape = (self.grid_size + 7,)
         self.state_dtype = int
+
+        self.terminal = True
         pass
 
     def get_start_states(
@@ -295,6 +297,8 @@ class SimpleCrafter(Environment):
             start_state: None | np.ndarray = None,
             seed: None | int = None
     ) -> np.ndarray:
+        self.terminal = False
+
         self.current_state = start_state
         if self.current_state is not None:
             return self.current_state
