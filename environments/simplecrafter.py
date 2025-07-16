@@ -121,7 +121,7 @@ class SimpleCrafter(Environment):
 
         self.terminal = True
         pass
-3
+
     def get_start_states(
             self
     ) -> List[np.ndarray]:
