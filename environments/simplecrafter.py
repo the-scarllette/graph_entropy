@@ -79,7 +79,8 @@ class SimpleCrafter(Environment):
 
     invalid_action_reward = -0.1
     step_reward = -0.001
-    terminal_reward = 1.0
+    success_reward = 1.0
+    failure_reward = -1.0
 
     # state:
     #   [flattened image of board]
@@ -409,7 +410,44 @@ class SimpleCrafter(Environment):
             else:
                 invalid_action = True
 
+        collectable_blocks = [SimpleCrafter.WOOD]
+        coords_to_empty = []
+        num_coords_to_empty = 0
+        if self.current_state[self.wood_pickaxe_index] >= 1:
+            collectable_blocks.append(SimpleCrafter.STONE)
+        if self.current_state[self.stone_pickaxe_index] >= 1:
+            collectable_blocks.append(SimpleCrafter.IRON)
+        if self.current_state[self.iron_pickaxe_index] >= 1:
+            collectable_blocks.append(SimpleCrafter.DIAMOND)
+        adj_coords = [
+            (agent_y - 1, agent_x),
+            (agent_y + 1, agent_x),
+            (agent_y, agent_x - 1),
+            (agent_y, agent_x + 1)
+        ]
+        blocks_collected = False
+        for adj_coord in adj_coords:
+            if (
+                    0 <= adj_coord[0] < self.grid_len and
+                    0 <= adj_coord[1] < self.grid_len and
+                    unflattened_state[adj_coord] in collectable_blocks
+            ):
+                blocks_collected = True
+                coords_to_empty.append(adj_coord)
+                num_coords_to_empty += 1
+                self.current_state[self.block_index_lookup[unflattened_state[adj_coord]]] += 1
+                if unflattened_state[adj_coord] == SimpleCrafter.DIAMOND:
+                    self.terminal = True
+                    reward += self.success_reward
+        if not blocks_collected:
+            reward += self.invalid_action_reward
+
         if invalid_action:
             reward += self.invalid_action_reward
+
+        if not self.terminal:
+            self.terminal = self.is_terminal(self.current_state)
+            if self.terminal:
+                reward += self.failure_reward
 
         pass
