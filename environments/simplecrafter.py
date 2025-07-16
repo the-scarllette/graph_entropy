@@ -68,7 +68,7 @@ class SimpleCrafter(Environment):
             [WOOD, WOOD, EMPTY, EMPTY, EMPTY, STONE],
             [EMPTY, EMPTY, WOOD, EMPTY, STONE, DIAMOND],
             [WOOD, EMPTY, EMPTY, STONE, IRON, STONE],
-            [EMPTY, EMPTY, WOOD, STONE, IRON, STONE],
+            [WOOD, EMPTY, WOOD, STONE, IRON, STONE],
             [EMPTY, EMPTY, EMPTY, EMPTY, STONE, STONE]
         ]
     )
@@ -121,7 +121,7 @@ class SimpleCrafter(Environment):
 
         self.terminal = True
         pass
-
+3
     def get_start_states(
             self
     ) -> List[np.ndarray]:
@@ -269,6 +269,35 @@ class SimpleCrafter(Environment):
             prob_weights.append(stationary_actions / self.action_space)
         return successor_states, prob_weights
 
+    def is_terminal(
+            self,
+            state: np.ndarray
+    ) -> bool:
+        if state[self.block_index_lookup[SimpleCrafter.DIAMOND]]  >= 1:
+            return True
+
+        # Need enough wood in the domain to make an iron pickaxe
+        total_wood = state[self.block_index_lookup[SimpleCrafter.WOOD]]
+        if total_wood >= 4:
+            return True
+
+        unique, counts = np.unique(state[:self.grid_size], return_counts=True)
+        block_counts = dict(zip(unique, counts))
+        total_wood += block_counts[SimpleCrafter.WOOD]
+        if total_wood >= 4:
+            return True
+        total_wood += block_counts[SimpleCrafter.TABLE]
+        if total_wood >= 3:
+            return True
+        if total_wood >= 2 and state[self.wood_pickaxe_index] >= 1:
+            return True
+        if total_wood >= 1 and state[self.stone_pickaxe_index] >= 1:
+            return True
+        if state[self.iron_pickaxe_index] >= 1:
+            return True
+
+        return False
+
     def unflatten_state(
             self,
             state: np.ndarray
@@ -315,3 +344,10 @@ class SimpleCrafter(Environment):
         self.current_state = np.zeros(self.state_shape, dtype=self.state_dtype)
         self.current_state[:self.grid_size] = np.reshape(unflattened_start_state, (self.grid_size,))
         return self.current_state
+
+    def step(
+            self,
+            action: int
+    ) -> (np.ndarray, float, bool, None):
+
+        pass

@@ -209,7 +209,7 @@ class Environment:
         else:
             self.options.update(copy.copy(new_options))
 
-    def step(self, action) -> (Any, float, bool, Any):
+    def step(self, action) ->(Any, float, bool, Any):
         return None, 0.0, False, None
 
     def reset(self, start_state=None, seed: None | int=None) -> Any:
