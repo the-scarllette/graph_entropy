@@ -1,6 +1,6 @@
 import numpy as np
 import random
-from typing import List
+from typing import List, Tuple
 
 from environments.environment import Environment
 
@@ -349,5 +349,67 @@ class SimpleCrafter(Environment):
             self,
             action: int
     ) -> (np.ndarray, float, bool, None):
+        if self.terminal:
+            raise AttributeError("Cannot step when environment is terminal")
+
+        (
+            unflattened_state,
+            agent_x,
+            agent_y,
+            num_wood,
+            num_stone,
+            num_iron,
+            num_diamond,
+            wood_pickaxe,
+            stone_pickaxe,
+            iron_pickaxe
+        ) = self.unflatten_state(self.current_state)
+        reward = self.step_reward
+        invalid_action = False
+
+        def alter_state(
+                coords: List[Tuple[int, int]],
+                new_values: List[int],
+        ):
+            for i in range(len(coords)):
+                unflattened_state[coords[i]] = new_values[i]
+            self.current_state[:self.grid_size] = np.reshape(unflattened_state, (self.grid_size,))
+            return
+
+        if action == SimpleCrafter.NORTH:
+            if 0 < agent_y and unflattened_state[agent_y - 1][agent_x] == SimpleCrafter.EMPTY:
+                alter_state(
+                    [(agent_y, agent_x), (agent_y - 1, agent_x)],
+                    [SimpleCrafter.EMPTY, SimpleCrafter.AGENT]
+                )
+            else:
+                invalid_action = True
+        elif action == SimpleCrafter.SOUTH:
+            if agent_y < self.grid_len - 1 and unflattened_state[agent_y + 1][agent_x] == SimpleCrafter.EMPTY:
+                alter_state(
+                    [(agent_y, agent_x), (agent_y + 1, agent_x)],
+                    [SimpleCrafter.EMPTY, SimpleCrafter.AGENT]
+                )
+            else:
+                invalid_action = True
+        elif action == SimpleCrafter.EAST:
+            if agent_x < self.grid_len - 1 and unflattened_state[agent_y][agent_x + 1] == SimpleCrafter.EMPTY:
+                alter_state(
+                    [(agent_y, agent_x), (agent_y, agent_x + 1)],
+                    [SimpleCrafter.EMPTY, SimpleCrafter.AGENT]
+                )
+            else:
+                invalid_action = True
+        elif action == SimpleCrafter.EAST:
+            if 0 < agent_x and unflattened_state[agent_y][agent_x - 1] == SimpleCrafter.EMPTY:
+                alter_state(
+                    [(agent_y, agent_x), (agent_y, agent_x - 1)],
+                    [SimpleCrafter.EMPTY, SimpleCrafter.AGENT]
+                )
+            else:
+                invalid_action = True
+
+        if invalid_action:
+            reward += self.invalid_action_reward
 
         pass
