@@ -247,16 +247,18 @@ class SimpleCrafter(Environment):
                 successor_states.append(successor_state)
             else:
                 stationary_actions += 1
-            if 1 <= num_stone:
+            if 1 <= num_stone and 1 <= num_wood:
                 successor_state = state.copy()
                 successor_state[self.block_index_lookup[SimpleCrafter.STONE]] -= 1
+                successor_state[self.block_index_lookup[SimpleCrafter.WOOD]] -= 1
                 successor_state[self.stone_pickaxe_index] = 1
                 successor_states.append(successor_state)
             else:
                 stationary_actions += 1
-            if 1 <= num_iron:
+            if 1 <= num_iron and 1 <= num_wood:
                 successor_state = state.copy()
                 successor_state[self.block_index_lookup[SimpleCrafter.IRON]] -= 1
+                successor_state[self.block_index_lookup[SimpleCrafter.WOOD]] -= 1
                 successor_state[self.iron_pickaxe_index] = 1
                 successor_states.append(successor_state)
             else:
@@ -280,25 +282,25 @@ class SimpleCrafter(Environment):
 
         # Need enough wood in the domain to make an iron pickaxe
         total_wood = state[self.block_index_lookup[SimpleCrafter.WOOD]]
-        if total_wood < 4:
-            return True
+        if total_wood >= 4:
+            return False
 
         unique, counts = np.unique(state[:self.grid_size], return_counts=True)
         block_counts = dict(zip(unique, counts))
         total_wood += block_counts[SimpleCrafter.WOOD]
-        if total_wood < 4:
-            return True
+        if total_wood >+ 4:
+            return False
         total_wood += block_counts[SimpleCrafter.TABLE]
-        if total_wood < 3:
-            return True
-        if total_wood < 2 and state[self.wood_pickaxe_index] >= 1:
-            return True
-        if total_wood < 1 <= state[self.stone_pickaxe_index]:
-            return True
+        if total_wood >= 3:
+            return False
+        if total_wood > 2 and state[self.wood_pickaxe_index] >= 1:
+            return False
+        if total_wood >=1 and state[self.stone_pickaxe_index] >= 1:
+            return False
         if state[self.iron_pickaxe_index] >= 1:
-            return True
+            return False
 
-        return False
+        return True
 
     def print_state(
             self,
@@ -418,7 +420,7 @@ class SimpleCrafter(Environment):
                 )
             else:
                 invalid_action = True
-        elif action == SimpleCrafter.EAST:
+        elif action == SimpleCrafter.WEST:
             if 0 < agent_x and unflattened_state[agent_y][agent_x - 1] == SimpleCrafter.EMPTY:
                 alter_state(
                     [(agent_y, agent_x), (agent_y, agent_x - 1)],
@@ -484,20 +486,22 @@ class SimpleCrafter(Environment):
             if not table_adjacent:
                 invalid_action = True
             elif action == SimpleCrafter.WOOD_PICKAXE:
-                if num_wood > 1:
+                if num_wood >= 1:
                     self.current_state[self.wood_pickaxe_index] = 1
                     self.current_state[self.block_index_lookup[SimpleCrafter.WOOD]] -= 1
                 else:
                     invalid_action = True
             elif action == SimpleCrafter.STONE_PICKAXE:
-                if num_stone > 1:
+                if num_stone >= 1 and num_wood >= 1:
                     self.current_state[self.stone_pickaxe_index] = 1
+                    self.current_state[self.block_index_lookup[SimpleCrafter.WOOD]] -= 1
                     self.current_state[self.block_index_lookup[SimpleCrafter.STONE]] -= 1
                 else:
                     invalid_action = True
             elif action == SimpleCrafter.IRON_PICKAXE:
-                if num_iron > 1:
+                if num_iron >= 1 and num_wood >= 1:
                     self.current_state[self.iron_pickaxe_index] = 1
+                    self.current_state[self.block_index_lookup[SimpleCrafter.WOOD]] -= 1
                     self.current_state[self.block_index_lookup[SimpleCrafter.IRON]] -= 1
                 else:
                     invalid_action = True
