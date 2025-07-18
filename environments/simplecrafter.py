@@ -495,4 +495,4 @@ class SimpleCrafter(Environment):
             if self.terminal:
                 reward += self.failure_reward
 
-        pass
+        return self.current_state, reward, self.terminal, None
