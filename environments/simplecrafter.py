@@ -300,28 +300,44 @@ class SimpleCrafter(Environment):
 
         return False
 
-    def unflatten_state(
+    def print_state(
             self,
-            state: np.ndarray
-    ) -> (np.ndarray, int, int, int, int, int, int, int, int, int):
-        unflattened_state = np.reshape(state[:self.grid_size], (self.grid_len, self.grid_len))
+            state: None|np.ndarray=None
+    ):
+        if state is None:
+            if self.terminal:
+                raise AttributeError("Either provide a state or print state while environment is not terminal.")
+            state = self.current_state
 
-        agent_cords = np.argwhere(unflattened_state == SimpleCrafter.AGENT)[0]
-        agent_y = agent_cords[0]
-        agent_x = agent_cords[1]
-
-        return (
+        (
             unflattened_state,
             agent_x,
             agent_y,
-            state[self.wood_index],
-            state[self.stone_index],
-            state[self.iron_index],
-            state[self.diamond_index],
-            state[self.wood_pickaxe_index],
-            state[self.stone_pickaxe_index],
-            state[self.iron_pickaxe_index]
+            num_wood,
+            num_stone,
+            num_iron,
+            num_diamond,
+            wood_pickaxe,
+            stone_pickaxe,
+            iron_pickaxe
+        ) = self.unflatten_state(state)
+
+        print(np.array2string(unflattened_state))
+        print(
+            "Wood: " + str(num_wood)
+            + " Stone: " + str(num_stone)
+            + " Iron: " + str(num_iron)
+            + " Diamond: " + str(num_diamond)
         )
+        equipment_list = ""
+        if wood_pickaxe >= 1:
+            equipment_list += "Wood Pickaxe "
+        if stone_pickaxe >= 1:
+            equipment_list += "Stone Pickaxe "
+        if iron_pickaxe >= 1:
+            equipment_list += "Iron Pickaxe "
+        print("Equipment: " + equipment_list)
+        return
 
     def reset(
             self,
@@ -496,3 +512,27 @@ class SimpleCrafter(Environment):
                 reward += self.failure_reward
 
         return self.current_state, reward, self.terminal, None
+
+    def unflatten_state(
+            self,
+            state: np.ndarray
+    ) -> (np.ndarray, int, int, int, int, int, int, int, int, int):
+        unflattened_state = np.reshape(state[:self.grid_size], (self.grid_len, self.grid_len))
+
+        agent_cords = np.argwhere(unflattened_state == SimpleCrafter.AGENT)[0]
+        agent_y = agent_cords[0]
+        agent_x = agent_cords[1]
+
+        return (
+            unflattened_state,
+            agent_x,
+            agent_y,
+            state[self.wood_index],
+            state[self.stone_index],
+            state[self.iron_index],
+            state[self.diamond_index],
+            state[self.wood_pickaxe_index],
+            state[self.stone_pickaxe_index],
+            state[self.iron_pickaxe_index]
+        )
+

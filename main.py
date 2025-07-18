@@ -2776,30 +2776,18 @@ if __name__ == "__main__":
 
     filenames = get_filenames(simple_crafter)
 
-    train_q_learning_agent(
-        simple_crafter,
-        training_timesteps,
-        5,
-        continue_training=False,
-        progress_bar=True,
-        overwrite_existing_agents=True,
-        all_actions_valid=True,
-        total_eval_steps=total_evaluation_steps
-    )
-    exit()
-
     data = graphing.extract_data(
         filenames['results'],
         [
-            'preparedness_agent_returns_none_onboarding.json',
+            # 'preparedness_agent_returns_none_onboarding.json',
             # 'preparedness_incremental_agent_returns_specific_update.json',
             # 'preparedness_incremental_agent_returns_specific_replace.json',
             # 'preparedness_agent_returns_none_onboarding.json',
             # 'preparedness_agent_returns_generic_onboarding.json',
             # 'preparedness_agent_returns_specific_onboarding.json',
             # 'eigenoptions_epoch_returns.json',
-            'louvain agent returns',
-            'betweenness_epoch_returns.json',
+            # 'louvain agent returns',
+            # 'betweenness_epoch_returns.json',
             # 'preparedness_flat_epoch_returns.json',
             'q_learning_epoch_returns.json'
         ]
@@ -2808,7 +2796,7 @@ if __name__ == "__main__":
         data,
         graphing_window,
         evaluate_policy_window,
-        name='TinyTown',
+        name='Simple Crafter',
         x_label='Timesteps',
         y_label='Average Epoch Return',
         error_bars=True,
@@ -2826,18 +2814,30 @@ if __name__ == "__main__":
             # 'Louvain',
             # 'Betweenness',
             # 'Flat Preparedness',
-            # 'Primitives'
+            'Primitives'
         ],
         colours=[
-            '#332288',
-            '#117733',
-            '#88CCEE',
+            # '#332288',
+            # '#117733',
+            # '#88CCEE',
             # '#DDCC77',
             # '#CC6677',
             # '#AA4499',
             # '#EE3377',
             '#555555'
         ]
+    )
+    exit()
+
+    train_q_learning_agent(
+        simple_crafter,
+        training_timesteps,
+        5,
+        continue_training=False,
+        progress_bar=True,
+        overwrite_existing_agents=True,
+        all_actions_valid=True,
+        total_eval_steps=total_evaluation_steps
     )
     exit()
 
