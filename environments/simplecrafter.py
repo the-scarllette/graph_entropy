@@ -429,11 +429,12 @@ class SimpleCrafter(Environment):
             else:
                 invalid_action = True
         elif action == SimpleCrafter.PLACE_TABLE:
-            if 0 < agent_y and unflattened_state[agent_y - 1][agent_x] == SimpleCrafter.EMPTY:
+            if 1 < num_wood and 0 < agent_y and unflattened_state[agent_y - 1][agent_x] == SimpleCrafter.EMPTY:
                 alter_state(
                     [(agent_y - 1, agent_x)],
                     [SimpleCrafter.TABLE]
                 )
+                self.current_state[self.block_index_lookup[SimpleCrafter.WOOD]] -= 1
             else:
                 invalid_action = True
         else:
