@@ -292,9 +292,10 @@ class SimpleCrafter(Environment):
         except KeyError:
             wood_block_count = 0
         total_wood += wood_block_count
-        if total_wood >+ 4:
+        if total_wood >= 4:
             return False
-        total_wood += block_counts[SimpleCrafter.TABLE]
+        if block_counts[SimpleCrafter.TABLE] < 1:
+            return True
         if total_wood >= 3:
             return False
         if total_wood > 2 and state[self.wood_pickaxe_index] >= 1:
