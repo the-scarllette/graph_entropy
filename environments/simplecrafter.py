@@ -418,27 +418,27 @@ class SimpleCrafter(Environment):
                 collectable_blocks.append(SimpleCrafter.IRON)
             if self.current_state[self.iron_pickaxe_index] >= 1:
                 collectable_blocks.append(SimpleCrafter.DIAMOND)
-            adj_coords = [ adj_coord
-                           for adj_coord in
+            adj_cords = [ adj_cord
+                           for adj_cord in
                            [
                                 (agent_y - 1, agent_x),
                                 (agent_y + 1, agent_x),
                                 (agent_y, agent_x - 1),
                                 (agent_y, agent_x + 1)
                            ]
-                           if 0 <= adj_coord[0] < self.grid_len and 0 <= adj_coord[1] < self.grid_len
+                           if 0 <= adj_cord[0] < self.grid_len and 0 <= adj_cord[1] < self.grid_len
             ]
             blocks_collected = False
-            for adj_coord in adj_coords:
+            for adj_cord in adj_cords:
                 if (
-                        0 <= adj_coord[0] < self.grid_len and
-                        0 <= adj_coord[1] < self.grid_len and
-                        unflattened_state[adj_coord] in collectable_blocks
+                        0 <= adj_cord[0] < self.grid_len and
+                        0 <= adj_cord[1] < self.grid_len and
+                        unflattened_state[adj_cord] in collectable_blocks
                 ):
                     blocks_collected = True
-                    coords_to_empty.append(adj_coord)
-                    self.current_state[self.block_index_lookup[unflattened_state[adj_coord]]] += 1
-                    if unflattened_state[adj_coord] == SimpleCrafter.DIAMOND:
+                    coords_to_empty.append(adj_cord)
+                    self.current_state[self.block_index_lookup[unflattened_state[adj_cord]]] += 1
+                    if unflattened_state[adj_cord] == SimpleCrafter.DIAMOND:
                         self.terminal = True
                         reward += self.success_reward
 
@@ -460,8 +460,8 @@ class SimpleCrafter(Environment):
                 invalid_action = True
 
         table_adjacent = False
-        for adj_coord in adj_coords:
-            if unflattened_state[adj_coord] == SimpleCrafter.TABLE:
+        for adj_cord in adj_cords:
+            if unflattened_state[adj_cord] == SimpleCrafter.TABLE:
                 table_adjacent = True
                 break
         if not table_adjacent:
