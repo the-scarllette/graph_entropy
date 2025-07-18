@@ -421,7 +421,7 @@ class SimpleCrafter(Environment):
                      ]
                      if 0 <= adj_cord[0] < self.grid_len and 0 <= adj_cord[1] < self.grid_len
                      ]
-        elif action == SimpleCrafter.COLLECT:
+        if action == SimpleCrafter.COLLECT:
             collectable_blocks = [SimpleCrafter.WOOD]
             coords_to_empty = []
             if self.current_state[self.wood_pickaxe_index] >= 1:
