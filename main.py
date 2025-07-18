@@ -2774,6 +2774,11 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # Preparedness flat - EE3377 - 8
 
+    run_episode(
+        simple_crafter
+    )
+    exit()
+
     filenames = get_filenames(simple_crafter)
 
     data = graphing.extract_data(
