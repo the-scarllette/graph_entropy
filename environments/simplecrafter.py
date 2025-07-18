@@ -410,6 +410,17 @@ class SimpleCrafter(Environment):
                 )
             else:
                 invalid_action = True
+
+        adj_cords = [adj_cord
+                     for adj_cord in
+                     [
+                         (agent_y - 1, agent_x),
+                         (agent_y + 1, agent_x),
+                         (agent_y, agent_x - 1),
+                         (agent_y, agent_x + 1)
+                     ]
+                     if 0 <= adj_cord[0] < self.grid_len and 0 <= adj_cord[1] < self.grid_len
+                     ]
         elif action == SimpleCrafter.COLLECT:
             collectable_blocks = [SimpleCrafter.WOOD]
             coords_to_empty = []
@@ -419,16 +430,6 @@ class SimpleCrafter(Environment):
                 collectable_blocks.append(SimpleCrafter.IRON)
             if self.current_state[self.iron_pickaxe_index] >= 1:
                 collectable_blocks.append(SimpleCrafter.DIAMOND)
-            adj_cords = [ adj_cord
-                           for adj_cord in
-                           [
-                                (agent_y - 1, agent_x),
-                                (agent_y + 1, agent_x),
-                                (agent_y, agent_x - 1),
-                                (agent_y, agent_x + 1)
-                           ]
-                           if 0 <= adj_cord[0] < self.grid_len and 0 <= adj_cord[1] < self.grid_len
-            ]
             blocks_collected = False
             for adj_cord in adj_cords:
                 if (
