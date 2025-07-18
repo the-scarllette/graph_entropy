@@ -418,11 +418,14 @@ class SimpleCrafter(Environment):
                 collectable_blocks.append(SimpleCrafter.IRON)
             if self.current_state[self.iron_pickaxe_index] >= 1:
                 collectable_blocks.append(SimpleCrafter.DIAMOND)
-            adj_coords = [
-                (agent_y - 1, agent_x),
-                (agent_y + 1, agent_x),
-                (agent_y, agent_x - 1),
-                (agent_y, agent_x + 1)
+            adj_coords = [ adj_coord if 0 <= adj_coord[0] < self.grid_len and 0 <= adj_coord[1] < self.grid_len
+                           for adj_coord in
+                           [
+                                (agent_y - 1, agent_x),
+                                (agent_y + 1, agent_x),
+                                (agent_y, agent_x - 1),
+                                (agent_y, agent_x + 1)
+                           ]
             ]
             blocks_collected = False
             for adj_coord in adj_coords:
@@ -445,12 +448,39 @@ class SimpleCrafter(Environment):
                 )
             else:
                 invalid_action = True
+
         elif action == SimpleCrafter.PLACE_TABLE:
             if 0 < agent_y and unflattened_state[agent_y - 1][agent_x] == SimpleCrafter.EMPTY:
                 alter_state(
                     [(agent_y - 1, agent_x)],
                     [SimpleCrafter.TABLE]
                 )
+            else:
+                invalid_action = True
+
+        table_adjacent = False
+        for adj_coord in adj_coords:
+            if unflattened_state[adj_coord] == SimpleCrafter.TABLE:
+                table_adjacent = True
+                break
+        if not table_adjacent:
+            invalid_action = True
+        elif action == SimpleCrafter.WOOD_PICKAXE:
+            if num_wood > 1:
+                self.current_state[self.wood_pickaxe_index] = 1
+                self.current_state[self.block_index_lookup[SimpleCrafter.WOOD]] -= 1
+            else:
+                invalid_action = True
+        elif action == SimpleCrafter.STONE_PICKAXE:
+            if num_stone > 1:
+                self.current_state[self.stone_pickaxe_index] = 1
+                self.current_state[self.block_index_lookup[SimpleCrafter.STONE]] -= 1
+            else:
+                invalid_action = True
+        elif action == SimpleCrafter.IRON_PICKAXE:
+            if num_iron > 1:
+                self.current_state[self.iron_pickaxe_index] = 1
+                self.current_state[self.block_index_lookup[SimpleCrafter.IRON]] -= 1
             else:
                 invalid_action = True
 
