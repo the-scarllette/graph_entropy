@@ -287,7 +287,11 @@ class SimpleCrafter(Environment):
 
         unique, counts = np.unique(state[:self.grid_size], return_counts=True)
         block_counts = dict(zip(unique, counts))
-        total_wood += block_counts[SimpleCrafter.WOOD]
+        try:
+            wood_block_count = block_counts[SimpleCrafter.WOOD]
+        except KeyError:
+            wood_block_count = 0
+        total_wood += wood_block_count
         if total_wood >+ 4:
             return False
         total_wood += block_counts[SimpleCrafter.TABLE]
