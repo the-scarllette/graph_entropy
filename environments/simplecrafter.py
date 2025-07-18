@@ -97,6 +97,7 @@ class SimpleCrafter(Environment):
             start_state: np.ndarray = default_start_state,
     ):
         self.action_space = len(self.possible_actions)
+        self.environmnet_name = "simple_crafter"
 
         self.current_state = None
         self.start_state = start_state

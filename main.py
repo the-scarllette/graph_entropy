@@ -14,8 +14,7 @@ from typing import Dict, List, Tuple
 import environments.environment
 from environments.environment import Environment
 from environments.lavaflow import LavaFlow
-from environments.officeworld import OfficeWorld
-from environments.sixroom import SixRoom
+from environments.simplecrafter import SimpleCrafter
 from environments.taxicab import TaxiCab
 from environments.tinytown import TinyTown
 import graphing
@@ -2737,17 +2736,13 @@ def update_graph_attributes(environment: Environment,
 
 if __name__ == "__main__":
     lavaflow = LavaFlow(None, None, (0, 0))
-    office_world = OfficeWorld()
+    simple_crafter = SimpleCrafter()
     taxicab = TaxiCab(
           False,
           False,
            [0.25, 0.01, 0.01, 0.01, 0.72],
            continuous=True
     )
-
-    print(office_world.default_floor_map)
-    exit()
-
     tinytown = TinyTown(2, 2)
 
     option_discovery_method = 'replace'
@@ -2759,8 +2754,8 @@ if __name__ == "__main__":
     min_num_hops = 1
     max_num_hops = 4
     num_agents = 5
-    # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, taxicab_classic = 25
-    total_evaluation_steps = np.inf
+    # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, simple_crafter=50, taxicab_classic=25
+    total_evaluation_steps = 50
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 50_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
@@ -2779,7 +2774,19 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # Preparedness flat - EE3377 - 8
 
-    filenames = get_filenames(tinytown)
+    filenames = get_filenames(simple_crafter)
+
+    train_q_learning_agent(
+        simple_crafter,
+        training_timesteps,
+        5,
+        continue_training=False,
+        progress_bar=True,
+        overwrite_existing_agents=True,
+        all_actions_valid=True,
+        total_eval_steps=total_evaluation_steps
+    )
+    exit()
 
     data = graphing.extract_data(
         filenames['results'],
@@ -2956,19 +2963,6 @@ if __name__ == "__main__":
                                      progress_bar=True)
     preparedness_agent.save(filenames_taxicab['agents'] + '/preparedness_base_agent.json')
     print(taxicab_classic.environment_name + " preparedness training options")
-    exit()
-
-    print("Training taxicab primitives")
-    train_q_learning_agent(
-        taxicab_classic,
-        training_timesteps,
-        5,
-        continue_training=False,
-        progress_bar=True,
-        overwrite_existing_agents=True,
-        all_actions_valid=True,
-        total_eval_steps=total_evaluation_steps
-    )
     exit()
 
     taxicab_classic = TaxiCab(False, False)
