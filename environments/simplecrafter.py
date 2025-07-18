@@ -418,7 +418,7 @@ class SimpleCrafter(Environment):
                 collectable_blocks.append(SimpleCrafter.IRON)
             if self.current_state[self.iron_pickaxe_index] >= 1:
                 collectable_blocks.append(SimpleCrafter.DIAMOND)
-            adj_coords = [ adj_coord if 0 <= adj_coord[0] < self.grid_len and 0 <= adj_coord[1] < self.grid_len
+            adj_coords = [ adj_coord
                            for adj_coord in
                            [
                                 (agent_y - 1, agent_x),
@@ -426,6 +426,7 @@ class SimpleCrafter(Environment):
                                 (agent_y, agent_x - 1),
                                 (agent_y, agent_x + 1)
                            ]
+                           if 0 <= adj_coord[0] < self.grid_len and 0 <= adj_coord[1] < self.grid_len
             ]
             blocks_collected = False
             for adj_coord in adj_coords:
