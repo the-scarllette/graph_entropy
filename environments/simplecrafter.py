@@ -77,7 +77,7 @@ class SimpleCrafter(Environment):
     # total wood in environment is < 4
 
     invalid_action_reward = -0.1
-    step_reward = -0.001
+    step_reward = -0.01
     success_reward = 1.0
     failure_reward = -1.0
 

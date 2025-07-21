@@ -2776,6 +2776,25 @@ if __name__ == "__main__":
 
     filenames = get_filenames(simple_crafter)
 
+    ep_return = run_episode(
+        simple_crafter
+    )
+    print("Total return: " + str(ep_return))
+    exit()
+
+    adj_matrix, state_transition_graph, stg_values = simple_crafter.get_adjacency_matrix(
+        True,
+        True,
+        True,
+        progress_bar=True
+    )
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
     data = graphing.extract_data(
         filenames['results'],
         [
@@ -2827,19 +2846,6 @@ if __name__ == "__main__":
             '#555555'
         ]
     )
-    exit()
-
-    adj_matrix, state_transition_graph, stg_values = simple_crafter.get_adjacency_matrix(
-        True,
-        True,
-        True,
-        progress_bar=True
-    )
-
-    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
     exit()
 
     train_q_learning_agent(
