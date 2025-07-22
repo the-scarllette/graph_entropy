@@ -6,10 +6,10 @@ largest amount of area from lava.
 
 <img src="environment_images/lavaflowenvironmentexample.png" alt="Lavaflow Environment Example" width="300"/>
 
-| Parameter        | Type                                    | Description                                                                     |
-|------------------|-----------------------------------------|---------------------------------------------------------------------------------|
-| Grid Size: $n$   | $\mathbb{N}$                            | Width/height of the maze.                                                       |
-| Maze Layout: $M$ | ${\left\{0, 1, 2\right\}}^{n \times n}$ | The initial layout of the maze,<br/> describes where the blocks and lava start. |
+| Parameter        | Type                         | Description                                                                     |
+|------------------|------------------------------|---------------------------------------------------------------------------------|
+| Grid Size: $n$   | $\mathbb{N}$                 | Width/height of the maze.                                                       |
+| Maze Layout: $M$ | ${\{0, 1, 2\}}^{n \times n}$ | The initial layout of the maze,<br/> describes where the blocks and lava start. |
 
 | Property                | Upper Bound                                                                                                               |
 |-------------------------|---------------------------------------------------------------------------------------------------------------------------|
@@ -24,7 +24,7 @@ largest amount of area from lava.
 
 ## State Space
 
-**Type:** ${\left\{0, 1, 2, 3\right\}}^{2}$
+**Type:** ${\{0, 1, 2, 3\}}^{2}$
 
 **Upper Bound:** $2\left(3^{{\left(k - 1\right)}^{2}} + k\right)$
 <br/>Where $k$ is the number of empty squares in the initial grid layout
