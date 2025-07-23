@@ -2776,6 +2776,30 @@ if __name__ == "__main__":
 
     filenames = get_filenames(simple_crafter)
 
+    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    stg_values = preparedness_efficient(
+        adj_matrix,
+        0.5,
+        computed_hops_range=[1, 2],
+        max_num_hops=5,
+        compressed_matrix=True,
+        existing_stg_values=stg_values,
+        progress_bar=True
+    )
+    nx.set_node_attributes(
+        state_transition_graph,
+        stg_values
+    )
+
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
     train_q_learning_agent(
         simple_crafter,
         training_timesteps,
@@ -2899,24 +2923,6 @@ if __name__ == "__main__":
     with open(six_room_filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
 
-    stg_values = preparedness_efficient(
-        adj_matrix,
-        0.5,
-        max_num_hops=10,
-        compressed_matrix=True,
-        existing_stg_values=stg_values,
-        progress_bar=True
-    )
-    nx.set_node_attributes(
-        state_transition_graph,
-        stg_values
-    )
-
-    nx.write_gexf(state_transition_graph, six_room_filenames['state transition graph'])
-    with open(six_room_filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
-    exit()
-
     print("Labeling preparedness subgoals")
     state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
         adj_matrix, state_transition_graph, stg_values, 0.5)
@@ -2960,10 +2966,6 @@ if __name__ == "__main__":
     exit()
 
     filenames_taxicab = get_filenames(taxicab_classic)
-    adj_matrix = sparse.load_npz(filenames_taxicab['adjacency matrix'])
-    state_transition_graph = nx.read_gexf(filenames_taxicab['state transition graph'])
-    with open(filenames_taxicab['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
     preparedness_subgoal_graph = nx.read_gexf(filenames_taxicab['preparedness aggregate graph'])
 
     print("Training " + taxicab_classic.environment_name + " " + option_onboarding + " Preparedness Agent")
