@@ -4,7 +4,7 @@ A 2D gridworld environment based on the classic taxicab domain.
 Each timestep there is a chance a passenger appears at one of four stops,
 and the agent needs to collect the passenger and take them to the correct destination stop.
 
-<img src="environment_images/taxicab.png" alt="Lavaflow Environment Example" width="300"/>
+<img src="environment_images/taxicab.png" alt="Taxicab Environment Example" width="300"/>
 
 | Parameter                | Type                    | Description                                                                                                                               |
 |--------------------------|-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|

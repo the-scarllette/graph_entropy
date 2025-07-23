@@ -28,17 +28,17 @@ Inspired by an environment created by [Mohamed and Jimenez Rezende (2015)](https
 ## State Space
 
 **Type:** Matrix of size $n + 1$ by $n + 1$, with values from $\left\lbrace0, 1, 2, 3\right\rbrace$.
-More formally: $M_{n+ 1}{\left(\left\lbrace0, 1, 2, 3, 4\right\rbrace\right)}$
+More formally: ${\left\lbrace0, 1, 2, 3, 4\right\rbrace}^{n + 1 \times n + 1}$.
 
-**Upper Bound:** $2\left(3^{\left(k - 1\right)} + k\right)$
-<br/>Where $k$ is the number of empty squares in the initial grid layout
+**Upper Bound:** $2\left(3^{\left(k - 1\right)} + k\right)$.
+<br/>Where $k$ is the number of empty squares in the initial grid layout.
 
 A state is a matrix where the $(i + 1, j + 1)$ index shows the value of the $(i, j)$ square in the grid.
 Whether the square is empty, a block, lava, or holds the agent. The $(0, 0)$ entry shows a $1$ if the state is terminal and a $0$ otherwise
 
 ## Action Space
 
-**Type:** $\mathbb{N}$
+**Type:** $\mathbb{N}$.
 
 | Action           | Description                                            |
 |------------------|--------------------------------------------------------|
