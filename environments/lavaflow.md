@@ -6,10 +6,10 @@ largest amount of area from lava.
 
 <img src="environment_images/lavaflowenvironmentexample.png" alt="Lavaflow Environment Example" width="300"/>
 
-| Parameter        | Type                                    | Description                                                                     |
-|------------------|-----------------------------------------|---------------------------------------------------------------------------------|
-| Grid Size: $n$   | $\mathbb{N}$                            | Width/height of the maze.                                                       |
-| Maze Layout: $M$ | ${\left\{0, 1, 2\right\}}^{n \times n}$ | The initial layout of the maze,<br/> describes where the blocks and lava start. |
+| Parameter        | Type                                        | Description                                                                     |
+|------------------|---------------------------------------------|---------------------------------------------------------------------------------|
+| Grid Size: $n$   | $\mathbb{N}$                                | Width/height of the maze.                                                       |
+| Maze Layout: $M$ | ${\left\lbrace0, 1, 2, 3\right\rbrace}^{2}$ | The initial layout of the maze,<br/> describes where the blocks and lava start. |
 
 | Property                | Upper Bound                                                                                                         |
 |-------------------------|---------------------------------------------------------------------------------------------------------------------|
@@ -25,7 +25,7 @@ largest amount of area from lava.
 
 ## State Space
 
-**Type:** ${\left\{0, 1, 2, 3\right\}}^{2}$
+**Type:** ${\left\lbrace0, 1, 2, 3\right\rbrace}^{2}$
 
 **Upper Bound:** $2\left(3^{\left(k - 1\right)} + k\right)$
 <br/>Where $k$ is the number of empty squares in the initial grid layout
@@ -53,7 +53,7 @@ Placing block actions ($4, 5, 6, 7$) have no effect if the square already contai
 
 ## Transition Dynamics
 The agent starts in a random empty square in the initial maze layout.
-Each timestep, every lava spreads from every tile containing lava to each adjacent tile not containing a block.
+Each timestep, every lava spreads from every square containing lava to each adjacent square not containing a block.
 The episode terminates if either the agent takes the terminate action ($8$) or if the agent occupies a lava square.
 
 ## Reward
@@ -66,5 +66,6 @@ the agent receives a reward of $-0.1$.
 If the environment terminates by the agent occupying the same square as lava, the reward given is $-1.0$.
 
 If the environment terminates by the agent taking the terminate action there are two possible rewards.
-If there is a path from the agent to any lava tile, the reward is $-1.0$.
-Otherwise, the reward is $2r$, where $r$ is the number of squares that have a path to the agent and do not have a path to any lava tile.
+If there is a path from the agent to any lava square, the reward is $-1.0$.
+Otherwise, the reward is $2r$,
+where $r$ is the number of squares that have a path to the agent and do not have a path to any lava square.
