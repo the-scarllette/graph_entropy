@@ -4,6 +4,8 @@ A 2D gridworld environment consisting of an $n \times n$ maze.
 Lava spreads to adjacent squares each timestep. The agent needs to place blocks in order to protect the
 largest amount of area from lava.
 
+Inspired by an environment created by [Mohamed and Jimenez Rezende (2015)](https://arxiv.org/abs/1509.08731).
+
 <img src="environment_images/lavaflowenvironmentexample.png" alt="Lavaflow Environment Example" width="300"/>
 
 | Parameter        | Type                                        | Description                                                                     |
