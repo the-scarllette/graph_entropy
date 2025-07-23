@@ -64,11 +64,10 @@ class SimpleCrafter(Environment):
 
     default_start_state = np.array(
         [
-            [WOOD, EMPTY, EMPTY, WOOD, STONE],
-            [WOOD, EMPTY, EMPTY, EMPTY, STONE],
-            [EMPTY, WOOD, EMPTY, STONE, DIAMOND],
-            [WOOD, EMPTY, STONE, IRON, STONE],
-            [ EMPTY, WOOD, EMPTY, STONE, STONE]
+            [WOOD, WOOD, WOOD, STONE],
+            [WOOD, EMPTY, STONE, DIAMOND],
+            [EMPTY, EMPTY, STONE, IRON],
+            [ WOOD, EMPTY, EMPTY, STONE]
         ]
     )
 

@@ -1852,7 +1852,7 @@ def train_agent(env: Environment, agent, num_steps,
                     evaluate_agent.load(agent_save_path)
                 epoch_return = run_epoch(evaluate_env, evaluate_agent, total_eval_steps,
                                          total_steps,
-                                         all_actions_valid, progress_bar)
+                                         all_actions_valid, False)
                 epoch_returns.append(epoch_return)
                 window_steps = evaluate_policy_window
 
@@ -2748,7 +2748,7 @@ if __name__ == "__main__":
     option_discovery_method = 'replace'
     option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
-    graphing_window = 50
+    graphing_window = 2
     evaluate_policy_window = 10
     hops = 5
     min_num_hops = 1
@@ -2757,10 +2757,10 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, simple_crafter=50, taxicab_classic=25
     total_evaluation_steps = 50
     # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 100_000
+    options_training_timesteps = 200_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     # lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 100_000
+    training_timesteps = 500_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
     behaviour_window = 500
 
@@ -2775,6 +2775,31 @@ if __name__ == "__main__":
     # Preparedness flat - EE3377 - 8
 
     filenames = get_filenames(simple_crafter)
+
+    train_q_learning_agent(
+        simple_crafter,
+        training_timesteps,
+        5,
+        continue_training=False,
+        progress_bar=True,
+        overwrite_existing_agents=True,
+        all_actions_valid=True,
+        total_eval_steps=total_evaluation_steps
+    )
+    exit()
+
+    adj_matrix, state_transition_graph, stg_values = simple_crafter.get_adjacency_matrix(
+        True,
+        True,
+        True,
+        progress_bar=True
+    )
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
 
     data = graphing.extract_data(
         filenames['results'],
@@ -2826,37 +2851,6 @@ if __name__ == "__main__":
             # '#EE3377',
             '#555555'
         ]
-    )
-    exit()
-
-    ep_return = run_episode(
-        simple_crafter
-    )
-    print("Total return: " + str(ep_return))
-    exit()
-
-    adj_matrix, state_transition_graph, stg_values = simple_crafter.get_adjacency_matrix(
-        True,
-        True,
-        True,
-        progress_bar=True
-    )
-
-    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
-    exit()
-
-    train_q_learning_agent(
-        simple_crafter,
-        training_timesteps,
-        5,
-        continue_training=False,
-        progress_bar=True,
-        overwrite_existing_agents=True,
-        all_actions_valid=True,
-        total_eval_steps=total_evaluation_steps
     )
     exit()
 
