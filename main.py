@@ -2748,7 +2748,7 @@ if __name__ == "__main__":
     option_discovery_method = 'replace'
     option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
-    graphing_window = 2
+    graphing_window = 50
     evaluate_policy_window = 10
     hops = 5
     min_num_hops = 1
@@ -2784,8 +2784,8 @@ if __name__ == "__main__":
     stg_values = preparedness_efficient(
         adj_matrix,
         0.5,
-        computed_hops_range=[1, 2],
-        max_num_hops=5,
+        computed_hops_range=[1, 5],
+        max_num_hops=7,
         compressed_matrix=True,
         existing_stg_values=stg_values,
         progress_bar=True
@@ -2800,29 +2800,20 @@ if __name__ == "__main__":
         json.dump(stg_values, f)
     exit()
 
-    train_q_learning_agent(
-        simple_crafter,
-        training_timesteps,
-        5,
-        continue_training=False,
-        progress_bar=True,
-        overwrite_existing_agents=True,
-        all_actions_valid=True,
-        total_eval_steps=total_evaluation_steps
-    )
-    exit()
+    print("Labeling preparedness subgoals")
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
+        adj_matrix, state_transition_graph, stg_values, 0.5)
+    update_graph_attributes(simple_crafter, stg_values)
 
-    adj_matrix, state_transition_graph, stg_values = simple_crafter.get_adjacency_matrix(
-        True,
-        True,
-        True,
-        progress_bar=True
+    print("Creating preparedness subgoal graph")
+    state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
+        simple_crafter, adj_matrix, state_transition_graph, stg_values,
+        preparedness_subgoals
     )
-
-    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
+
+    update_graph_attributes(simple_crafter, stg_values)
     exit()
 
     data = graphing.extract_data(
@@ -2878,6 +2869,31 @@ if __name__ == "__main__":
     )
     exit()
 
+    train_q_learning_agent(
+        simple_crafter,
+        training_timesteps,
+        5,
+        continue_training=False,
+        progress_bar=True,
+        overwrite_existing_agents=True,
+        all_actions_valid=True,
+        total_eval_steps=total_evaluation_steps
+    )
+    exit()
+
+    adj_matrix, state_transition_graph, stg_values = simple_crafter.get_adjacency_matrix(
+        True,
+        True,
+        True,
+        progress_bar=True
+    )
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
     adj_matrix, state_transition_graph, stg_values = simple_crafter.get_adjacency_matrix(
         True,
         True,
@@ -2922,21 +2938,6 @@ if __name__ == "__main__":
     nx.write_gexf(state_transition_graph, six_room_filenames['state transition graph'])
     with open(six_room_filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
-
-    print("Labeling preparedness subgoals")
-    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
-        adj_matrix, state_transition_graph, stg_values, 0.5)
-
-    print("Creating preparedness subgoal graph")
-    state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
-        taxicab_classic, adj_matrix, state_transition_graph, stg_values,
-        preparedness_subgoals
-    )
-    nx.write_gexf(preparedness_subgoal_graph, filenames_taxicab['preparedness aggregate graph'])
-    nx.write_gexf(state_transition_graph, filenames_taxicab['state transition graph'])
-
-    update_graph_attributes(taxicab_classic, stg_values)
-    exit()
 
     exit()
 

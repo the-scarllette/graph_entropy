@@ -13,10 +13,10 @@ Inspired by an environment created by [Mohamed and Jimenez Rezende (2015)](https
 | Grid Size: $n$   | $\mathbb{N}$                                | Width/height of the maze.                                                       |
 | Maze Layout: $M$ | ${\left\lbrace0, 1, 2, 3\right\rbrace}^{2}$ | The initial layout of the maze,<br/> describes where the blocks and lava start. |
 
-| Property                | Upper Bound                                                                                                         |
-|-------------------------|---------------------------------------------------------------------------------------------------------------------|
-| $\vert\mathcal{S}\vert$ | $2\left(3^{\left(k - 1\right)} + k\right)$ <br/>Where $k$ is the number of empty squares in the initial grid layout |
-| $\vert\mathcal{A}\vert$ | $9$                                                                                                                 |
+| Property                | Value | Upper Bound                                                                                                         |
+|-------------------------|-------|---------------------------------------------------------------------------------------------------------------------|
+| $\vert\mathcal{S}\vert$ | ~     | $2\left(3^{\left(k - 1\right)} + k\right)$ <br/>Where $k$ is the number of empty squares in the initial grid layout |
+| $\vert\mathcal{A}\vert$ | $9$   | ~                                                                                                                   |
 
 | Feature                            | Value     |
 |------------------------------------|-----------|
@@ -27,7 +27,8 @@ Inspired by an environment created by [Mohamed and Jimenez Rezende (2015)](https
 
 ## State Space
 
-**Type:** ${\left\lbrace0, 1, 2, 3\right\rbrace}^{2}$
+**Type:** Matrix of size $n + 1$ by $n + 1$, with values from $\left\lbrace0, 1, 2, 3\right\rbrace$.
+More formally: $M_{n+ 1}{\left(\left\lbrace0, 1, 2, 3, 4\right\rbrace\right)}$
 
 **Upper Bound:** $2\left(3^{\left(k - 1\right)} + k\right)$
 <br/>Where $k$ is the number of empty squares in the initial grid layout
