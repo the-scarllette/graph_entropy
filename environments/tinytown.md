@@ -64,8 +64,26 @@ In tinytown there are two resource types and two building types. Each building h
 | 0     | Brick    | <img src="environment_images/tinytown-brick-resource.png" alt="Tinytown Brick Resource" width="25"/>  |
 | 1     | Glass    | <img src="environment_images/tinytown-glass-resource.png" alt="Tinytown Glass Resource" width="25"/>. |
 
-| Index | Building   | Image | Resource Pattern |
-|-------|------------|-------|------------------|
-| 0     | Cottage    |       |                  |
-| 1     | Greenhouse |       |                  |
+| Index | Building   | Image                                                                                        | Resource Pattern                                                                                             |
+|-------|------------|----------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
+| 0     | Cottage    | <img src="environment_images/tinytown-cottage.png" alt="Tinytown Cottage" width="75"/>       | <img src="environment_images/tinytown-cottage-pattern.png" alt="Tinytown Cottage Pattern" width="75"/>       |
+| 1     | Greenhouse | <img src="environment_images/tinytown-greenhouse.png" alt="Tinytown Greenhouse" width="75"/> | <img src="environment_images/tinytown-greenhouse-pattern.png" alt="Tinytown Greenhouse Pattern" width="75"/> |
 
+The environment start state is an entirely empty grid in the resource phase.
+During the resource phase, the agent places one resource in an empty grid square. After this, the environment transitions to the building phase.
+
+In the building phase, the agent can place buildings on the grid. If the matching building pattern is on the grid,
+the agent can take an action to remove all resources from this pattern and place the corresponding building in one of
+the squares of the pattern. The agent can keep taking actions to place buildings (if there are corresponding patterns).
+Alternatively, the agent can take the end building phase action to end the building phase and return to the resource phase.
+
+The environment terminates when the agent takes the end building phase action in a state where every square is filled.
+
+## Reward
+No reward is given until the agent transitions to a terminal state.
+When transition to a terminal state, the agent receives a reward of
+$3\min{\left\lbrace c, 4g \right\rbrace} - nm + c + g$ 
+where $c$ and $g$ are the number of cottages and greenhouses in the terminal state respectively.
+
+This encourages the agent to construct as many buildings as possible,
+building a greenhouse for every $4$ cottages.
