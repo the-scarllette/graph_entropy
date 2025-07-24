@@ -57,6 +57,15 @@ and ending the building phase.
 | $\left(\cdot, \cdot, \cdot, \cdot, \cdot, 2\right)$ | End the building phase.                                                                                                                                                               | The state must be in the building phase.                                                                                                                                                                                         |
 
 ## Transition Dynamics
-In tinytown there are two resources:
+In tinytown there are two resource types and two building types. Each building has a corresponding resource pattern.
 
-bricks: <img src="environment_images/tinytown.png" alt="Tinytown Environment Example" width="300"/>
+| Index | Resource | Image                                                                                                 |
+|-------|----------|-------------------------------------------------------------------------------------------------------|
+| 0     | Brick    | <img src="environment_images/tinytown-brick-resource.png" alt="Tinytown Brick Resource" width="25"/>  |
+| 1     | Glass    | <img src="environment_images/tinytown-glass-resource.png" alt="Tinytown Glass Resource" width="25"/>. |
+
+| Index | Building   | Image | Resource Pattern |
+|-------|------------|-------|------------------|
+| 0     | Cottage    |       |                  |
+| 1     | Greenhouse |       |                  |
+
