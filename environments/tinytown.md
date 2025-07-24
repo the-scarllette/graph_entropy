@@ -1,10 +1,9 @@
 # Tinytown Environment Specification
 
 A discrete environment based on an $n \times m$ grid.
-Each timestep the agent places resources onto empty grid squares,
-if these resources are in the correct patterns, they can be turned into buildings.
+Each timestep the agent places a resource onto an empty grid square.
 The environment alternates between a _resource phase_ where the agent places a resource on an empty square,
-and a _building phase_ where the agent converts groups of respurces into a single building.
+and a _building phase_ where the agent converts groups of resources into a single building.
 
 Based on the board game [Tiny Towns](https://www.petermcpherson.com/games/tiny-towns) by Peter McPherson.
 
@@ -30,14 +29,14 @@ Based on the board game [Tiny Towns](https://www.petermcpherson.com/games/tiny-t
 ## State Space
 
 **Type:** Matrix of size $\left(n + 1\right) \times \left(m + 1\right)$
-with values from $\left\lbrace0, 1, 2, 3, 4\right\rbrace$.
+containing values from $\left\lbrace0, 1, 2, 3, 4\right\rbrace$.
 More formally: ${\left\lbrace0, 1, 2, 3, 4\right\rbrace}^{m + 1 \times n + 1}$.
 
 **Upper bound:** $2\times{{5}^{nm}} - 1$.
 
 A state is a $n + 1 \times m + 1$ matrix where the $\left(i, j\right)$ index shows the
-resource or building contained in the $\left(i, j\right)$ square in the town.
-The value is $0$ if the grid square is empty. The value at index $\left(n, m\right)$ is $0$ 
+resource or building contained in the $\left(i, j\right)$ square.
+The value is $0$ if the grid square is empty. The value at index $\left(n, m\right)$ is $0$
 if the state is in the _resource phase_, or $1$ if the state is in the _building phase_.
 
 ## Action Space
@@ -46,15 +45,15 @@ if the state is in the _resource phase_, or $1$ if the state is in the _building
 
 Actions correspond to either placing a specific resource at a grid location,
 converting a group of resources centered on a location into a building at another location,
-and ending the building phase.
+or ending the building phase.
 
-| Action                                              | Description                                                                                                                                                                           | Conditions                                                                                                                                                                                                                       |
-|-----------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| $\left(i, j, 0, \cdot, \cdot, 0\right)$             | Where $0 \leq i < n$ and $0 \leq j < m$.<br/> Place a _brick_ at grid square $\left(i, j\right)$.                                                                                     | The square at $\left(i, j\right)$ must be empty<br/>and the state cannot be in the resource phase.                                                                                                                               |
-| $\left(i, j, 1, \cdot, \cdot, 0\right)$             | Where $0 \leq i < n$ and $0 \leq j < m$.<br/> Place _glass_ at grid square $\left(i, j\right)$.                                                                                       | The square at $\left(i, j\right)$ must be empty<br/>and the state cannot be in the resource phase.                                                                                                                               |
-| $\left(i, j, 0, \hat{i}, \hat{j}, 1\right)$         | Where $0 \leq i, \hat{i} < n$ and $0 \leq j, \hat{j} < m$.<br/>Use the resource pattern centered at $\left(i, j\right)$<br/>to place a cottage at $\left(\hat{i}, \hat{j}\right)$.    | The squares from $\left(i, j\right)$ to $\left(i + 1, j + 1\right)$<br/>contain the cottage resource pattern,<br/>$i - 1 \leq \hat{i}\leq i + 1$, $j - 1 \leq \hat{j}\leq j + 1$,<br/>and the state is in the building phase.    |
-| $\left(i, j, 1, \hat{i}, \hat{j}, 1\right)$         | Where $0 \leq i, \hat{i} < n$ and $0 \leq j, \hat{j} < m$.<br/>Use the resource pattern centered at $\left(i, j\right)$<br/>to place a greenhouse at $\left(\hat{i}, \hat{j}\right)$. | The squares from $\left(i, j\right)$ to $\left(i + 1, j + 1\right)$<br/>contain the greenhouse resource pattern,<br/>$i - 1 \leq \hat{i}\leq i + 1$, $j - 1 \leq \hat{j}\leq j + 1$,<br/>and the state is in the building phase. |
-| $\left(\cdot, \cdot, \cdot, \cdot, \cdot, 2\right)$ | End the building phase.                                                                                                                                                               | The state must be in the building phase.                                                                                                                                                                                         |
+| Action                                              | Description                                                                                                                                                                                   | Conditions                                                                                                                                                                                                                           |
+|-----------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| $\left(i, j, 0, \cdot, \cdot, 0\right)$             | Where $0 \leq i < n$ and $0 \leq j < m$.<br/> Place a _brick_ at grid square $\left(i, j\right)$.                                                                                             | The square at $\left(i, j\right)$ must be empty<br/>and the state is in the resource phase.                                                                                                                                          |
+| $\left(i, j, 1, \cdot, \cdot, 0\right)$             | Where $0 \leq i < n$ and $0 \leq j < m$.<br/> Place _glass_ at grid square $\left(i, j\right)$.                                                                                               | The square at $\left(i, j\right)$ must be empty<br/>and the state is in the resource phase.                                                                                                                                          |
+| $\left(i, j, 0, \tilde{i}, \tilde{j}, 1\right)$     | Where $0 \leq i, \tilde{i} < n$ and $0 \leq j, \tilde{j} < m$.<br/>Use the resource pattern centered at $\left(i, j\right)$<br/>to place a cottage at $\left(\tilde{i}, \tilde{j}\right)$.    | The squares from $\left(i, j\right)$ to $\left(i + 1, j + 1\right)$<br/>contain the cottage resource pattern,<br/>$i - 1 \leq \tilde{i}\leq i + 1$, $j - 1 \leq \tilde{j}\leq j + 1$,<br/>and the state is in the building phase.    |
+| $\left(i, j, 1, \tilde{i}, \tilde{j}, 1\right)$     | Where $0 \leq i, \tilde{i} < n$ and $0 \leq j, \tilde{j} < m$.<br/>Use the resource pattern centered at $\left(i, j\right)$<br/>to place a greenhouse at $\left(\tilde{i}, \tilde{j}\right)$. | The squares from $\left(i, j\right)$ to $\left(i + 1, j + 1\right)$<br/>contain the greenhouse resource pattern,<br/>$i - 1 \leq \tilde{i}\leq i + 1$, $j - 1 \leq \tilde{j}\leq j + 1$,<br/>and the state is in the building phase. |
+| $\left(\cdot, \cdot, \cdot, \cdot, \cdot, 2\right)$ | End the building phase.                                                                                                                                                                       | The state must be in the building phase.                                                                                                                                                                                             |
 
 ## Transition Dynamics
 In tinytown there are two resource types and two building types. Each building has a corresponding resource pattern.
@@ -81,8 +80,8 @@ The environment terminates when the agent takes the end building phase action in
 
 ## Reward
 No reward is given until the agent transitions to a terminal state.
-When transition to a terminal state, the agent receives a reward of
-$3\min{\left\lbrace c, 4g \right\rbrace} - nm + c + g$ 
+When transitioning to a terminal state, the agent receives a reward of
+$3\min{\left\lbrace c, 4g \right\rbrace} - nm + c + g$, 
 where $c$ and $g$ are the number of cottages and greenhouses in the terminal state respectively.
 
 This encourages the agent to construct as many buildings as possible,
