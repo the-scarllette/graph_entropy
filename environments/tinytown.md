@@ -42,14 +42,21 @@ if the state is in the _resource phase_, or $1$ if the state is in the _building
 
 ## Action Space
 
-**Type:** $\mathbb{N}$.
+**Type:** A vector of length $6$ containing natural numbers ($\mathbb{N}^{6}$).
 
 Actions correspond to either placing a specific resource at a grid location,
 converting a group of resources centered on a location into a building at another location,
 and ending the building phase.
 
-| Action Range               | Description                                                          | Conditions                                       |
-|----------------------------|----------------------------------------------------------------------|--------------------------------------------------|
-| $\left[0, nm\right]$       | For action $ij$, place a _brick_ at grid square $\left(i, j\right)$. | The square at $\left(i, j\right)$ must be empty. |
-| $\left[nm + 1, 2nm\right]$ | For action $2ij$                                                     |                                                  |
+| Action                                              | Description                                                                                                                                                                           | Conditions                                                                                                                                                                                                                       |
+|-----------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| $\left(i, j, 0, \cdot, \cdot, 0\right)$             | Where $0 \leq i < n$ and $0 \leq j < m$.<br/> Place a _brick_ at grid square $\left(i, j\right)$.                                                                                     | The square at $\left(i, j\right)$ must be empty<br/>and the state cannot be in the resource phase.                                                                                                                               |
+| $\left(i, j, 1, \cdot, \cdot, 0\right)$             | Where $0 \leq i < n$ and $0 \leq j < m$.<br/> Place _glass_ at grid square $\left(i, j\right)$.                                                                                       | The square at $\left(i, j\right)$ must be empty<br/>and the state cannot be in the resource phase.                                                                                                                               |
+| $\left(i, j, 0, \hat{i}, \hat{j}, 1\right)$         | Where $0 \leq i, \hat{i} < n$ and $0 \leq j, \hat{j} < m$.<br/>Use the resource pattern centered at $\left(i, j\right)$<br/>to place a cottage at $\left(\hat{i}, \hat{j}\right)$.    | The squares from $\left(i, j\right)$ to $\left(i + 1, j + 1\right)$<br/>contain the cottage resource pattern,<br/>$i - 1 \leq \hat{i}\leq i + 1$, $j - 1 \leq \hat{j}\leq j + 1$,<br/>and the state is in the building phase.    |
+| $\left(i, j, 1, \hat{i}, \hat{j}, 1\right)$         | Where $0 \leq i, \hat{i} < n$ and $0 \leq j, \hat{j} < m$.<br/>Use the resource pattern centered at $\left(i, j\right)$<br/>to place a greenhouse at $\left(\hat{i}, \hat{j}\right)$. | The squares from $\left(i, j\right)$ to $\left(i + 1, j + 1\right)$<br/>contain the greenhouse resource pattern,<br/>$i - 1 \leq \hat{i}\leq i + 1$, $j - 1 \leq \hat{j}\leq j + 1$,<br/>and the state is in the building phase. |
+| $\left(\cdot, \cdot, \cdot, \cdot, \cdot, 2\right)$ | End the building phase.                                                                                                                                                               | The state must be in the building phase.                                                                                                                                                                                         |
 
+## Transition Dynamics
+In tinytown there are two resources:
+
+bricks: <img src="environment_images/tinytown.png" alt="Tinytown Environment Example" width="300"/>
