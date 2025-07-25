@@ -2748,7 +2748,7 @@ if __name__ == "__main__":
     option_discovery_method = 'replace'
     option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
-    graphing_window = 50
+    graphing_window = 200
     evaluate_policy_window = 10
     hops = 5
     min_num_hops = 1
@@ -2760,7 +2760,7 @@ if __name__ == "__main__":
     options_training_timesteps = 200_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     # lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 500_000
+    training_timesteps = 1_000_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
     behaviour_window = 500
 
@@ -2774,47 +2774,12 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # Preparedness flat - EE3377 - 8
 
+    run_episode(
+        simple_crafter
+    )
+    exit()
+
     filenames = get_filenames(simple_crafter)
-
-    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
-
-    stg_values = preparedness_efficient(
-        adj_matrix,
-        0.5,
-        computed_hops_range=[1, 5],
-        max_num_hops=7,
-        compressed_matrix=True,
-        existing_stg_values=stg_values,
-        progress_bar=True
-    )
-    nx.set_node_attributes(
-        state_transition_graph,
-        stg_values
-    )
-
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
-    exit()
-
-    print("Labeling preparedness subgoals")
-    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
-        adj_matrix, state_transition_graph, stg_values, 0.5)
-    update_graph_attributes(simple_crafter, stg_values)
-
-    print("Creating preparedness subgoal graph")
-    state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
-        simple_crafter, adj_matrix, state_transition_graph, stg_values,
-        preparedness_subgoals
-    )
-    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-
-    update_graph_attributes(simple_crafter, stg_values)
-    exit()
 
     data = graphing.extract_data(
         filenames['results'],
@@ -2879,6 +2844,46 @@ if __name__ == "__main__":
         all_actions_valid=True,
         total_eval_steps=total_evaluation_steps
     )
+    exit()
+
+    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    stg_values = preparedness_efficient(
+        adj_matrix,
+        0.5,
+        computed_hops_range=[1, 5],
+        max_num_hops=7,
+        compressed_matrix=True,
+        existing_stg_values=stg_values,
+        progress_bar=True
+    )
+    nx.set_node_attributes(
+        state_transition_graph,
+        stg_values
+    )
+
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+    print("Labeling preparedness subgoals")
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
+        adj_matrix, state_transition_graph, stg_values, 0.5)
+    update_graph_attributes(simple_crafter, stg_values)
+
+    print("Creating preparedness subgoal graph")
+    state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
+        simple_crafter, adj_matrix, state_transition_graph, stg_values,
+        preparedness_subgoals
+    )
+    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+
+    update_graph_attributes(simple_crafter, stg_values)
     exit()
 
     adj_matrix, state_transition_graph, stg_values = simple_crafter.get_adjacency_matrix(
