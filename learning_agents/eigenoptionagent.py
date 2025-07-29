@@ -86,7 +86,6 @@ class EigenOptionAgent(OptionsAgent):
 
         self.state_to_index_lookup = {}
 
-        self.initiation_lookup = {}
         return
 
     def choose_action(self, state: np.ndarray, optimal_choice: bool=False,
@@ -237,6 +236,13 @@ class EigenOptionAgent(OptionsAgent):
         self.state_option_values = data['option values'].copy()
         return
 
+    def node_to_state(
+            self,
+            node: str
+    ) -> np.ndarray:
+        state_str = self.state_transition_graph.nodes(data=True)[node]['state']
+        return self.state_str_to_state(state_str)
+
     def option_initiation_function(self, state: np.ndarray, goal_state_index: int) -> bool:
         state_index = self.get_state_index(state)
         return self.initiation_lookup[str(state_index)][str(goal_state_index)] == 'True'
@@ -248,19 +254,14 @@ class EigenOptionAgent(OptionsAgent):
         possible_actions = environment.possible_actions
         start_states = []
 
-        if possible_start_states is None:
-            possible_start_states = environment.get_start_states()
-        for state in possible_start_states:
-            if self.option_initiation_function(state, option.goal_index):
-                start_states.append(state)
-
         for total_steps in range(training_steps):
             if progress_bar:
                 print_progress_bar(total_steps, training_steps,
                                    prefix='Eigenoption Training: ', suffix='Complete')
 
             if terminal:
-                state = environment.reset(random.choice(start_states))
+                self.node_to_state
+                state = environment.reset()
                 state_index = self.get_state_index(state)
                 if not all_actions_valid:
                     possible_actions = environment.get_possible_actions()
