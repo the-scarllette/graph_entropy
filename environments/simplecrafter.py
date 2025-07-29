@@ -75,7 +75,7 @@ class SimpleCrafter(Environment):
     # Has diamond
     # total wood in environment is < 4
 
-    invalid_action_reward = -0.5
+    invalid_action_reward = 0.0
     step_reward = -0.01
     success_reward = 2.0
     failure_reward = -3.0

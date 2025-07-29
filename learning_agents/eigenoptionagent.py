@@ -28,21 +28,21 @@ from progressbar import print_progress_bar
 
 class EigenOption(Option):
 
-    def __init__(self, actions: List[int], eigenvector: np.ndarray, goal_index: int,
-                 terminate_action: int, initiation_func: Callable[[np.ndarray], bool],
-                 alpha: float=0.9, epsilon: float=0.1, gamma: float=0.9):
+    def __init__(
+            self,
+            actions: List[int],
+            eigenvector: np.ndarray,
+            eigenvector_index: int,
+            terminate_action: int,
+            alpha: float=0.9, epsilon: float=0.1, gamma: float=0.9):
         self.actions = None
         self.eigenvector = eigenvector
+        self.eigenvector_index = eigenvector_index
         self.terminate_action = terminate_action
         self.possible_actions = actions + [self.terminate_action]
 
-        self.initiation_func = initiation_func
-        self.terminating_func = None
-
-        self.goal_index = goal_index
         self.policy = QLearningAgent(self.possible_actions, alpha, epsilon, gamma)
         return
-
 
 class EigenOptionAgent(OptionsAgent):
 
@@ -53,6 +53,7 @@ class EigenOptionAgent(OptionsAgent):
         self.adjacency_matrix = adjacency_matrix
         self.adjacency_matrix[adjacency_matrix.nonzero()] = 1.0
 
+        self.num_states = self.adjacency_matrix.shape[0]
         self.state_transition_graph = state_transition_graph
 
         self.alpha = alpha
@@ -127,23 +128,21 @@ class EigenOptionAgent(OptionsAgent):
         return num_available_skills
 
     def find_options(self, progress_bar: bool=False):
-        laplacian = x.normalized_laplacian_matrix(self.state_transition_graph.to_undirected())
-        eigenvalues, eigenvectors = sparse.linalg.eigh(laplacian, self.num_options, which='SR')
-        goal_indexes = np.argmax(eigenvectors, axis=0)
+        laplacian = nx.normalized_laplacian_matrix(self.state_transition_graph.to_undirected())
+        _, eigenvectors = sparse.linalg.eigsh(laplacian, self.num_options, which='SM')
 
         for state_index in range(self.num_states):
             if progress_bar:
                 print_progress_bar(state_index, self.num_states, "Finding options: ")
-            distances = sparse.csgraph.dijkstra(self.adjacency_matrix, indices=state_index,
-                                                unweighted=True, min_only=True)
-            self.initiation_lookup[str(state_index)] = {str(goal_index): str(distances[goal_index] < np.inf)
-                                                        for goal_index in goal_indexes}
 
         for i in range(self.num_options):
             eigenvector = np.real(eigenvectors[:, i])
-            goal_state_index = goal_indexes[i]
-            option = EigenOption(self.actions, eigenvector, goal_state_index, self.terminate_action,
-                                 lambda s: self.option_initiation_function(s, goal_state_index))
+            option = EigenOption(
+                self.actions,
+                eigenvector,
+                i,
+                self.terminate_action
+            )
             self.options.append(option)
         for action in self.actions:
             option = Option([action])

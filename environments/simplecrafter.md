@@ -85,9 +85,6 @@ have enough resources to collect a diamond.
 ## Reward
 Each timestep the agent receives the reward of $-0.01$.
 
-When the agent takes an action with no effect (such as collecting when no resources are available to)
-they receive a reward of $-0.5$.
-
 Collecting a diamond gives a reward of $2.0$.
 
 Transitioning to a terminal state where there is $4$ or less total wood in the domain

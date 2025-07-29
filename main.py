@@ -2753,7 +2753,7 @@ if __name__ == "__main__":
     option_discovery_method = 'replace'
     option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
-    graphing_window = 200
+    graphing_window = 10
     evaluate_policy_window = 10
     hops = 5
     min_num_hops = 1
@@ -2781,33 +2781,6 @@ if __name__ == "__main__":
 
     filenames = get_filenames(simple_crafter)
 
-    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
-
-    betweenness_agent = BetweennessAgent(
-        simple_crafter.possible_actions,
-        0.9,
-        0.1,
-        0.1,
-        simple_crafter.state_shape,
-        simple_crafter.state_dtype,
-        state_transition_graph,
-        30
-    )
-    _ = betweenness_agent.find_betweenness_subgoals(stg_values, True)
-    betweenness_agent.create_options()
-    betweenness_agent.option_stationary_reward = -0.5
-    betweenness_agent.train_options(
-        simple_crafter,
-        1_000_000,
-        True,
-        True
-    )
-    betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
-    exit()
-
     train_q_learning_agent(
         simple_crafter,
         training_timesteps,
@@ -2820,15 +2793,10 @@ if __name__ == "__main__":
     )
     exit()
 
-    print("Betweenness Agent " + taxicab.environment_name + " training options")
-    betweennessagent = BetweennessAgent(taxicab.possible_actions, 0.9, 0.3, 0.9,
-                                        taxicab.state_shape, taxicab.state_dtype,
-                                        state_transition_graph, 30)
-    betweennessagent.load(filenames['agents'] + '/betweenness_base_agent.json')
-    betweennessagent.train_options(taxicab, options_training_timesteps,
-                                   True, True)
-    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
-    exit()
+    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
 
     data = graphing.extract_data(
         filenames['results'],
@@ -2853,6 +2821,7 @@ if __name__ == "__main__":
         name='Simple Crafter',
         x_label='Timesteps',
         y_label='Average Epoch Return',
+        x_lim=[0, 10_000],
         error_bars=True,
         labels=[
             # 'Graph and Mutual Information Skills',
@@ -2881,6 +2850,38 @@ if __name__ == "__main__":
             '#555555'
         ]
     )
+    exit()
+
+    betweenness_agent = BetweennessAgent(
+        simple_crafter.possible_actions,
+        0.9,
+        0.1,
+        0.1,
+        simple_crafter.state_shape,
+        simple_crafter.state_dtype,
+        state_transition_graph,
+        30
+    )
+    _ = betweenness_agent.find_betweenness_subgoals(stg_values, True)
+    betweenness_agent.create_options()
+    betweenness_agent.option_stationary_reward = -0.5
+    betweenness_agent.train_options(
+        simple_crafter,
+        1_000_000,
+        True,
+        True
+    )
+    betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    exit()
+
+    print("Betweenness Agent " + taxicab.environment_name + " training options")
+    betweennessagent = BetweennessAgent(taxicab.possible_actions, 0.9, 0.3, 0.9,
+                                        taxicab.state_shape, taxicab.state_dtype,
+                                        state_transition_graph, 30)
+    betweennessagent.load(filenames['agents'] + '/betweenness_base_agent.json')
+    betweennessagent.train_options(taxicab, options_training_timesteps,
+                                   True, True)
+    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
     exit()
 
     stg_values = preparedness_efficient(
