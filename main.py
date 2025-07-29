@@ -2761,11 +2761,11 @@ if __name__ == "__main__":
     num_agents = 5
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, simple_crafter=50, taxicab_classic=25
     total_evaluation_steps = 50
-    # simple_crafter: 200_000, tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 200_000
+    # simple_crafter: 1_000_000, tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
+    options_training_timesteps = 1_000_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     # lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 2_000_000
+    training_timesteps = 100_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
     behaviour_window = 500
 
@@ -2796,18 +2796,28 @@ if __name__ == "__main__":
         state_transition_graph,
         30
     )
-    stg_values = betweenness_agent.find_betweenness_subgoals(stg_values, True)
+    _ = betweenness_agent.find_betweenness_subgoals(stg_values, True)
     betweenness_agent.create_options()
-    betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
-    exit()
+    betweenness_agent.option_stationary_reward = -0.5
     betweenness_agent.train_options(
         simple_crafter,
-        100,
+        100_000,
         True,
         True
     )
+    betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
     exit()
-    update_graph_attributes(simple_crafter, stg_values)
+
+    train_q_learning_agent(
+        simple_crafter,
+        training_timesteps,
+        5,
+        continue_training=False,
+        progress_bar=True,
+        overwrite_existing_agents=True,
+        all_actions_valid=True,
+        total_eval_steps=total_evaluation_steps
+    )
     exit()
 
     print("Betweenness Agent " + taxicab.environment_name + " training options")
@@ -2870,18 +2880,6 @@ if __name__ == "__main__":
             # '#EE3377',
             '#555555'
         ]
-    )
-    exit()
-
-    train_q_learning_agent(
-        simple_crafter,
-        training_timesteps,
-        5,
-        continue_training=False,
-        progress_bar=True,
-        overwrite_existing_agents=True,
-        all_actions_valid=True,
-        total_eval_steps=total_evaluation_steps
     )
     exit()
 

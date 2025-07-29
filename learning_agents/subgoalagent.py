@@ -34,7 +34,8 @@ class SubgoalOption(Option):
 class SubgoalAgent(OptionsAgent):
 
     option_failure_reward = -1.0
-    option_step_reward = -0.001
+    option_stationary_reward = 0.0
+    option_step_reward = -0.1
     option_success_reward = 1.0
 
     def __init__(self, actions: List[int], alpha: float, epsilon: float, gamma: float,
@@ -212,6 +213,8 @@ class SubgoalAgent(OptionsAgent):
             elif terminated or option.terminated(next_state):
                 terminated = True
                 reward = self.option_failure_reward
+            elif np.array_equal(state, next_state):
+                reward = self.option_stationary_reward
 
             if terminated:
                 total_end_states += 1
