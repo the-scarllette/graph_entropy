@@ -257,7 +257,6 @@ class EigenOptionAgent(OptionsAgent):
         return
 
     def train_option(self, environment: Environment, option: EigenOption, training_steps: int,
-                     possible_start_states: None | List[np.ndarray]=None,
                      all_actions_valid: bool=False, progress_bar: bool=False):
         terminal = True
         possible_actions = environment.possible_actions
@@ -300,12 +299,11 @@ class EigenOptionAgent(OptionsAgent):
 
     def train_options(self, environment: Environment, training_steps: int,
                       all_actions_valid: bool=True, progress_bar: bool=False):
-        possible_start_states = environment.get_start_states()
         for i in range(self.num_options):
             if progress_bar:
                 print("Training EigenOption " + str(i + 1) + "/" + str(self.num_options))
             option = self.options[i]
-            self.train_option(environment, option, training_steps, possible_start_states,
+            self.train_option(environment, option, training_steps,
                               all_actions_valid, progress_bar)
 
         return
