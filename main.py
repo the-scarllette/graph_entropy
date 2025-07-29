@@ -2753,7 +2753,7 @@ if __name__ == "__main__":
     option_discovery_method = 'replace'
     option_onboarding = 'specific'
     # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
-    graphing_window = 10
+    graphing_window = 100
     evaluate_policy_window = 10
     hops = 5
     min_num_hops = 1
@@ -2762,7 +2762,7 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, simple_crafter=50, taxicab_classic=25
     total_evaluation_steps = 50
     # simple_crafter: 1_000_000, tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 1_000_000
+    options_training_timesteps = 2_000_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     # lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
     training_timesteps = 100_000
@@ -2781,6 +2781,33 @@ if __name__ == "__main__":
 
     filenames = get_filenames(simple_crafter)
 
+    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    eigenoptions_agent = EigenOptionAgent(
+        adj_matrix,
+        state_transition_graph,
+        0.9,
+        0.15,
+        0.9,
+        simple_crafter.possible_actions,
+        simple_crafter.state_dtype,
+        simple_crafter.state_shape,
+        64)
+    eigenoptions_agent.find_options(True)
+    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
+    exit()
+    eigenoptions_agent.train_options(
+        simple_crafter,
+        options_training_timesteps,
+        True,
+        True
+    )
+    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
+    exit()
+
     train_q_learning_agent(
         simple_crafter,
         training_timesteps,
@@ -2792,11 +2819,6 @@ if __name__ == "__main__":
         total_eval_steps=total_evaluation_steps
     )
     exit()
-
-    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
 
     data = graphing.extract_data(
         filenames['results'],
@@ -2821,7 +2843,6 @@ if __name__ == "__main__":
         name='Simple Crafter',
         x_label='Timesteps',
         y_label='Average Epoch Return',
-        x_lim=[0, 10_000],
         error_bars=True,
         labels=[
             # 'Graph and Mutual Information Skills',
@@ -3859,19 +3880,6 @@ if __name__ == "__main__":
                              continue_training=False,
                              overwrite_existing_agents=True,
                              progress_bar=True)
-    exit()
-
-    print("Training eigenoptions taxicab options")
-    eigenoptions_agent = EigenOptionAgent(adj_matrix, state_transition_graph,
-                                          0.9, 0.15, 0.9,
-                                          taxicab.possible_actions,
-                                          taxicab.state_dtype, taxicab.state_shape,
-                                          64)
-    eigenoptions_agent.find_options(True)
-    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
-    eigenoptions_agent.train_options(taxicab, options_training_timesteps,
-                                     True, True)
-    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
     exit()
 
     print(tinytown.environment_name + " preparedness training options")

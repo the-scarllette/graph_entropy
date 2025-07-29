@@ -122,13 +122,9 @@ class EigenOptionAgent(OptionsAgent):
 
         return num_available_skills
 
-    def find_options(self, progress_bar: bool=False):
+    def find_options(self):
         laplacian = nx.normalized_laplacian_matrix(self.state_transition_graph.to_undirected())
         _, eigenvectors = sparse.linalg.eigsh(laplacian, self.num_options, which='SM')
-
-        for state_index in range(self.num_states):
-            if progress_bar:
-                print_progress_bar(state_index, self.num_states, "Finding options: ")
 
         for i in range(self.num_options):
             eigenvector = np.real(eigenvectors[:, i])
