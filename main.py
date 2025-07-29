@@ -2797,17 +2797,16 @@ if __name__ == "__main__":
         30
     )
     betweenness_agent.load(filenames['agents'] + '/betweenness_base_agent.json')
-    stg_values = betweenness_agent.find_betweenness_subgoals(stg_values, True)
-    betweenness_agent.create_options()
-    betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
-    exit()
-
     betweenness_agent.train_options(
         simple_crafter,
         100,
         True,
         True
     )
+    betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    exit()
+    stg_values = betweenness_agent.find_betweenness_subgoals(stg_values, True)
+    betweenness_agent.create_options()
     exit()
 
     stg_values = betweenness_agent.find_betweenness_subgoals(stg_values)
