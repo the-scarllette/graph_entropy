@@ -2801,7 +2801,7 @@ if __name__ == "__main__":
     betweenness_agent.option_stationary_reward = -0.5
     betweenness_agent.train_options(
         simple_crafter,
-        100_000,
+        1_000_000,
         True,
         True
     )

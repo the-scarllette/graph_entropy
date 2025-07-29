@@ -51,9 +51,15 @@ class EigenOptionAgent(OptionsAgent):
                  alpha: float, epsilon: float, gamma: float, actions: List[int], state_dtype: Type, state_shape: Tuple[int, int],
                  num_options: int=64):
         self.adjacency_matrix = adjacency_matrix
+        self.num_states = self.adjacency_matrix.shape[0]
+        for i in range(self.num_states):
+            for j in range(self.num_states):
+                if i == j:
+                    continue
+                if self.adjacency_matrix[i, j] != 0:
+                    self.adjacency_matrix[j, i] = self.adjacency_matrix[i, j]
         self.adjacency_matrix[adjacency_matrix.nonzero()] = 1.0
 
-        self.num_states = self.adjacency_matrix.shape[0]
         self.state_transition_graph = state_transition_graph
 
         self.alpha = alpha
