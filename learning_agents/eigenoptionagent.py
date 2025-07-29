@@ -149,9 +149,8 @@ class EigenOptionAgent(OptionsAgent):
 
         return
 
-    def get_available_options(self, state: np.ndarray, possible_actions: None | List[int]=None) -> List[int]:
-        available_options = [str(i) for i in range(self.num_options)
-                             if self.options[i].initiated(state)]
+    def get_available_options(self, state: np.ndarray, possible_actions: None | List[int]=None) -> List[str]:
+        available_options = [str(i) for i in range(self.num_options)]
 
         if possible_actions is None:
             available_options += [str(i) for i in range(self.num_options, len(self.options))]
