@@ -2748,15 +2748,7 @@ def update_graph_attributes(environment: Environment,
 # Writing: Related Work, future work
 
 if __name__ == "__main__":
-    lavaflow = LavaFlow(None, None, (0, 0))
     simple_crafter = SimpleCrafter()
-    taxicab = TaxiCab(
-          False,
-          False,
-           [0.25, 0.01, 0.01, 0.01, 0.72],
-           continuous=True
-    )
-    tinytown = TinyTown(2, 2)
 
     option_discovery_method = 'replace'
     option_onboarding = 'specific'
@@ -2769,7 +2761,7 @@ if __name__ == "__main__":
     num_agents = 5
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, simple_crafter=50, taxicab_classic=25
     total_evaluation_steps = 50
-    # tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
+    # simple_crafter: 200_000, tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 200_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     # lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
@@ -2804,8 +2796,31 @@ if __name__ == "__main__":
         state_transition_graph,
         30
     )
+    betweenness_agent.load(filenames['agents'] + '/betweenness_base_agent.json')
     stg_values = betweenness_agent.find_betweenness_subgoals(stg_values)
-    update_graph_attributes(tinytown, stg_values)
+    betweenness_agent.create_options()
+    betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    exit()
+    betweenness_agent.train_options(
+        simple_crafter,
+        100,
+        True,
+        True
+    )
+    exit()
+
+    stg_values = betweenness_agent.find_betweenness_subgoals(stg_values)
+    update_graph_attributes(simple_crafter, stg_values)
+    exit()
+
+    print("Betweenness Agent " + taxicab.environment_name + " training options")
+    betweennessagent = BetweennessAgent(taxicab.possible_actions, 0.9, 0.3, 0.9,
+                                        taxicab.state_shape, taxicab.state_dtype,
+                                        state_transition_graph, 30)
+    betweennessagent.load(filenames['agents'] + '/betweenness_base_agent.json')
+    betweennessagent.train_options(taxicab, options_training_timesteps,
+                                   True, True)
+    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
     exit()
 
     data = graphing.extract_data(
@@ -3869,25 +3884,6 @@ if __name__ == "__main__":
                                      min_hop=3))
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
-    exit()
-
-    print("Betweenness Agent " + taxicab.environment_name + " training options")
-    betweennessagent = BetweennessAgent(taxicab.possible_actions, 0.9, 0.3, 0.9,
-                                        taxicab.state_shape, taxicab.state_dtype,
-                                        state_transition_graph, 30)
-    betweennessagent.load(filenames['agents'] + '/betweenness_base_agent.json')
-    betweennessagent.train_options(taxicab, options_training_timesteps,
-                                   True, True)
-    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
-    exit()
-
-    stg_values = betweennessagent.find_betweenness_subgoals(stg_values)
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
-    nx.set_node_attributes(state_transition_graph, stg_values)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    betweennessagent.create_options()
-    betweennessagent.save(filenames['agents'] + '/betweenness_base_agent.json')
     exit()
 
     adj_matrix, state_transition_graph, stg_values = taxicab.get_adjacency_matrix(True, True,
