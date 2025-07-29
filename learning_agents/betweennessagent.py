@@ -37,13 +37,27 @@ class BetweennessAgent(SubgoalAgent):
         self.intra_option = False
         return
 
-    def find_betweenness_subgoals(self, state_transition_graph_values: Dict[str, Dict[str, str]]|None=None) -> Dict[str, Dict[str, str]]|None:
-        betweenness_values = nx.betweenness_centrality(self.state_transition_graph)
+    def find_betweenness_subgoals(
+            self,
+            state_transition_graph_values: Dict[str, Dict[str, str]]|None=None,
+            betweenness_computed: bool=False
+    ) -> Dict[str, Dict[str, str]]|None:
+        betweenness_value_key = 'node betweenness'
+        betweenness_subgoal_key = 'node betweenness subgoal'
         self.subgoals = []
+
+        if betweenness_computed and state_transition_graph_values is not None:
+            for node in state_transition_graph_values:
+                if state_transition_graph_values[node][betweenness_subgoal_key] == 'True':
+                    self.subgoals.append(node)
+            return state_transition_graph_values
+
+        betweenness_values = nx.betweenness_centrality(self.state_transition_graph)
 
         for node in betweenness_values.keys():
             betweenness = betweenness_values[node]
             is_subgoal = True
+
             for neighbour in nx.all_neighbors(self.state_transition_graph, node):
                 if neighbour == node:
                     continue
@@ -55,8 +69,8 @@ class BetweennessAgent(SubgoalAgent):
             if is_subgoal:
                 self.subgoals.append(node)
             if state_transition_graph_values is not None:
-                state_transition_graph_values[node]['node betweenness'] = betweenness_values[node]
-                state_transition_graph_values[node]['node betweenness subgoal'] = str(is_subgoal)
+                state_transition_graph_values[node][betweenness_value_key] = betweenness_values[node]
+                state_transition_graph_values[node][betweenness_subgoal_key] = str(is_subgoal)
 
         if state_transition_graph_values is None:
             return
