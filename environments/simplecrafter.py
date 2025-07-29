@@ -117,7 +117,7 @@ class SimpleCrafter(Environment):
         }
 
         self.state_shape = (self.grid_size + 7,)
-        self.state_dtype = int
+        self.state_dtype = float
 
         self.terminal = True
         pass
