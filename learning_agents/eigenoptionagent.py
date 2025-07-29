@@ -51,13 +51,6 @@ class EigenOptionAgent(OptionsAgent):
                  alpha: float, epsilon: float, gamma: float, actions: List[int], state_dtype: Type, state_shape: Tuple[int, int],
                  num_options: int=64):
         self.adjacency_matrix = adjacency_matrix
-        self.num_states = self.adjacency_matrix.shape[0]
-        for i in range(self.num_states):
-            for j in range(self.num_states):
-                if i == j:
-                    continue
-                if self.adjacency_matrix[i, j] != 0:
-                    self.adjacency_matrix[j, i] = self.adjacency_matrix[i, j]
         self.adjacency_matrix[adjacency_matrix.nonzero()] = 1.0
 
         self.state_transition_graph = state_transition_graph
@@ -134,8 +127,8 @@ class EigenOptionAgent(OptionsAgent):
         return num_available_skills
 
     def find_options(self, progress_bar: bool=False):
-        laplacian = sparse.csgraph.laplacian(self.adjacency_matrix, True)
-        _, eigenvectors = sparse.linalg.eigs(laplacian, self.num_options, which='SR')
+        laplacian = x.normalized_laplacian_matrix(self.state_transition_graph.to_undirected())
+        eigenvalues, eigenvectors = sparse.linalg.eigh(laplacian, self.num_options, which='SR')
         goal_indexes = np.argmax(eigenvectors, axis=0)
 
         for state_index in range(self.num_states):
