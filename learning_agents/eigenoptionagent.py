@@ -252,7 +252,6 @@ class EigenOptionAgent(OptionsAgent):
                      all_actions_valid: bool=False, progress_bar: bool=False):
         terminal = True
         possible_actions = environment.possible_actions
-        start_states = []
 
         for total_steps in range(training_steps):
             if progress_bar:
@@ -260,8 +259,11 @@ class EigenOptionAgent(OptionsAgent):
                                    prefix='Eigenoption Training: ', suffix='Complete')
 
             if terminal:
-                self.node_to_state
-                state = environment.reset()
+                state_found = False
+                while not state_found:
+                    state = self.node_to_state(str(random.randint(self.num_states)))
+                    state_found = not environment.is_terminal(state)
+                state = environment.reset(state)
                 state_index = self.get_state_index(state)
                 if not all_actions_valid:
                     possible_actions = environment.get_possible_actions()
@@ -269,18 +271,21 @@ class EigenOptionAgent(OptionsAgent):
             action = option.policy.choose_action(state, possible_actions=possible_actions)
 
             if action == self.terminate_action:
-                next_state = state
+                next_state = state.copy()
+                next_state_index = state_index
                 terminal = True
+                reward = 0.0
             else:
                 next_state, _, terminal, _ = environment.step(action)
-
-            next_state_index = self.get_state_index(next_state)
-            reward = option.eigenvector[next_state_index] - option.eigenvector[state_index]
+                next_state_index = self.get_state_index(next_state)
+                reward = option.eigenvector[next_state_index] - option.eigenvector[state_index]
 
             if not all_actions_valid:
                 possible_actions = environment.get_possible_actions()
             option.policy.learn(state, action, reward, next_state, terminal, possible_actions)
+
             state = next_state
+            state_index = next_state_index
 
         return
 
