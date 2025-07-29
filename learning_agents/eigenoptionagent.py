@@ -206,14 +206,11 @@ class EigenOptionAgent(OptionsAgent):
         with open(save_path, 'r') as f:
             data = json.load(f)
 
-        self.initiation_lookup = data['initiation lookup'].copy()
-
         for i in range(self.num_options):
             option_data = data['options'][str(i)]
             eigenvector = np.frombuffer(eval(option_data['eigenvector']), dtype=self.state_dtype)
-            goal_state_index = option_data['goal_index']
-            option = EigenOption(self.actions, eigenvector, goal_state_index, self.terminate_action,
-                                 lambda s: self.option_initiation_function(s, goal_state_index))
+            eigenvector_index = option_data['eigenvector_index']
+            option = EigenOption(self.actions, eigenvector, eigenvector_index, self.terminate_action)
             option.policy.q_values = option_data['policy'].copy()
             self.options.append(option)
         for action in self.actions:
@@ -320,11 +317,11 @@ class EigenOptionAgent(OptionsAgent):
         except FileExistsError:
             ()
 
-        data = {'options': {}, 'option values': {}, 'initiation lookup': self.initiation_lookup}
+        data = {'options': {}, 'option values': {}}
         for i in range(self.num_options):
             option = self.options[i]
             data['options'][i] = {'policy': option.policy.q_values,
-                                  'goal_index': int(option.goal_index),
+                                  'eigenvector_index': int(option.eigenvector_index),
                                   'eigenvector': str(option.eigenvector.tobytes())}
 
         data['option values'] = self.state_option_values.copy()
