@@ -103,8 +103,6 @@ class EigenOptionAgent(OptionsAgent):
 
         if chosen_action == self.terminate_action:
             self.terminate_eigenoption(state, possible_actions=possible_actions)
-            self.current_option = None
-            self.current_option_index = None
             return self.choose_action(state, optimal_choice, possible_actions)
 
         return chosen_action
