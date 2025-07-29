@@ -269,7 +269,7 @@ class EigenOptionAgent(OptionsAgent):
             if terminal:
                 state_found = False
                 while not state_found:
-                    state = self.node_to_state(str(random.randint(self.num_states)))
+                    state = self.node_to_state(str(random.randint(0, self.num_states)))
                     state_found = not environment.is_terminal(state)
                 state = environment.reset(state)
                 state_index = self.get_state_index(state)

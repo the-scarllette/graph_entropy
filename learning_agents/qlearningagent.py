@@ -37,13 +37,17 @@ class QLearningAgent:
 
         action_values = self.get_action_values(state)
 
-        if possible_actions is None:
-            return max_key(action_values)
-
-        valid_action_values = {}
+        max_value = -np.inf
+        max_actions = []
         for action in possible_actions:
-            valid_action_values[action] = action_values[action]
-        return max_key(valid_action_values)
+            action_value = action_values[action]
+            if action_value > max_value:
+                max_value = action_value
+                max_actions = [action]
+            elif action_value == max_value:
+                max_actions.append(action)
+
+        return rand.choice(max_actions)
 
     def get_action_values(self, state):
         state = np.array2string(state)
