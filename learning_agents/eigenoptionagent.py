@@ -97,14 +97,12 @@ class EigenOptionAgent(OptionsAgent):
 
         if self.current_option is None:
             self.current_option = self.choose_option(state, optimal_choice, possible_actions)
-            if self.current_option is None:
-                return None
 
         chosen_action = self.current_option.choose_action(state, possible_actions)
         self.current_option_step += 1
 
         if chosen_action == self.terminate_action:
-            self.learn(state, chosen_action, 0, state, next_state_possible_actions=possible_actions)
+            self.terminate_eigenoption(state, possible_actions=possible_actions)
             self.current_option = None
             self.current_option_index = None
             return self.choose_action(state, optimal_choice, possible_actions)
@@ -178,13 +176,9 @@ class EigenOptionAgent(OptionsAgent):
     def learn(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray,
               terminal: None | bool=None, next_state_possible_actions: None | List[int]=None):
         self.total_option_reward += reward
+
         if not (terminal or self.current_option.terminated(next_state)):
             return
-
-        try:
-            self.current_option.policy.current_option = None
-        except AttributeError:
-            ()
 
         option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
         all_next_options = []
@@ -201,7 +195,7 @@ class EigenOptionAgent(OptionsAgent):
             next_option_values = [all_next_options[option] for option in next_options]
         max_next_option = max(next_option_values)
 
-        state_str = np.array2string(np.ndarray.astype(self.option_start_state, dtype=self.state_dtype))
+        state_str = self.state_to_state_str(state)
 
         self.state_option_values[state_str][self.current_option_index] += self.alpha * \
                                                                     (self.total_option_reward +
@@ -245,6 +239,31 @@ class EigenOptionAgent(OptionsAgent):
     def option_initiation_function(self, state: np.ndarray, goal_state_index: int) -> bool:
         state_index = self.get_state_index(state)
         return self.initiation_lookup[str(state_index)][str(goal_state_index)] == 'True'
+
+    def terminate_eigenoption(
+            self,
+            state: np.ndarray,
+            possible_actions: None|List[int]=None
+    ):
+        option_value = self.get_state_option_values(self.option_start_state)[self.current_option_index]
+
+        next_options = self.get_available_options(state, possible_actions)
+        next_option_values = [self.get_state_option_values(state)[option] for option in next_options]
+        max_next_option = max(next_option_values)
+
+        state_str = self.state_to_state_str(state)
+
+        self.state_option_values[state_str][self.current_option_index] += self.alpha * \
+                                                                          (self.total_option_reward +
+                                                                           (self.gamma ** self.current_option_step) *
+                                                                           max_next_option
+                                                                           - option_value)
+
+        self.current_option = None
+        self.current_option_index = None
+        self.option_start_state = None
+        self.total_option_reward = 0
+        return
 
     def train_option(self, environment: Environment, option: EigenOption, training_steps: int,
                      possible_start_states: None | List[np.ndarray]=None,
