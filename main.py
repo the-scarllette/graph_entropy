@@ -1340,6 +1340,18 @@ def make_entropy_intrinsic_reward(graph_entropies):
 
     return intrinsic_reward_func
 
+def merge_stg_values(
+        merge_from: Dict[str, Dict[str, str|float]],
+        merge_into: Dict[str, Dict[str, str|float]]
+) -> Dict[str, Dict[str, str|float]]:
+    for key in merge_from.keys():
+        try:
+            _ = merge_into[key]
+            for new_key in merge_into[key].keys():
+                merge_into[key][new_key] = merge_from[key][new_key]
+        except KeyError:
+            merge_into[key] = merge_from[key]
+    return merge_into
 
 def node_frequency_entropy(adjacency_matrix: np.matrix, node, num_hops=1,
                            log_base=10, accuracy=4, compressed_matrix=False,
@@ -1924,6 +1936,7 @@ def run_episode(env: Environment,
     if agent is None:
         env.print_state(state)
         print("Total reward: " + str(episode_return))
+        print("Total steps:" + str(total_steps))
 
     return episode_return
 
@@ -2760,7 +2773,7 @@ if __name__ == "__main__":
     options_training_timesteps = 200_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     # lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 1_000_000
+    training_timesteps = 2_000_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
     behaviour_window = 500
 
@@ -2781,20 +2794,18 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    print("Labeling preparedness subgoals")
-    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
-        adj_matrix, state_transition_graph, stg_values, 0.5, max_level=5)
-    update_graph_attributes(simple_crafter, stg_values)
-
-    print("Creating preparedness subgoal graph")
-    state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
-        simple_crafter, adj_matrix, state_transition_graph, stg_values,
-        preparedness_subgoals
+    betweenness_agent = BetweennessAgent(
+        simple_crafter.possible_actions,
+        0.9,
+        0.1,
+        0.1,
+        simple_crafter.state_shape,
+        simple_crafter.state_dtype,
+        state_transition_graph,
+        30
     )
-    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-
-    update_graph_attributes(simple_crafter, stg_values)
+    stg_values = betweenness_agent.find_betweenness_subgoals(stg_values)
+    update_graph_attributes(tinytown, stg_values)
     exit()
 
     data = graphing.extract_data(
@@ -2865,8 +2876,8 @@ if __name__ == "__main__":
     stg_values = preparedness_efficient(
         adj_matrix,
         0.5,
-        computed_hops_range=[1, 5],
-        max_num_hops=7,
+        computed_hops_range=[1, 6],
+        max_num_hops=8,
         compressed_matrix=True,
         existing_stg_values=stg_values,
         progress_bar=True
@@ -2879,6 +2890,22 @@ if __name__ == "__main__":
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
+    exit()
+
+    print("Labeling preparedness subgoals")
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
+        adj_matrix, state_transition_graph, stg_values, 0.5)
+    update_graph_attributes(simple_crafter, stg_values)
+
+    print("Creating preparedness subgoal graph")
+    state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
+        simple_crafter, adj_matrix, state_transition_graph, stg_values,
+        preparedness_subgoals
+    )
+    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+
+    update_graph_attributes(simple_crafter, stg_values)
     exit()
 
     adj_matrix, state_transition_graph, stg_values = simple_crafter.get_adjacency_matrix(
@@ -3762,14 +3789,6 @@ if __name__ == "__main__":
                                  ],
                         graph_name="Lavaflow Percentage of Clusters/Subgoals States"
                         )
-    exit()
-
-    betweenness_agent = BetweennessAgent(tinytown.possible_actions,
-                                         0.9, 0.1, 0.9,
-                                         tinytown.state_shape, tinytown.state_dtype,
-                                         state_transition_graph, 30)
-    stg_values = betweenness_agent.find_betweenness_subgoals(stg_values)
-    update_graph_attributes(tinytown, stg_values)
     exit()
 
     print("Labeling frequency entropy subgoals")
