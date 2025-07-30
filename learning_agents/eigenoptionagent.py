@@ -276,7 +276,7 @@ class EigenOptionAgent(OptionsAgent):
                 if not all_actions_valid:
                     possible_actions = environment.get_possible_actions()
 
-            action = option.policy.choose_action(state, possible_actions=possible_actions)
+            action = option.policy.choose_action(state, False, possible_actions=possible_actions)
 
             if action == self.terminate_action:
                 next_state = state.copy()

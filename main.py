@@ -2786,6 +2786,43 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
+    print("Labeling preparedness subgoals")
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
+        adj_matrix, state_transition_graph, stg_values, 0.5)
+    update_graph_attributes(simple_crafter, stg_values)
+
+    print("Creating preparedness subgoal graph")
+    state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
+        simple_crafter, adj_matrix, state_transition_graph, stg_values,
+        preparedness_subgoals
+    )
+    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+
+    update_graph_attributes(simple_crafter, stg_values)
+    exit()
+
+    eigenoptions_agent = EigenOptionAgent(
+        adj_matrix,
+        state_transition_graph,
+        0.9,
+        0.15,
+        0.9,
+        simple_crafter.possible_actions,
+        simple_crafter.state_dtype,
+        simple_crafter.state_shape,
+        64)
+    eigenoptions_agent.find_options()
+    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
+    eigenoptions_agent.train_options(
+        simple_crafter,
+        1_000_000,
+        True,
+        True
+    )
+    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
+    exit()
+
     betweenness_agent = BetweennessAgent(
         simple_crafter.possible_actions,
         0.9,
@@ -2800,43 +2837,11 @@ if __name__ == "__main__":
     betweenness_agent.create_options()
     betweenness_agent.train_options(
         simple_crafter,
-        10_000,
+        1_000_000,
         True,
         True
     )
     betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
-    exit()
-
-    eigenoptions_agent = EigenOptionAgent(
-        adj_matrix,
-        state_transition_graph,
-        0.9,
-        0.15,
-        0.9,
-        simple_crafter.possible_actions,
-        simple_crafter.state_dtype,
-        simple_crafter.state_shape,
-        64)
-    eigenoptions_agent.load(filenames['agents'] + '/eigenoptions_base_agent.json')
-    eigenoptions_agent.train_options(
-        simple_crafter,
-        options_training_timesteps,
-        True,
-        True
-    )
-    eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
-    exit()
-
-    train_q_learning_agent(
-        simple_crafter,
-        training_timesteps,
-        5,
-        continue_training=False,
-        progress_bar=True,
-        overwrite_existing_agents=True,
-        all_actions_valid=True,
-        total_eval_steps=total_evaluation_steps
-    )
     exit()
 
     data = graphing.extract_data(
@@ -2892,6 +2897,18 @@ if __name__ == "__main__":
     )
     exit()
 
+    train_q_learning_agent(
+        simple_crafter,
+        training_timesteps,
+        5,
+        continue_training=False,
+        progress_bar=True,
+        overwrite_existing_agents=True,
+        all_actions_valid=True,
+        total_eval_steps=total_evaluation_steps
+    )
+    exit()
+
     print("Betweenness Agent " + taxicab.environment_name + " training options")
     betweennessagent = BetweennessAgent(taxicab.possible_actions, 0.9, 0.3, 0.9,
                                         taxicab.state_shape, taxicab.state_dtype,
@@ -2919,22 +2936,6 @@ if __name__ == "__main__":
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
-    exit()
-
-    print("Labeling preparedness subgoals")
-    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
-        adj_matrix, state_transition_graph, stg_values, 0.5)
-    update_graph_attributes(simple_crafter, stg_values)
-
-    print("Creating preparedness subgoal graph")
-    state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
-        simple_crafter, adj_matrix, state_transition_graph, stg_values,
-        preparedness_subgoals
-    )
-    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-
-    update_graph_attributes(simple_crafter, stg_values)
     exit()
 
     adj_matrix, state_transition_graph, stg_values = simple_crafter.get_adjacency_matrix(
