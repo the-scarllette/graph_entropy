@@ -249,5 +249,5 @@ class SubgoalAgent(OptionsAgent):
                                                                   progress_bar)
             if progress_bar:
                 percentage_hits = percentage(total_successes, total_end_states)
-                print("     Option -> " + option.subgoal + " " + str(percentage_hits) + "% hits")
+                print("     Option -> " + option.subgoal + " " + str(percentage_hits) + "% hits" + "" + str(total_successes) + " total hits")
         return
