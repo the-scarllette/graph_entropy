@@ -167,14 +167,14 @@ class Option:
         self.terminating_func = terminating_func
         return
 
-    def choose_action(self, state, possible_actions=None):
+    def choose_action(self, state, optimal_choice=True, possible_actions=None):
         if self.policy is None:
             try:
                 action = self.actions[0]
                 return action
             except IndexError:
                 raise AttributeError('Option must have a defined policy or a set of actions')
-        return self.policy.choose_action(state, True, possible_actions=possible_actions)
+        return self.policy.choose_action(state, optimal_choice, possible_actions=possible_actions)
 
     def has_policy(self):
         return not (self.policy is None)

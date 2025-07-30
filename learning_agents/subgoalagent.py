@@ -200,7 +200,7 @@ class SubgoalAgent(OptionsAgent):
                 if not all_actions_possible:
                     possible_actions = environment.get_possible_actions(state)
 
-            action = option.choose_action(state, possible_actions)
+            action = option.choose_action(state, False, possible_actions)
 
             next_state, _, terminated, _ = environment.step(action)
             next_state_node = self.get_state_node(next_state)

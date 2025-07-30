@@ -2762,7 +2762,7 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, simple_crafter=50, taxicab_classic=25
     total_evaluation_steps = 50
     # simple_crafter: 1_000_000, tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 1_000
+    options_training_timesteps = 100_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     # lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
     training_timesteps = 500_000
@@ -2786,6 +2786,27 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
+    betweenness_agent = BetweennessAgent(
+        simple_crafter.possible_actions,
+        0.9,
+        0.1,
+        0.1,
+        simple_crafter.state_shape,
+        simple_crafter.state_dtype,
+        state_transition_graph,
+        30
+    )
+    _ = betweenness_agent.find_betweenness_subgoals(stg_values, True)
+    betweenness_agent.create_options()
+    betweenness_agent.train_options(
+        simple_crafter,
+        10_000,
+        True,
+        True
+    )
+    betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    exit()
+
     eigenoptions_agent = EigenOptionAgent(
         adj_matrix,
         state_transition_graph,
@@ -2804,7 +2825,6 @@ if __name__ == "__main__":
         True
     )
     eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
-    exit()
     exit()
 
     train_q_learning_agent(
@@ -2870,28 +2890,6 @@ if __name__ == "__main__":
             '#555555'
         ]
     )
-    exit()
-
-    betweenness_agent = BetweennessAgent(
-        simple_crafter.possible_actions,
-        0.9,
-        0.1,
-        0.1,
-        simple_crafter.state_shape,
-        simple_crafter.state_dtype,
-        state_transition_graph,
-        30
-    )
-    _ = betweenness_agent.find_betweenness_subgoals(stg_values, True)
-    betweenness_agent.create_options()
-    betweenness_agent.option_stationary_reward = -0.5
-    betweenness_agent.train_options(
-        simple_crafter,
-        1_000_000,
-        True,
-        True
-    )
-    betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
     exit()
 
     print("Betweenness Agent " + taxicab.environment_name + " training options")
