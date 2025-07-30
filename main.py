@@ -1347,10 +1347,11 @@ def merge_stg_values(
     for key in merge_from.keys():
         try:
             _ = merge_into[key]
-            for new_key in merge_into[key].keys():
-                merge_into[key][new_key] = merge_from[key][new_key]
         except KeyError:
             merge_into[key] = merge_from[key]
+            continue
+        for new_key in merge_from[key].keys():
+            merge_into[key][new_key] = merge_from[key][new_key]
     return merge_into
 
 def node_frequency_entropy(adjacency_matrix: np.matrix, node, num_hops=1,
@@ -2786,6 +2787,28 @@ if __name__ == "__main__":
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
+    betweenness_agent = BetweennessAgent(
+        simple_crafter.possible_actions,
+        0.9,
+        0.1,
+        0.1,
+        simple_crafter.state_shape,
+        simple_crafter.state_dtype,
+        state_transition_graph,
+        30
+    )
+    stg_values = betweenness_agent.find_betweenness_subgoals(stg_values, False)
+    update_graph_attributes(simple_crafter, stg_values)
+    betweenness_agent.create_options()
+    betweenness_agent.train_options(
+        simple_crafter,
+        100_000,
+        True,
+        True
+    )
+    betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    exit()
+
     print("Labeling preparedness subgoals")
     state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
         adj_matrix, state_transition_graph, stg_values, 0.5)
@@ -2821,27 +2844,6 @@ if __name__ == "__main__":
         True
     )
     eigenoptions_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
-    exit()
-
-    betweenness_agent = BetweennessAgent(
-        simple_crafter.possible_actions,
-        0.9,
-        0.1,
-        0.1,
-        simple_crafter.state_shape,
-        simple_crafter.state_dtype,
-        state_transition_graph,
-        30
-    )
-    _ = betweenness_agent.find_betweenness_subgoals(stg_values, True)
-    betweenness_agent.create_options()
-    betweenness_agent.train_options(
-        simple_crafter,
-        1_000_000,
-        True,
-        True
-    )
-    betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
     exit()
 
     data = graphing.extract_data(
