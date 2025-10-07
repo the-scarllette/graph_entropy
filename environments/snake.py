@@ -187,7 +187,7 @@ class Snake(Environment):
             self.current_state[:, index] = np.copy(next_body_location)
             next_body_location = np.copy(body_location)
 
-        reward: int = self.step_reward
+        reward: float = self.step_reward
 
         for i in range(2, index + 1):
             if np.array_equal(self.current_state[:, 0], self.current_state[:, i]):
