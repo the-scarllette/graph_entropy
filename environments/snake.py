@@ -58,7 +58,128 @@ class Snake(Environment):
             state: np.ndarray,
             probability_weights: bool = False
     ) -> (List[np.ndarray], List[float]):
-        pass
+
+        if self.is_terminal(state):
+            return [], []
+
+        successor_states: List[np.ndarray] = []
+        weights: List[float] = []
+        move_successors: List[np.ndarray] = []
+        num_successor_states: int = 0
+
+        original_next_body_location: np.ndarray = np.copy(state[:, 0])
+
+        successor_state = np.copy(state)
+        successor_state[0, 0] -= 1
+        move_successors.append(successor_state)
+        successor_state = np.copy(state)
+        successor_state[0, 0] += 1
+        move_successors.append(successor_state)
+        successor_state = np.copy(state)
+        successor_state[1, 0] += 1
+        move_successors.append(successor_state)
+        successor_state = np.copy(state)
+        successor_state[1, 0] -= 1
+        move_successors.append(successor_state)
+
+        successor_terminal: bool
+        successor_food_generated: bool
+        next_body_location: np.ndarray
+        index: int
+        weight: float = 1.0
+        for successor in move_successors:
+            successor_terminal = False
+            successor_food_generated = True
+            next_body_location = np.copy(original_next_body_location)
+
+            index = 2
+            for index in range(2, self.max_body_length + 2):
+                body_location = np.copy(successor[:, index])
+
+                if self.is_empty_coords(body_location):
+                    break
+
+                successor[:, index] = np.copy(next_body_location)
+                next_body_location = np.copy(body_location)
+
+            for i in range(2, index + 1):
+                if np.array_equal(successor[:, 0], successor[:, i]):
+                    successor_terminal = True
+
+            if np.array_equal(successor_state[:, 0], successor_state[:, 1]):
+                successor[:, index] = np.copy(next_body_location)
+
+                if index >= self.max_body_length + 1:
+                    successor_terminal = True
+                    successor[:, 1] = [-1, -1]
+                    successor_food_generated = True
+                else:
+                    successor_food_generated = False
+            elif not ((0 <= successor[0, 0] < self.height) and (0 <= successor[1, 0] < self.width)):
+                successor_terminal = True
+
+            if (not successor_terminal) and (not successor_food_generated):
+                # Generate Successors from collecting food
+                num_food_locations: int = self.max_body_length - index + 2
+                can_place_food: bool
+                true_successor: np.ndarray
+
+                for i in range(self.height):
+                    for j in range(self.width):
+                        can_place_food = True
+                        potential_food_location = np.array([i, j])
+
+                        if np.array_equal(successor[:, 0], potential_food_location):
+                            continue
+
+                        for i in range(2, index + 1):
+                            if np.array_equal(successor[:, i], potential_food_location):
+                                can_place_food = False
+                                break
+
+                        if can_place_food:
+                            true_successor = np.copy(successor)
+                            true_successor[:, 1] = np.copy(potential_food_location)
+
+                            num_successor_states += 1
+                            successor_states.append(np.copy(true_successor))
+                            if probability_weights:
+                                weight = 0.25 * (1/num_food_locations)
+                            weights.append(weight)
+
+            else:
+                num_successor_states += 1
+                successor_states.append(np.copy(successor_state))
+                if probability_weights:
+                    weight = 0.25
+                weights.append(weight)
+
+        successors_no_duplicates: List[np.ndarray] = []
+        weights_no_duplicates: List[float] = []
+        equal_indexes: List[int]
+        for i in range(num_successor_states):
+            successor = successor_states[i]
+            if successor is None:
+                continue
+
+            equal_indexes = []
+            for j in range(i + 1, num_successor_states):
+                if successor_states[j] is None:
+                    continue
+
+                if np.array_equal(successor, successor_states[j]):
+                    equal_indexes.append(j)
+                    successor_states[j] = None
+
+            successors_no_duplicates.append(np.copy(successor))
+            weight = 1.0
+            if probability_weights:
+                weight = 0.0
+                for equal_index in equal_indexes:
+                    weight += weights[equal_index]
+            weights_no_duplicates.append(weight)
+
+        return successors_no_duplicates, weights_no_duplicates
 
     def is_empty_coords(
             self,
