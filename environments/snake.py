@@ -1,0 +1,229 @@
+import numpy as np
+import random as rand
+from typing import List, Tuple
+
+from environments.environment import Environment
+
+# STATE: food coords, head coords, body coords (fill until width X height values with 0)
+
+class Snake(Environment):
+
+    EMPTY_COORDS: np.ndarray = np.array([-1, -1])
+
+    NORTH: int=0
+    SOUTH: int = 1
+    EAST: int = 2
+    WEST: int=3
+
+    possible_actions = [NORTH, SOUTH, EAST, WEST]
+
+    EMPTY_TILE: int=0
+    HEAD_TILE: int=1
+    FOOD_TILE: int=2
+    BODY_TILE: int=3
+
+    collect_food_reward: float = 1.0
+    failure_reward: float = -0.5
+    step_reward: float = 0.1
+
+    head_coords: (int, int)=(-1, -1)
+    body_coords: List[Tuple[int, int]]=[]
+    food_coords: (int, int)=(-1, -1)
+
+    def __init__(
+            self,
+            width: int,
+            height: int
+    ):
+        self.width: int = width
+        self.height: int = height
+        self.max_body_length: int = (self.height * self.width) - 1
+
+        self.environment_name: str = "snake_" + str(self.width) + "x" + str(self.height)
+
+        self.state_dtype: type=int
+        self.state_shape: (int, ) = (2, 2 + self.max_body_length)
+
+        self.current_state: None|np.ndarray = None
+        self.terminal: bool=True
+        return
+
+    def get_start_states(
+            self
+    ) -> List[np.ndarray]:
+        pass
+
+    def get_successor_states(
+            self,
+            state: np.ndarray,
+            probability_weights: bool = False
+    ) -> (List[np.ndarray], List[float]):
+        pass
+
+    def is_empty_coords(
+            self,
+            coords: np.ndarray
+    ) -> bool:
+        return np.array_equal(self.EMPTY_COORDS, coords)
+
+    def is_terminal(
+            self,
+            state: None|np.ndarray=None,
+    ) -> bool:
+        if state is None:
+            state = self.current_state
+            if state is None:
+                raise AttributeError("Must provide a state or environment must be initialised with reset method")
+
+        # Head is greater than width and height
+        head_coords = state[:, 0]
+        if not ((0 <= head_coords[0] < self.height) and (0 <= head_coords[1] < self.width)):
+            return True
+
+        # Head is same tile as body
+        maximum_length_reached: bool = True
+        for index in range(2, self.max_body_length + 2):
+            body_coords = state[:, index]
+            if self.is_empty_coords(body_coords):
+                maximum_length_reached = False
+                break
+            if np.array_equal(head_coords, body_coords):
+                return True
+
+        # nowhere else to spawn food (so entire body queue is full and food location is (-1, -1))
+        return maximum_length_reached
+
+    def print_state(
+            self,
+            state: None|np.ndarray=None
+    ):
+        if state is None:
+            if self.terminal and (self.current_state is None):
+                raise AttributeError("Either provide a state or print state while environment is not terminal.")
+            state = self.current_state
+
+        print_state: np.ndarray = np.full((self.height, self.width), self.EMPTY_TILE)
+
+        if (0 <= state[0, 0] < self.height) and (0 <= state[1, 0] < self.width):
+            print_state[state[0, 0], state[1, 0]] = self.HEAD_TILE
+
+        if not self.is_empty_coords(state[:, 1]):
+            print_state[state[0, 1], state[1, 1]] = self.FOOD_TILE
+
+        for index in range(2, self.max_body_length + 2):
+            body_coords = state[:, index]
+            if self.is_empty_coords(body_coords):
+                break
+            print_state[body_coords[0], body_coords[1]] = self.BODY_TILE
+
+        print(np.array2string(print_state))
+        return
+
+    def reset(
+            self,
+            start_state: None|np.ndarray=None,
+            seed: None|int=None
+    ) -> np.ndarray:
+        if start_state is not None:
+            self.current_state = start_state
+            self.terminal = self.is_terminal()
+            return self.current_state
+
+        self.terminal = False
+
+        if seed is not None:
+            rand.seed(seed)
+
+        self.current_state = np.full(self.state_shape, -1)
+
+        head_row = rand.randint(0, self.height - 1)
+        head_col = rand.randint(0, self.width - 1)
+        self.current_state[:, 0] = [head_row, head_col]
+
+        food_row = head_row
+        food_col = head_col
+        while (food_row == head_row) and (food_col == head_col):
+            food_row = rand.randint(0, self.height - 1)
+            food_col = rand.randint(0, self.width - 1)
+        self.current_state[:, 1] = [food_row, food_col]
+
+        return self.current_state
+
+    def step(
+            self,
+            action: int
+    ) -> (np.ndarray, float, bool, None):
+        # Move head location
+        # Move body forward
+        # check if head and food are same location:
+        #   if yes, add body length
+        # check if environment terminal
+        #   if not terminal: produce new food location
+
+        if self.terminal:
+            raise AttributeError("Environment is terminated, must be initialised with reset method")
+
+        next_body_location: np.ndarray = np.copy(self.current_state[:, 0])
+        food_generated: bool = True
+
+        if action == self.NORTH:
+            self.current_state[0, 0] -= 1
+        elif action == self.SOUTH:
+            self.current_state[0, 0] += 1
+        elif action == self.EAST:
+            self.current_state[1, 0] += 1
+        elif action == self.WEST:
+            self.current_state[1, 0] -= 1
+        else:
+            raise ValueError(f"Invalid action {action}")
+
+        index: int = 2
+        for index in range(2, self.max_body_length + 2):
+            body_location = np.copy(self.current_state[:, index])
+
+            if self.is_empty_coords(body_location):
+                break
+
+            self.current_state[:, index] = np.copy(next_body_location)
+            next_body_location = np.copy(body_location)
+
+        reward: int = self.step_reward
+
+        for i in range(2, index + 1):
+            if np.array_equal(self.current_state[:, 0], self.current_state[:, i]):
+                reward += self.failure_reward
+                self.terminal = True
+
+        if np.array_equal(self.current_state[:, 0], self.current_state[:, 1]):
+            reward += self.collect_food_reward
+            self.current_state[:, index] = np.copy(next_body_location)
+
+            if index >= self.max_body_length + 1:
+                self.terminal = True
+                self.current_state[:, 1] = [-1, -1]
+                food_generated = True
+            else:
+                food_generated = False
+        elif not ((0 <= self.current_state[0, 0] < self.height) and (0 <= self.current_state[1, 0] < self.width)):
+            self.terminal = True
+            reward += self.failure_reward
+
+        if (not self.terminal) and (not food_generated):
+            food_array: None|np.ndarray = None
+            while not food_generated:
+                food_array = np.array([rand.randint(0, self.height - 1), rand.randint(0, self.width - 1)])
+
+                if np.array_equal(food_array, self.current_state[:, 0]):
+                    continue
+
+                food_generated = True
+                for index in range(2, self.max_body_length + 2):
+                    if self.is_empty_coords(self.current_state[:, index]):
+                        break
+                    if np.array_equal(self.current_state[:, index], food_array):
+                        food_generated = False
+                        break
+
+            self.current_state[:, 1] = np.copy(food_array)
+
+        return np.copy(self.current_state), reward, self.terminal, None
