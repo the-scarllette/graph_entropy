@@ -51,7 +51,25 @@ class Snake(Environment):
     def get_start_states(
             self
     ) -> List[np.ndarray]:
-        pass
+        start_states: List[np.ndarray] = []
+        start_state: np.ndarray
+
+        for head_i in range(self.height):
+            for head_j in range(self.width):
+                start_state = np.full(self.state_shape, -1)
+
+                start_state[:, 0] = [head_i, head_j]
+
+                for food_i in range(self.height):
+                    for food_j in range(self.width):
+                        if (head_i == food_i) and (head_j == food_j):
+                            continue
+
+                        start_state[:, 1] = [food_i, food_j]
+                        start_states.append(np.copy(start_state))
+                        start_state[:, 1] = [-1, -1]
+
+        return start_states
 
     def get_successor_states(
             self,
