@@ -2775,7 +2775,7 @@ def update_graph_attributes(environment: Environment,
 if __name__ == "__main__":
     lavaflow = LavaFlow()
     simple_crafter = SimpleCrafter()
-    snake = Snake(4, 4)
+    snake = Snake(3, 3)
     tinytown = TinyTown(2, 2)
     taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72], continuous=True)
     waterbucket = WaterBucket()
@@ -2809,12 +2809,20 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # Preparedness flat - EE3377 - 8
 
-    run_episode(
-        snake
-    )
-    exit()
+    filenames = get_filenames(snake)
 
-    filenames = get_filenames(taxicab)
+    adj_matrix, stg, stg_values = snake.get_adjacency_matrix(
+        True,
+        True,
+        True,
+        progress_bar=True
+    )
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(stg, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
 
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])

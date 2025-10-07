@@ -5,7 +5,7 @@ import numpy as np
 from progressbar import print_progress_bar
 
 from scipy import sparse
-from typing import Any
+from typing import Any, Dict
 
 
 class Environment:
@@ -27,6 +27,7 @@ class Environment:
     def get_adjacency_matrix(self, directed=True, probability_weights=False,
                              compressed_matrix=False,
                              symmetry_functions=[],
+                             get_state_features: bool=False,
                              progress_bar=False):
         connected_states = {}
         state_indexes = {}
@@ -147,11 +148,19 @@ class Environment:
         else:
             state_transition_graph = nx.from_numpy_array(adj_matrix, create_using=nx.MultiDiGraph)
 
-        stg_values = {str(node) : {'state': np.array2string(all_states[node])}
-                      for node in range(adj_matrix.shape[0])}
+        if not get_state_features:
+            stg_values = {node : {'state': np.array2string(all_states[node])}
+                          for node in range(adj_matrix.shape[0])}
+        else:
+            stg_values = {node: self.get_state_features(all_states[node])
+                          for node in range(adj_matrix.shape[0])}
         nx.set_node_attributes(state_transition_graph, stg_values)
+        new_stg_values = {
+            str(node) : stg_values[node]
+            for node in range(adj_matrix.shape[0])
+        }
 
-        return adj_matrix, state_transition_graph, stg_values
+        return adj_matrix, state_transition_graph, new_stg_values
 
     def get_current_state(self):
         return None
@@ -161,6 +170,12 @@ class Environment:
 
     def get_possible_actions(self, state):
         return self.possible_actions
+
+    def get_state_features(
+            self,
+            state: np.ndarray
+    ) -> Dict[str, str]:
+        return {'state': np.array2string(state)}
 
     def get_transition_probability(self, state, action, next_state):
         return 1.0

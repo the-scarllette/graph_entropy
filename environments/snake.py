@@ -135,6 +135,8 @@ class Snake(Environment):
                     successor_food_generated = False
             elif not ((0 <= successor[0, 0] < self.height) and (0 <= successor[1, 0] < self.width)):
                 successor_terminal = True
+                successor[:, 0] = [-1, -1]
+                successor[:, 1] = [-1, -1]
 
             if (not successor_terminal) and (not successor_food_generated):
                 # Generate Successors from collecting food
@@ -192,7 +194,7 @@ class Snake(Environment):
             successors_no_duplicates.append(np.copy(successor))
             weight = 1.0
             if probability_weights:
-                weight = 0.0
+                weight = weights[i]
                 for equal_index in equal_indexes:
                     weight += weights[equal_index]
             weights_no_duplicates.append(weight)
@@ -216,7 +218,10 @@ class Snake(Environment):
 
         # Head is greater than width and height
         head_coords = state[:, 0]
-        if not ((0 <= head_coords[0] < self.height) and (0 <= head_coords[1] < self.width)):
+        if (
+                (not ((0 <= head_coords[0] < self.height) and (0 <= head_coords[1] < self.width))) or
+                self.is_empty_coords(head_coords)
+        ):
             return True
 
         # Head is same tile as body
@@ -345,6 +350,8 @@ class Snake(Environment):
                 food_generated = False
         elif not ((0 <= self.current_state[0, 0] < self.height) and (0 <= self.current_state[1, 0] < self.width)):
             self.terminal = True
+            self.current_state[:, 0] = [-1, -1]
+            self.current_state[:, 1] = [-1, -1]
             reward += self.failure_reward
 
         if (not self.terminal) and (not food_generated):
