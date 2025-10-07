@@ -2775,7 +2775,7 @@ def update_graph_attributes(environment: Environment,
 if __name__ == "__main__":
     lavaflow = LavaFlow()
     simple_crafter = SimpleCrafter()
-    snake = Snake(3, 3)
+    snake = Snake(4, 4)
     tinytown = TinyTown(2, 2)
     taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72], continuous=True)
     waterbucket = WaterBucket()
@@ -2815,7 +2815,8 @@ if __name__ == "__main__":
         True,
         True,
         True,
-        progress_bar=True
+        progress_bar=True,
+        get_state_features=True
     )
 
     sparse.save_npz(filenames['adjacency matrix'], adj_matrix)

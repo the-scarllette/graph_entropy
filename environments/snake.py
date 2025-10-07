@@ -1,6 +1,6 @@
 import numpy as np
 import random as rand
-from typing import List, Tuple
+from typing import Dict,List, Tuple
 
 from environments.environment import Environment
 
@@ -70,6 +70,30 @@ class Snake(Environment):
                         start_state[:, 1] = [-1, -1]
 
         return start_states
+
+    def get_state_features(
+            self,
+            state: np.ndarray
+    ) -> Dict[str, str]:
+        state_features: Dict[str, str] = {
+            'state': np.array2string(state),
+            'head y': str(state[0, 0]),
+            'head x': str(state[1, 0]),
+            'food y': str(state[0, 1]),
+            'food x': str(state[1, 1]),
+            'head coords': str((state[0, 0], state[1, 0])),
+            'food coords': str((state[0, 1], state[1, 1]))
+        }
+
+        body_length: int = 0
+        for i in range(2, self.max_body_length + 2):
+            if self.is_empty_coords(state[:, i]):
+                break
+            body_length += 1
+
+        state_features['body length'] = str(body_length)
+
+        return state_features
 
     def get_successor_states(
             self,
