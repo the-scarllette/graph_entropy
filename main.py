@@ -1242,13 +1242,17 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
     return
 
 
-def label_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
-                   stg_values: Dict[str, Dict[str, float|str]], value_key: str,
-                   value_key_suffix: str="",
-                   min_level: None|int=None, max_level: None|int=None,
-                   min_subgoals: bool=False,
-                   growing_neighbourhood: bool=True
-                   ) -> Tuple[nx.MultiDiGraph, Dict[str, Dict[str, float|str]], Dict[int, List[str]]]:
+def label_subgoals(
+        adj_matrix: sparse.csr_matrix,
+        stg: nx.MultiDiGraph,
+        stg_values: Dict[str, Dict[str, float|str]],
+        value_key: str,
+        value_key_suffix: str="",
+        min_level: None|int=None,
+        max_level: None|int=None,
+        min_subgoals: bool=False,
+        growing_neighbourhood: bool=True
+) -> Tuple[nx.MultiDiGraph, Dict[str, Dict[str, float|str]], Dict[int, List[str]]]:
     subgoal_level_key = value_key + " subgoal level"
     subgoal_found = False
     key_end = " - local maxima"
@@ -1285,6 +1289,13 @@ def label_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
             except KeyError:
                 max_level_found = True
 
+    distance_matrix = sparse.csgraph.dijkstra(
+        adj_matrix,
+        True,
+        unweighted=True,
+        limit=max_level
+    )
+
     subgoals = {level: [] for level in range(min_level, max_level + 1)}
     for level in range(min_level, max_level + 1):
         key = get_value_key(level)
@@ -1292,28 +1303,32 @@ def label_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
 
         for node in stg_values:
             is_subgoal_str = 'True'
-            distance_matrix = sparse.csgraph.dijkstra(adj_matrix, True, indices=int(node),
-                                                      unweighted=True)
 
             neighbourhood_range = 1
             if growing_neighbourhood:
                 neighbourhood_range = level
-            in_neighbours = np.where((distance_matrix <= neighbourhood_range) &
-                                     (0 < distance_matrix))[0]
+            out_neighbours = np.array(
+                [int(j) for j in stg_values if 0 < distance_matrix[int(node), int(j)] <= neighbourhood_range]
+            )
 
-            if in_neighbours.size <= 0:
+            if out_neighbours.size <= 0:
                 is_subgoal_str = 'False'
             else:
-                out_neighbours = np.where(distance_matrix <= neighbourhood_range)[0]
-                value = float(stg_values[node][key])
-                for neighbour in np.append(out_neighbours, in_neighbours):
-                    neighbour_str = str(neighbour)
-                    if neighbour_str == node:
-                        continue
-                    neighbour_value = float(stg_values[neighbour_str][key])
-                    if comparison(neighbour_value, value):
-                        is_subgoal_str = 'False'
-                        break
+                in_neighbours = np.array(
+                    [int(j) for j in stg_values if 0 < distance_matrix[int(j), int(node)] <= neighbourhood_range]
+                )
+                if out_neighbours.size <= 0:
+                    is_subgoal_str = 'False'
+                else:
+                    value = float(stg_values[node][key])
+                    for neighbour in np.append(out_neighbours, in_neighbours):
+                        neighbour_str = str(neighbour)
+                        if neighbour_str == node:
+                            continue
+                        neighbour_value = float(stg_values[neighbour_str][key])
+                        if comparison(neighbour_value, value):
+                            is_subgoal_str = 'False'
+                            break
 
             stg_values[node][subgoal_key] = is_subgoal_str
 
@@ -1354,7 +1369,15 @@ def label_preparedness_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGr
                                 min_subgoals: bool=False
                                 ) -> Tuple[nx.MultiDiGraph, Dict[str, float|str], Dict[int, List[str]]]:
     return label_subgoals(
-        adj_matrix, stg, stg_values, "preparedness", " - beta = " + str(beta), min_level, max_level, min_subgoals
+        adj_matrix,
+        stg,
+        stg_values,
+        "preparedness",
+        " - beta = " + str(beta),
+        min_level,
+        max_level,
+        min_subgoals,
+        True
     )
 
 
@@ -2775,14 +2798,14 @@ def update_graph_attributes(environment: Environment,
 if __name__ == "__main__":
     lavaflow = LavaFlow()
     simple_crafter = SimpleCrafter()
-    snake = Snake(4, 4)
+    snake = Snake(3, 3)
     tinytown = TinyTown(2, 2)
     taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72], continuous=True)
     waterbucket = WaterBucket()
 
     option_discovery_method = 'replace'
     option_onboarding = 'specific'
-    # Taxicab=25, tinytown2x2=25, tinytown2x3=50, lavaflow=50
+    # lavaflow=50, snake=50, Taxicab=25, tinytown2x2=25, tinytown2x3=50
     graphing_window = 50
     evaluate_policy_window = 10
     hops = 5
@@ -2794,8 +2817,8 @@ if __name__ == "__main__":
     # simple_crafter: 1_000_000, tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 100_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
-    # lavaflow_room=50_000, lavaflow_pipes=50_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 500_000
+    # lavaflow_room=50_000, lavaflow_pipes=50_000, snake=200_000 taxicab=50_000, taxicab_classic=100_000
+    training_timesteps = 200_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
     behaviour_window = 500
 
@@ -2811,7 +2834,42 @@ if __name__ == "__main__":
 
     filenames = get_filenames(snake)
 
-    adj_matrix, stg, stg_values = snake.get_adjacency_matrix(
+    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    stg_values = preparedness_efficient(
+        adj_matrix,
+        0.5,
+        max_num_hops=4,
+        compressed_matrix=True,
+        progress_bar=True,
+        existing_stg_values=stg_values,
+    )
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+
+    nx.set_node_attributes(state_transition_graph, stg_values)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
+        adj_matrix,
+        state_transition_graph,
+        stg_values,
+    )
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+
+    nx.set_node_attributes(state_transition_graph, stg_values)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+    adj_matrix, state_transition_graph, stg_values = snake.get_adjacency_matrix(
         True,
         True,
         True,
@@ -2819,27 +2877,72 @@ if __name__ == "__main__":
         get_state_features=True
     )
 
+    print("Num Nodes: " + str(adj_matrix.shape[0]))
+
+    nx.set_node_attributes(state_transition_graph, stg_values)
+
     sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
-    nx.write_gexf(stg, filenames['state transition graph'])
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
     exit()
 
-    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
+    print("Preparedness Subgoals Snake")
 
-    print_subgoals(stg_values, 'frequency entropy  - 1 hops - local minima')
+    data = graphing.extract_data(
+        filenames['results'],
+        [
+            # 'preparedness_agent_returns_none_onboarding.json',
+            # 'preparedness_agent_returns_generic_onboarding.json',
+            # 'preparedness_agent_returns_specific_onboarding.json',
+            # 'eigenoptions_epoch_returns.json',
+            # 'louvain agent returns',
+            # 'betweenness_epoch_returns.json',
+            # 'preparedness_flat_epoch_returns.json',
+            'q_learning_epoch_returns.json'
+        ]
+    )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='Snake',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        colours=[
+            # '#332288',
+            # '#117733',
+            # '#88CCEE',
+            # '#DDCC77',
+            # '#CC6677',
+            # '#AA4499',
+            '#555555'
+        ],
+        labels=[
+            # 'Preparedness',
+            # 'Flat Preparedness',
+            'Primitives'
+        ]
+    )
     exit()
 
-    state_transition_graph, stg_values, preparedness_subgoals = label_subgoals(
-        adj_matrix, state_transition_graph, stg_values, 'frequency entropy ', min_level=1, max_level=4, min_subgoals=True, growing_neighbourhood=False
+    train_q_learning_agent(
+        snake,
+        training_timesteps,
+        5,
+        continue_training=False,
+        progress_bar=True,
+        overwrite_existing_agents=True,
+        all_actions_valid=True,
+        total_eval_steps=total_evaluation_steps
     )
+    exit()
 
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'w') as f:
-        json.dump(stg_values, f)
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
+        adj_matrix, state_transition_graph, stg_values, 0.5)
+
+    print_subgoals(stg_values, 'frequency entropy  - 1 hops - local minima')
     exit()
 
     betweenness_agent = BetweennessAgent(
@@ -2854,8 +2957,6 @@ if __name__ == "__main__":
     )
     stg_values = betweenness_agent.find_betweenness_subgoals(stg_values, False)
 
-    nx.set_node_attributes(state_transition_graph, stg_values)
-
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     with open('example_stg_values.json', 'w') as f:
         json.dump(stg_values, f)
@@ -2864,87 +2965,6 @@ if __name__ == "__main__":
     exit()
 
     filenames_tinytown = get_filenames(lavaflow)
-    data = graphing.extract_data(
-        filenames_tinytown['results'],
-        [
-            'preparedness_agent_returns_none_onboarding.json',
-            #'preparedness_agent_returns_generic_onboarding.json',
-            #'preparedness_agent_returns_specific_onboarding.json',
-            #'eigenoptions_epoch_returns.json',
-            #'louvain agent returns',
-            #'betweenness_epoch_returns.json',
-            'preparedness_flat_epoch_returns.json',
-            'q_learning_epoch_returns.json'
-        ]
-    )
-    graphing.graph_reward_per_epoch(
-        data,
-        graphing_window,
-        evaluate_policy_window,
-        name='Lavaflow',
-        x_label='Timesteps',
-        y_label='Average Epoch Return',
-        error_bars=True,
-        colours=['#332288',
-                 #'#117733',
-                 #'#88CCEE',
-                 #'#DDCC77',
-                 '#CC6677',
-                 #'#AA4499',
-                 '#555555'
-                 ],
-        labels=[
-            'Preparedness',
-            'Flat Preparedness',
-            'Primitives'
-        ]
-    )
-    exit()
-
-    example_adj_matrix = np.array(
-        [
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1/2, 0, 0, 1/2, 0, 0, 0, 0, 0, 0],
-            [1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1/3, 1/3, 1/3, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 1/3, 1/3, 0, 0, 1/3],
-            [0, 0, 0, 0, 1/2, 0, 0, 1/2, 0, 0],
-            [0, 0, 0, 0, 1/2, 0, 0, 1/2, 0, 0],
-            [0, 0, 0, 0, 0, 1/2, 1/2, 0, 0, 0],
-            [0, 1/2, 0, 0, 0, 0, 1/2, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, 1, 0]
-        ]
-    )
-
-    example_stg = nx.from_numpy_array(example_adj_matrix, create_using=nx.MultiDiGraph)
-
-    nx.write_gexf(example_stg, 'example_stg.gexf')
-
-    example_adj_matrix = sparse.csr_matrix(example_adj_matrix)
-    sparse.save_npz('example_adj_matrix.npz', example_adj_matrix)
-
-    stg_values = preparedness_efficient(
-        example_adj_matrix,
-        0.5,
-        max_num_hops=5,
-        compressed_matrix=True,
-        progress_bar=True
-    )
-
-    state_transition_graph = nx.read_gexf('example_stg.gexf')
-
-    adj_matrix, state_transition_graph, stg_values = waterbucket.get_adjacency_matrix(
-        True,
-        True,
-        True,
-        progress_bar=True
-    )
-
-    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
-    exit()
 
     stg_values = preparedness_efficient(
         adj_matrix,
@@ -2963,11 +2983,6 @@ if __name__ == "__main__":
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
     exit()
-
-    print("Labeling preparedness subgoals")
-    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
-        adj_matrix, state_transition_graph, stg_values, 0.5)
-    update_graph_attributes(simple_crafter, stg_values)
 
     print("Creating preparedness subgoal graph")
     state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
@@ -3065,18 +3080,6 @@ if __name__ == "__main__":
             # '#EE3377',
             '#555555'
         ]
-    )
-    exit()
-
-    train_q_learning_agent(
-        simple_crafter,
-        training_timesteps,
-        5,
-        continue_training=False,
-        progress_bar=True,
-        overwrite_existing_agents=True,
-        all_actions_valid=True,
-        total_eval_steps=total_evaluation_steps
     )
     exit()
 

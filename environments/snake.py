@@ -129,38 +129,40 @@ class Snake(Environment):
         next_body_location: np.ndarray
         index: int
         weight: float = 1.0
-        for successor in move_successors:
+        for successor_state in move_successors:
             successor_terminal = False
             successor_food_generated = True
             next_body_location = np.copy(original_next_body_location)
 
-            index = 2
+            body_length: int = 1
             for index in range(2, self.max_body_length + 2):
-                body_location = np.copy(successor[:, index])
+                body_location = np.copy(successor_state[:, index])
 
                 if self.is_empty_coords(body_location):
                     break
 
-                successor[:, index] = np.copy(next_body_location)
+                body_length += 1
+
+                successor_state[:, index] = np.copy(next_body_location)
                 next_body_location = np.copy(body_location)
 
-            for i in range(2, index + 1):
-                if np.array_equal(successor[:, 0], successor[:, i]):
+            for i in range(2, 2 + body_length):
+                if np.array_equal(successor_state[:, 0], successor_state[:, i]):
                     successor_terminal = True
 
             if np.array_equal(successor_state[:, 0], successor_state[:, 1]):
-                successor[:, index] = np.copy(next_body_location)
+                successor_state[:, index] = np.copy(next_body_location)
 
                 if index >= self.max_body_length + 1:
                     successor_terminal = True
-                    successor[:, 1] = [-1, -1]
+                    successor_state[:, 1] = [-1, -1]
                     successor_food_generated = True
                 else:
                     successor_food_generated = False
-            elif not ((0 <= successor[0, 0] < self.height) and (0 <= successor[1, 0] < self.width)):
+            elif not ((0 <= successor_state[0, 0] < self.height) and (0 <= successor_state[1, 0] < self.width)):
                 successor_terminal = True
-                successor[:, 0] = [-1, -1]
-                successor[:, 1] = [-1, -1]
+                successor_state[:, 0] = [-1, -1]
+                successor_state[:, 1] = [-1, -1]
 
             if (not successor_terminal) and (not successor_food_generated):
                 # Generate Successors from collecting food
@@ -173,16 +175,16 @@ class Snake(Environment):
                         can_place_food = True
                         potential_food_location = np.array([i, j])
 
-                        if np.array_equal(successor[:, 0], potential_food_location):
+                        if np.array_equal(successor_state[:, 0], potential_food_location):
                             continue
 
-                        for i in range(2, index + 1):
-                            if np.array_equal(successor[:, i], potential_food_location):
+                        for body_index in range(2, 2 + body_length):
+                            if np.array_equal(successor_state[:, body_index], potential_food_location):
                                 can_place_food = False
                                 break
 
                         if can_place_food:
-                            true_successor = np.copy(successor)
+                            true_successor = np.copy(successor_state)
                             true_successor[:, 1] = np.copy(potential_food_location)
 
                             num_successor_states += 1
@@ -202,8 +204,8 @@ class Snake(Environment):
         weights_no_duplicates: List[float] = []
         equal_indexes: List[int]
         for i in range(num_successor_states):
-            successor = successor_states[i]
-            if successor is None:
+            successor_state = successor_states[i]
+            if successor_state is None:
                 continue
 
             equal_indexes = []
@@ -211,11 +213,11 @@ class Snake(Environment):
                 if successor_states[j] is None:
                     continue
 
-                if np.array_equal(successor, successor_states[j]):
+                if np.array_equal(successor_state, successor_states[j]):
                     equal_indexes.append(j)
                     successor_states[j] = None
 
-            successors_no_duplicates.append(np.copy(successor))
+            successors_no_duplicates.append(np.copy(successor_state))
             weight = 1.0
             if probability_weights:
                 weight = weights[i]
@@ -345,19 +347,21 @@ class Snake(Environment):
         else:
             raise ValueError(f"Invalid action {action}")
 
-        index: int = 2
+        body_length: int = 1
         for index in range(2, self.max_body_length + 2):
             body_location = np.copy(self.current_state[:, index])
 
             if self.is_empty_coords(body_location):
                 break
 
+            body_length += 1
+
             self.current_state[:, index] = np.copy(next_body_location)
             next_body_location = np.copy(body_location)
 
         reward: float = self.step_reward
 
-        for i in range(2, index + 1):
+        for i in range(2, body_length + 2):
             if np.array_equal(self.current_state[:, 0], self.current_state[:, i]):
                 reward += self.failure_reward
                 self.terminal = True

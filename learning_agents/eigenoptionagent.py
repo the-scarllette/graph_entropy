@@ -4,7 +4,7 @@ import networkx as nx
 import os
 import random
 from scipy import sparse
-from typing import Callable, List, Tuple, Type
+from typing import Callable, Dict, List, Tuple, Type
 
 from environments.environment import Environment
 from learning_agents.optionsagent import Option, OptionsAgent
@@ -31,12 +31,15 @@ class EigenOption(Option):
     def __init__(
             self,
             actions: List[int],
-            eigenvector: np.ndarray,
+            pvf: np.ndarray,
             eigenvector_index: int,
             terminate_action: int,
-            alpha: float=0.9, epsilon: float=0.1, gamma: float=0.9):
+            alpha: float=0.9,
+            epsilon: float=0.1,
+            gamma: float=0.9
+    ):
         self.actions = None
-        self.eigenvector = eigenvector
+        self.pvf = pvf
         self.eigenvector_index = eigenvector_index
         self.terminate_action = terminate_action
         self.possible_actions = actions + [self.terminate_action]
@@ -46,12 +49,23 @@ class EigenOption(Option):
 
 class EigenOptionAgent(OptionsAgent):
 
-    def __init__(self, adjacency_matrix: sparse.csr_matrix,
-                 state_transition_graph: nx.MultiDiGraph,
-                 alpha: float, epsilon: float, gamma: float, actions: List[int], state_dtype: Type, state_shape: Tuple[int, int],
-                 num_options: int=64):
+    def __init__(
+            self,
+            adjacency_matrix: sparse.csr_matrix,
+            state_transition_graph: nx.MultiDiGraph,
+            alpha: float,
+            epsilon: float,
+            gamma: float,
+            actions: List[int],
+            state_dtype: Type,
+            state_shape: Tuple[int, int],
+            num_options: int=64
+    ):
         self.adjacency_matrix = adjacency_matrix
         self.adjacency_matrix[adjacency_matrix.nonzero()] = 1.0
+
+        self.proto_value_functions = None
+        self.negative_proto_value_functions = None
 
         self.num_states = self.adjacency_matrix.shape[0]
         self.state_transition_graph = state_transition_graph
@@ -122,24 +136,78 @@ class EigenOptionAgent(OptionsAgent):
 
         return num_available_skills
 
-    def find_options(self):
-        laplacian = nx.normalized_laplacian_matrix(self.state_transition_graph.to_undirected())
-        _, eigenvectors = sparse.linalg.eigsh(laplacian, self.num_options, which='SM')
+    def find_options(
+            self,
+            num_options: None | int = None,
+            find_pvfs: bool=True,
+            existing_stg_values: None | Dict[str, Dict[str, str | float]] = None,
+    ) -> None | Tuple[nx.MultiDiGraph, Dict[str, Dict[str, str|float]]]:
+        if num_options is None:
+            num_options = self.num_options
 
-        for i in range(self.num_options):
-            eigenvector = np.real(eigenvectors[:, i])
-            option = EigenOption(
-                self.actions,
-                eigenvector,
-                i,
-                self.terminate_action
-            )
-            self.options.append(option)
+        if find_pvfs or (self.proto_value_functions is None):
+            if existing_stg_values is None:
+                self.find_pvfs(num_pvfs=num_options)
+            else:
+                state_transition_graph, existing_stg_values = self.find_pvfs(
+                    existing_stg_values,
+                    num_options
+                )
+
+        self.options = []
+
         for action in self.actions:
             option = Option([action])
             self.options.append(option)
+        for i in range(num_options):
+            self.options.append(
+                EigenOption(
+                    self.actions,
+                    self.proto_value_functions[:, i],
+                    i,
+                    self.terminate_action,
+                    self.alpha,
+                    self.epsilon,
+                    self.gamma
+                )
+            )
 
-        return
+        if existing_stg_values is None:
+            return
+        return state_transition_graph, existing_stg_values
+
+    def find_pvfs(
+            self,
+            existing_stg_values: None|Dict[str, Dict[str, str|float]]=None,
+            num_pvfs: None|int=None
+    ) -> None|Tuple[nx.MultiDiGraph, Dict[str, Dict[str, str|float]]]:
+        if num_pvfs is None:
+            num_pvfs = self.num_options
+
+        laplacian = nx.normalized_laplacian_matrix(self.state_transition_graph)
+
+        eigenvalues, eigenvectors = sparse.linalg.eigh(
+            laplacian, num_pvfs, which='SR'
+        )
+
+        self.proto_value_functions = eigenvectors
+        self.negative_proto_value_functions = -1 * eigenvectors
+
+        if existing_stg_values is None:
+            return
+
+        for i in range(num_pvfs):
+            pvf_key = "PVF " + str(i)
+            negative_pvf_key = "Negative PVF " + str(i)
+
+            pvf = eigenvectors[:, i]
+            for node in existing_stg_values:
+                existing_stg_values[node][pvf_key] = pvf[int(node)]
+                existing_stg_values[node][negative_pvf_key] = -pvf[int(node)]
+
+        nx.set_node_attributes(self.state_transition_graph, existing_stg_values)
+
+        return self.state_transition_graph, existing_stg_values
 
     def get_available_options(self, state: np.ndarray, possible_actions: None | List[int]=None) -> List[str]:
         available_options = [str(i) for i in range(self.num_options)]
@@ -256,8 +324,14 @@ class EigenOptionAgent(OptionsAgent):
         self.total_option_reward = 0
         return
 
-    def train_option(self, environment: Environment, option: EigenOption, training_steps: int,
-                     all_actions_valid: bool=False, progress_bar: bool=False):
+    def train_option(
+            self,
+            environment: Environment,
+            option: EigenOption,
+            training_steps: int,
+            all_actions_valid: bool=False,
+            progress_bar: bool=False
+    ):
         terminal = True
         possible_actions = environment.possible_actions
 
