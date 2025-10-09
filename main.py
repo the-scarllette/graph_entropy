@@ -2834,6 +2834,44 @@ if __name__ == "__main__":
 
     filenames = get_filenames(snake)
 
+    data = graphing.extract_data(
+        filenames['results'],
+        [
+            # 'preparedness_agent_returns_none_onboarding.json',
+            # 'preparedness_agent_returns_generic_onboarding.json',
+            # 'preparedness_agent_returns_specific_onboarding.json',
+            # 'eigenoptions_epoch_returns.json',
+            # 'louvain agent returns',
+            # 'betweenness_epoch_returns.json',
+            # 'preparedness_flat_epoch_returns.json',
+            'q_learning_epoch_returns.json'
+        ]
+    )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='Snake',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        colours=[
+            # '#332288',
+            # '#117733',
+            # '#88CCEE',
+            # '#DDCC77',
+            # '#CC6677',
+            # '#AA4499',
+            '#555555'
+        ],
+        labels=[
+            # 'Preparedness',
+            # 'Flat Preparedness',
+            'Primitives'
+        ]
+    )
+    exit()
+
     adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     with open(filenames['state transition graph values'], 'r') as f:
@@ -2897,44 +2935,6 @@ if __name__ == "__main__":
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
-    exit()
-
-    data = graphing.extract_data(
-        filenames['results'],
-        [
-            # 'preparedness_agent_returns_none_onboarding.json',
-            # 'preparedness_agent_returns_generic_onboarding.json',
-            # 'preparedness_agent_returns_specific_onboarding.json',
-            # 'eigenoptions_epoch_returns.json',
-            # 'louvain agent returns',
-            # 'betweenness_epoch_returns.json',
-            # 'preparedness_flat_epoch_returns.json',
-            'q_learning_epoch_returns.json'
-        ]
-    )
-    graphing.graph_reward_per_epoch(
-        data,
-        graphing_window,
-        evaluate_policy_window,
-        name='Snake',
-        x_label='Timesteps',
-        y_label='Average Epoch Return',
-        error_bars=True,
-        colours=[
-            # '#332288',
-            # '#117733',
-            # '#88CCEE',
-            # '#DDCC77',
-            # '#CC6677',
-            # '#AA4499',
-            '#555555'
-        ],
-        labels=[
-            # 'Preparedness',
-            # 'Flat Preparedness',
-            'Primitives'
-        ]
-    )
     exit()
 
     print("Preparedness Subgoals Snake")

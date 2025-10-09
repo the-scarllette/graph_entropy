@@ -1,5 +1,6 @@
 import json
 import numpy as np
+import math
 import networkx as nx
 import os
 import random
@@ -31,7 +32,7 @@ class EigenOption(Option):
     def __init__(
             self,
             actions: List[int],
-            pvf: np.ndarray,
+            pvf: Dict[str, float],
             eigenvector_index: int,
             terminate_action: int,
             alpha: float=0.9,
@@ -46,6 +47,30 @@ class EigenOption(Option):
 
         self.policy = QLearningAgent(self.possible_actions, alpha, epsilon, gamma)
         return
+
+    def intrinsic_reward(
+            self,
+            state_str: str,
+            next_state_str: str,
+    ) -> float:
+        reward = self.pvf[next_state_str] - self.pvf[state_str]
+
+        if math.isclose(reward, 0, abs_tol=1e-5):
+            return 0.0
+
+        return reward
+
+    def initiated(
+            self,
+            state: np.ndarray
+    ) -> bool:
+        return True
+
+    def terminated(
+            self,
+            state: np.ndarray
+    ) -> bool:
+        return False
 
 class EigenOptionAgent(OptionsAgent):
 
@@ -102,8 +127,12 @@ class EigenOptionAgent(OptionsAgent):
 
         return
 
-    def choose_action(self, state: np.ndarray, optimal_choice: bool=False,
-                      possible_actions: None | List[int]=None) -> int:
+    def choose_action(
+            self,
+            state: np.ndarray,
+            optimal_choice: bool=False,
+            possible_actions: None | List[int]=None
+    ) -> int:
         if self.options is None:
             raise AttributeError("Options have not been found yet, run the 'find options' method first")
 
@@ -126,15 +155,6 @@ class EigenOptionAgent(OptionsAgent):
         self.current_option = None
         self.current_option_index = None
         return
-
-    def count_available_skills(self, state: np.ndarray, possible_actions: None|List[int]=None) -> int:
-        num_available_skills = 0
-
-        for i in range(self.num_options):
-            if self.options[i].initiated(state):
-                num_available_skills += 1
-
-        return num_available_skills
 
     def find_options(
             self,
@@ -163,7 +183,7 @@ class EigenOptionAgent(OptionsAgent):
             self.options.append(
                 EigenOption(
                     self.actions,
-                    self.proto_value_functions[:, i],
+                    self.proto_value_functions[i],
                     i,
                     self.terminate_action,
                     self.alpha,
@@ -212,14 +232,17 @@ class EigenOptionAgent(OptionsAgent):
         return self.state_transition_graph, existing_stg_values
 
     def get_available_options(self, state: np.ndarray, possible_actions: None | List[int]=None) -> List[str]:
-        available_options = [str(i) for i in range(self.num_options)]
-
         if possible_actions is None:
-            available_options += [str(i) for i in range(self.num_options, len(self.options))]
-            return available_options
+            return [str(i) for i in range(len(self.options))]
 
-        available_options += [str(i) for i in range(self.num_options, len(self.options))
-                              if self.options[i].actions[0] in possible_actions]
+        available_options: List[str] = []
+        for i in range(len(self.options)):
+            option = self.options[i]
+            if not option.has_policy:
+                if option.actions[0] in possible_actions:
+                    available_options.append(str(i))
+            else:
+                available_options.append(str(i))
         
         return available_options
 
@@ -339,37 +362,37 @@ class EigenOptionAgent(OptionsAgent):
 
         for total_steps in range(training_steps):
             if progress_bar:
-                print_progress_bar(total_steps, training_steps,
-                                   prefix='Eigenoption Training: ', suffix='Complete')
+                print_progress_bar(
+                    total_steps,
+                    training_steps,
+                    prefix='Eigenoption Training: ',
+                    suffix='Complete'
+                )
 
             if terminal:
                 state_found = False
                 while not state_found:
-                    state = self.node_to_state(str(random.randint(0, self.num_states)))
+                    state = self.node_to_state(str(random.randint(0, self.num_states - 1)))
                     state_found = not environment.is_terminal(state)
                 state = environment.reset(state)
-                state_index = self.get_state_index(state)
                 if not all_actions_valid:
                     possible_actions = environment.get_possible_actions()
 
             action = option.policy.choose_action(state, False, possible_actions=possible_actions)
 
             if action == self.terminate_action:
-                next_state = state.copy()
-                next_state_index = state_index
+                next_state = np.copy(state)
                 terminal = True
                 reward = 0.0
             else:
                 next_state, _, terminal, _ = environment.step(action)
-                next_state_index = self.get_state_index(next_state)
-                reward = option.eigenvector[next_state_index] - option.eigenvector[state_index]
+                reward = option.intrinsic_reward(self.state_to_state_str(state), self.state_to_state_str(next_state))
 
             if not all_actions_valid:
                 possible_actions = environment.get_possible_actions()
             option.policy.learn(state, action, reward, next_state, terminal, possible_actions)
 
             state = next_state
-            state_index = next_state_index
 
         return
 
