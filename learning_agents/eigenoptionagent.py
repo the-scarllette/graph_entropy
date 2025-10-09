@@ -190,8 +190,8 @@ class EigenOptionAgent(OptionsAgent):
             laplacian, num_pvfs, which='SR'
         )
 
-        self.proto_value_functions = eigenvectors
-        self.negative_proto_value_functions = -1 * eigenvectors
+        self.proto_value_functions = {i: {} for i in range(num_pvfs)}
+        self.negative_proto_value_functions = {i: {} for i in range(num_pvfs)}
 
         if existing_stg_values is None:
             return
@@ -204,6 +204,8 @@ class EigenOptionAgent(OptionsAgent):
             for node in existing_stg_values:
                 existing_stg_values[node][pvf_key] = pvf[int(node)]
                 existing_stg_values[node][negative_pvf_key] = -pvf[int(node)]
+                self.proto_value_functions[i][existing_stg_values[node]['state']] = pvf[int(node)]
+                self.negative_proto_value_functions[i][existing_stg_values[node]['state']] = pvf[int(node)]
 
         nx.set_node_attributes(self.state_transition_graph, existing_stg_values)
 

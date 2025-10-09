@@ -2798,7 +2798,7 @@ def update_graph_attributes(environment: Environment,
 if __name__ == "__main__":
     lavaflow = LavaFlow()
     simple_crafter = SimpleCrafter()
-    snake = Snake(3, 3)
+    snake = Snake(3, 4)
     tinytown = TinyTown(2, 2)
     taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72], continuous=True)
     waterbucket = WaterBucket()
@@ -2812,13 +2812,13 @@ if __name__ == "__main__":
     min_num_hops = 1
     max_num_hops = 4
     num_agents = 5
-    # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, simple_crafter=50, taxicab_classic=25
+    # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, simple_crafter=50, taxicab_classic=25, snake=50
     total_evaluation_steps = 50
     # simple_crafter: 1_000_000, tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 100_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     # lavaflow_room=50_000, lavaflow_pipes=50_000, snake=200_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 200_000
+    training_timesteps = 100_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
     behaviour_window = 500
 
@@ -2861,12 +2861,24 @@ if __name__ == "__main__":
         stg_values,
     )
 
-    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
-
     nx.set_node_attributes(state_transition_graph, stg_values)
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
+    exit()
+
+    train_q_learning_agent(
+        snake,
+        training_timesteps,
+        5,
+        continue_training=False,
+        progress_bar=True,
+        overwrite_existing_agents=True,
+        all_actions_valid=True,
+        total_eval_steps=total_evaluation_steps
+    )
     exit()
 
     adj_matrix, state_transition_graph, stg_values = snake.get_adjacency_matrix(
@@ -2879,15 +2891,13 @@ if __name__ == "__main__":
 
     print("Num Nodes: " + str(adj_matrix.shape[0]))
 
-    nx.set_node_attributes(state_transition_graph, stg_values)
-
     sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+
+    nx.set_node_attributes(state_transition_graph, stg_values)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
     exit()
-
-    print("Preparedness Subgoals Snake")
 
     data = graphing.extract_data(
         filenames['results'],
@@ -2927,17 +2937,7 @@ if __name__ == "__main__":
     )
     exit()
 
-    train_q_learning_agent(
-        snake,
-        training_timesteps,
-        5,
-        continue_training=False,
-        progress_bar=True,
-        overwrite_existing_agents=True,
-        all_actions_valid=True,
-        total_eval_steps=total_evaluation_steps
-    )
-    exit()
+    print("Preparedness Subgoals Snake")
 
     state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
         adj_matrix, state_transition_graph, stg_values, 0.5)
