@@ -1251,7 +1251,8 @@ def label_subgoals(
         min_level: None|int=None,
         max_level: None|int=None,
         min_subgoals: bool=False,
-        growing_neighbourhood: bool=True
+        growing_neighbourhood: bool=True,
+        use_in_neighbourhood: bool=True
 ) -> Tuple[nx.MultiDiGraph, Dict[str, Dict[str, float|str]], Dict[int, List[str]]]:
     subgoal_level_key = value_key + " subgoal level"
     subgoal_found = False
@@ -1314,14 +1315,17 @@ def label_subgoals(
             if out_neighbours.size <= 0:
                 is_subgoal_str = 'False'
             else:
-                in_neighbours = np.array(
-                    [int(j) for j in stg_values if 0 < distance_matrix[int(j), int(node)] <= neighbourhood_range]
-                )
+                if use_in_neighbourhood:
+                    in_neighbours = np.array(
+                        [int(j) for j in stg_values if 0 < distance_matrix[int(j), int(node)] <= neighbourhood_range]
+                    )
+                else:
+                    in_neighbours = np.array([])
                 if out_neighbours.size <= 0:
                     is_subgoal_str = 'False'
                 else:
                     value = float(stg_values[node][key])
-                    for neighbour in np.append(out_neighbours, in_neighbours):
+                    for neighbour in np.append(out_neighbours, in_neighbours).astype(int):
                         neighbour_str = str(neighbour)
                         if neighbour_str == node:
                             continue
@@ -1377,6 +1381,7 @@ def label_preparedness_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGr
         min_level,
         max_level,
         min_subgoals,
+        True,
         True
     )
 
@@ -2132,7 +2137,7 @@ def train_eigenoption_agents(base_agent_save_path,
                              total_eval_steps=np.inf,
                              continue_training=False,
                              overwrite_existing_agents=False,
-                             num_options=64, alpha=0.9, epsilon=0.1, gamma=0.9,
+                             num_options=32, alpha=0.9, epsilon=0.1, gamma=0.9,
                              progress_bar=False):
     all_agent_training_returns = {str(i): [] for i in range(num_agents)}
     all_agent_returns = {str(i): [] for i in range(num_agents)}
@@ -2181,11 +2186,17 @@ def train_eigenoption_agents(base_agent_save_path,
             print("Training eigenoptions agent " + str(i))
 
         # Load agent
-        agent = EigenOptionAgent(adjacency_matrix, state_transition_graph,
-                                 alpha, epsilon, gamma,
-                                 environment.possible_actions,
-                                 environment.state_dtype,
-                                 num_options)
+        agent = EigenOptionAgent(
+            adjacency_matrix,
+            state_transition_graph,
+            alpha,
+            epsilon,
+            gamma,
+            environment.possible_actions,
+            environment.state_dtype,
+            environment.state_shape,
+            num_options
+        )
         if continue_training and (i < existing_agents_index):
             agent.load(agent_directory + '/eigenoption_agent_' + str(i) + '.json')
         else:
@@ -2796,17 +2807,18 @@ def update_graph_attributes(environment: Environment,
 # Writing: Related Work, future work
 
 if __name__ == "__main__":
-    lavaflow = LavaFlow()
-    simple_crafter = SimpleCrafter()
-    snake = Snake(3, 4)
-    tinytown = TinyTown(2, 2)
+    # lavaflow = LavaFlow()
+    # simple_crafter = SimpleCrafter()
+    # snake = Snake(3, 4)
+    # tinytown = TinyTown(2, 2)
+    # taxicab_classic = TaxiCab(False, False, continuous=False)
     taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72], continuous=True)
-    waterbucket = WaterBucket()
+    # waterbucket = WaterBucket()
 
     option_discovery_method = 'replace'
     option_onboarding = 'specific'
     # lavaflow=50, snake=50, Taxicab=25, tinytown2x2=25, tinytown2x3=50
-    graphing_window = 50
+    graphing_window = 25
     evaluate_policy_window = 10
     hops = 5
     min_num_hops = 1
@@ -2815,10 +2827,10 @@ if __name__ == "__main__":
     # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, simple_crafter=50, taxicab_classic=25, snake=50
     total_evaluation_steps = 50
     # simple_crafter: 1_000_000, tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
-    options_training_timesteps = 100_000
+    options_training_timesteps = 1_000_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     # lavaflow_room=50_000, lavaflow_pipes=50_000, snake=200_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 100_000
+    training_timesteps = 50_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
     behaviour_window = 500
 
@@ -2832,7 +2844,45 @@ if __name__ == "__main__":
     # Primitives - 555555 - 7
     # Preparedness flat - EE3377 - 8
 
-    filenames = get_filenames(snake)
+    filenames = get_filenames(taxicab)
+
+    print("Training " + taxicab.environment_name + " eigenoptions agents")
+
+    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    eigenoption_agent = EigenOptionAgent(
+        adj_matrix,
+        state_transition_graph,
+        0.9,
+        0.15,
+        0.9,
+        taxicab.possible_actions,
+        taxicab.state_dtype,
+        taxicab.state_shape,
+        32
+    )
+
+    eigenoption_agent.load(filenames['agents'] + '/eigenoptions_base_agent.json')
+
+    eigenoption_agent.train_options(
+        taxicab,
+        options_training_timesteps,
+        True,
+        True
+    )
+    eigenoption_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+
+    to_set = {int(node): stg_values[node] for node in stg_values}
+    nx.set_node_attributes(state_transition_graph, to_set)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
 
     data = graphing.extract_data(
         filenames['results'],
@@ -2840,7 +2890,7 @@ if __name__ == "__main__":
             # 'preparedness_agent_returns_none_onboarding.json',
             # 'preparedness_agent_returns_generic_onboarding.json',
             # 'preparedness_agent_returns_specific_onboarding.json',
-            # 'eigenoptions_epoch_returns.json',
+            'eigenoptions_epoch_returns.json',
             # 'louvain agent returns',
             # 'betweenness_epoch_returns.json',
             # 'preparedness_flat_epoch_returns.json',
@@ -2851,7 +2901,7 @@ if __name__ == "__main__":
         data,
         graphing_window,
         evaluate_policy_window,
-        name='Snake',
+        name='TaxiCab',
         x_label='Timesteps',
         y_label='Average Epoch Return',
         error_bars=True,
@@ -2859,12 +2909,13 @@ if __name__ == "__main__":
             # '#332288',
             # '#117733',
             # '#88CCEE',
-            # '#DDCC77',
+            '#DDCC77',
             # '#CC6677',
             # '#AA4499',
             '#555555'
         ],
         labels=[
+            'Eigenoptions',
             # 'Preparedness',
             # 'Flat Preparedness',
             'Primitives'
@@ -2872,10 +2923,65 @@ if __name__ == "__main__":
     )
     exit()
 
-    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
+    train_eigenoption_agents(
+        filenames['agents'] + '/eigenoptions_base_agent.json',
+        taxicab,
+        training_timesteps,
+        5,
+        evaluate_policy_window,
+        True,
+        total_evaluation_steps,
+        continue_training=False,
+        overwrite_existing_agents=True,
+        progress_bar=True
+    )
+    exit()
+
+    adj_matrix, state_transition_graph, stg_values = lavaflow.get_adjacency_matrix(
+        True,
+        True,
+        True,
+        progress_bar=True
+    )
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+
+    print("Training " + lavaflow.environment_name + " Eigenoptions")
+
+    state_transition_graph, stg_values = eigenoption_agent.find_pvfs(
+        stg_values,
+        32
+    )
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+
+    to_set = {int(node): stg_values[node] for node in stg_values}
+    nx.set_node_attributes(state_transition_graph, to_set)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+
+    eigenoption_agent.find_options(
+        32,
+        False
+    )
+
+    adj_matrix, state_transition_graph, stg_values = taxicab.get_adjacency_matrix(
+        True,
+        True,
+        True,
+        progress_bar=True
+    )
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+
+    nx.set_node_attributes(state_transition_graph, stg_values)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
 
     stg_values = preparedness_efficient(
         adj_matrix,
@@ -2906,6 +3012,15 @@ if __name__ == "__main__":
     with open(filenames["state transition graph values"], 'w') as f:
         json.dump(stg_values, f)
     exit()
+
+    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    _, state_transition_graph, _ = taxicab.get_adjacency_matrix(
+        True,
+        True,
+        True,
+        progress_bar=True,
+        get_state_features=True
+    )
 
     train_q_learning_agent(
         snake,
@@ -2993,20 +3108,6 @@ if __name__ == "__main__":
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
 
     update_graph_attributes(simple_crafter, stg_values)
-    exit()
-
-    print("Training Simple Crafter eigenoptions agent")
-    train_eigenoption_agents(
-        filenames['agents'] + '/eigenoptions_base_agent.json',
-        simple_crafter,
-        training_timesteps,
-        5,
-        evaluate_policy_window,
-        True,
-        total_evaluation_steps,
-        continue_training=False,
-        overwrite_existing_agents=True,
-        progress_bar=True)
     exit()
 
     eigenoptions_agent = EigenOptionAgent(

@@ -84,7 +84,7 @@ class EigenOptionAgent(OptionsAgent):
             actions: List[int],
             state_dtype: Type,
             state_shape: Tuple[int, int],
-            num_options: int=64
+            num_options: int=32
     ):
         self.adjacency_matrix = adjacency_matrix
         self.adjacency_matrix[adjacency_matrix.nonzero()] = 1.0
@@ -120,6 +120,8 @@ class EigenOptionAgent(OptionsAgent):
         self.actions = actions
         self.terminate_action = self.actions[-1] + 1
 
+        self.eigenoption_terminate_state = np.full(self.state_shape, -2, self.state_dtype)
+
         self.options = []
         self.num_options = num_options
 
@@ -142,11 +144,12 @@ class EigenOptionAgent(OptionsAgent):
             self.current_option = self.choose_option(state, optimal_choice, possible_actions)
 
         chosen_action = self.current_option.choose_action(state, possible_actions)
-        self.current_option_step += 1
 
         if chosen_action == self.terminate_action:
             self.terminate_eigenoption(state, possible_actions=possible_actions)
             return self.choose_action(state, optimal_choice, possible_actions)
+
+        self.current_option_step += 1
 
         return chosen_action
 
@@ -198,7 +201,7 @@ class EigenOptionAgent(OptionsAgent):
 
     def find_pvfs(
             self,
-            existing_stg_values: None|Dict[str, Dict[str, str|float]]=None,
+            existing_stg_values: Dict[str, Dict[str, str|float]],
             num_pvfs: None|int=None
     ) -> None|Tuple[nx.MultiDiGraph, Dict[str, Dict[str, str|float]]]:
         if num_pvfs is None:
@@ -206,15 +209,14 @@ class EigenOptionAgent(OptionsAgent):
 
         laplacian = nx.normalized_laplacian_matrix(self.state_transition_graph)
 
-        eigenvalues, eigenvectors = sparse.linalg.eigh(
+        eigenvalues, eigenvectors = sparse.linalg.eigs(
             laplacian, num_pvfs, which='SR'
         )
 
+        eigenvectors = np.real(eigenvectors)
+
         self.proto_value_functions = {i: {} for i in range(num_pvfs)}
         self.negative_proto_value_functions = {i: {} for i in range(num_pvfs)}
-
-        if existing_stg_values is None:
-            return
 
         for i in range(num_pvfs):
             pvf_key = "PVF " + str(i)
@@ -238,7 +240,7 @@ class EigenOptionAgent(OptionsAgent):
         available_options: List[str] = []
         for i in range(len(self.options)):
             option = self.options[i]
-            if not option.has_policy:
+            if not option.has_policy():
                 if option.actions[0] in possible_actions:
                     available_options.append(str(i))
             else:
@@ -299,15 +301,16 @@ class EigenOptionAgent(OptionsAgent):
         with open(save_path, 'r') as f:
             data = json.load(f)
 
-        for i in range(self.num_options):
-            option_data = data['options'][str(i)]
-            eigenvector = np.frombuffer(eval(option_data['eigenvector']), dtype=self.state_dtype)
-            eigenvector_index = option_data['eigenvector_index']
-            option = EigenOption(self.actions, eigenvector, eigenvector_index, self.terminate_action)
-            option.policy.q_values = option_data['policy'].copy()
-            self.options.append(option)
         for action in self.actions:
             option = Option([action])
+            self.options.append(option)
+
+        for i in range(self.num_options):
+            option_data = data['options'][str(i)]
+            pvf = option_data['pvf']
+            eigenvector_index = option_data['eigenvector_index']
+            option = EigenOption(self.actions, pvf, eigenvector_index, self.terminate_action)
+            option.policy.q_values = option_data['policy'].copy()
             self.options.append(option)
 
         self.state_option_values = data['option values'].copy()
@@ -317,7 +320,7 @@ class EigenOptionAgent(OptionsAgent):
             self,
             node: str
     ) -> np.ndarray:
-        state_str = self.state_transition_graph.nodes(data=True)[node]['state']
+        state_str = self.state_transition_graph.nodes(data=True)[str(node)]['state']
         return self.state_str_to_state(state_str)
 
     def option_initiation_function(self, state: np.ndarray, goal_state_index: int) -> bool:
@@ -381,7 +384,7 @@ class EigenOptionAgent(OptionsAgent):
             action = option.policy.choose_action(state, False, possible_actions=possible_actions)
 
             if action == self.terminate_action:
-                next_state = np.copy(state)
+                next_state = np.copy(self.eigenoption_terminate_state)
                 terminal = True
                 reward = 0.0
             else:
@@ -398,12 +401,15 @@ class EigenOptionAgent(OptionsAgent):
 
     def train_options(self, environment: Environment, training_steps: int,
                       all_actions_valid: bool=True, progress_bar: bool=False):
-        for i in range(self.num_options):
+        i = 0
+        for option in self.options:
+            if not option.has_policy():
+                continue
             if progress_bar:
                 print("Training EigenOption " + str(i + 1) + "/" + str(self.num_options))
-            option = self.options[i]
             self.train_option(environment, option, training_steps,
                               all_actions_valid, progress_bar)
+            i += 1
 
         return
 
@@ -415,11 +421,16 @@ class EigenOptionAgent(OptionsAgent):
             ()
 
         data = {'options': {}, 'option values': {}}
-        for i in range(self.num_options):
-            option = self.options[i]
-            data['options'][i] = {'policy': option.policy.q_values,
-                                  'eigenvector_index': int(option.eigenvector_index),
-                                  'eigenvector': str(option.eigenvector.tobytes())}
+        i = 0
+        for option in self.options:
+            if not option.has_policy():
+                continue
+            data['options'][i] = {
+                'policy': option.policy.q_values.copy(),
+                'pvf': option.pvf,
+                'eigenvector_index': option.eigenvector_index
+            }
+            i += 1
 
         data['option values'] = self.state_option_values.copy()
 
