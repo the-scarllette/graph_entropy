@@ -94,7 +94,10 @@ class SubgoalAgent(OptionsAgent):
 
         return num_available_skills
 
-    def create_options(self) -> None:
+    def create_options(
+            self,
+            environment: Environment
+    ) -> None:
         self.options = []
         for action in self.actions:
             option = Option([action])
@@ -103,7 +106,9 @@ class SubgoalAgent(OptionsAgent):
         for subgoal in self.subgoals:
             distances = nx.shortest_path_length(self.state_transition_graph, target=subgoal)
             initiation_set = [self.node_to_state(node) for node in list(distances.keys())
-                                if (node != subgoal) and (distances[node] < (self.subgoal_distance + 1))]
+                                if (node != subgoal) and
+                              (distances[node] < (self.subgoal_distance + 1)) and
+                              (not environment.is_terminal(self.node_to_state(node)))]
             option = SubgoalOption(self.actions, self.alpha, self.epsilon, self.gamma, subgoal, initiation_set)
             self.options.append(option)
         return
@@ -194,9 +199,12 @@ class SubgoalAgent(OptionsAgent):
                 print_progress_bar(current_timesteps, training_timesteps,
                                    '        >')
 
-            if terminated:
-                state = rand.choice(option.initiation_set)
+            while terminated:
+                state = np.copy(rand.choice(option.initiation_set))
+                if environment.is_terminal(state):
+                    continue
                 state = environment.reset(state)
+                terminated = False
                 if not all_actions_possible:
                     possible_actions = environment.get_possible_actions(state)
 

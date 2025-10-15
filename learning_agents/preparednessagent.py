@@ -858,7 +858,7 @@ class PreparednessAgent(OptionsAgent):
                 option_initiated = False
                 while not option_initiated:
                     if option_start_states is not None:
-                        state = rand.choice(option_start_states)
+                        state = np.copy(rand.choice(option_start_states))
                     else:
                         state_node = rand.choice(list(self.path_lookup.keys()))
                         state = self.node_to_state(state_node)

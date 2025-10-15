@@ -22,9 +22,10 @@ class Snake(Environment):
     FOOD_TILE: int=2
     BODY_TILE: int=3
 
-    collect_food_reward: float = 1.0
+    collect_food_reward: float = 0.0
     failure_reward: float = -0.5
-    step_reward: float = 0.1
+    step_reward: float = 0.0
+    terminal_reward_per_food: float = 0.5
 
     head_coords: (int, int)=(-1, -1)
     body_coords: List[Tuple[int, int]]=[]
@@ -33,13 +34,20 @@ class Snake(Environment):
     def __init__(
             self,
             width: int,
-            height: int
+            height: int,
+            start_length: int
     ):
         self.width: int = width
         self.height: int = height
+        self.start_length: int = start_length
         self.max_body_length: int = (self.height * self.width) - 1
 
-        self.environment_name: str = "snake_" + str(self.width) + "x" + str(self.height)
+        if (self.start_length >= self.width) and (self.start_length >= self.height):
+            raise ValueError("start_length must be less than either width or height of environment")
+
+        self.environment_name: str = (
+                "snake_" + str(self.width) + "x" + str(self.height) + "_start_length_" + str(self.start_length)
+        )
 
         self.state_dtype: type=int
         self.state_shape: (int, ) = (2, 2 + self.max_body_length)
@@ -52,22 +60,63 @@ class Snake(Environment):
             self
     ) -> List[np.ndarray]:
         start_states: List[np.ndarray] = []
+        potential_start_states: List[np.ndarray] = []
         start_state: np.ndarray
+        start_state_valid: bool=False
 
         for head_i in range(self.height):
             for head_j in range(self.width):
                 start_state = np.full(self.state_shape, -1)
-
                 start_state[:, 0] = [head_i, head_j]
+                potential_start_states = []
+                if self.start_length <= 0:
+                    potential_start_states.append(np.copy(start_state))
+                    start_state_valid = True
+                else:
+                    if head_i - self.start_length >= 0:
+                        new_start_state = np.copy(start_state)
+                        for body_length in range(2, 2 + self.start_length):
+                            new_start_state[:, body_length] = [head_i - body_length + 1, head_j]
+                        potential_start_states.append(np.copy(new_start_state))
+                        start_state_valid = True
+                    if head_i + self.start_length < self.height:
+                        new_start_state = np.copy(start_state)
+                        for body_length in range(2, 2 + self.start_length):
+                            new_start_state[:, body_length] = [head_i + body_length -  1, head_j]
+                        potential_start_states.append(np.copy(new_start_state))
+                        start_state_valid = True
+                    if head_j - self.start_length >= 0:
+                        new_start_state = np.copy(start_state)
+                        for body_length in range(2, 2 + self.start_length):
+                            new_start_state[:, body_length] = [head_i, head_j - body_length + 1]
+                        potential_start_states.append(np.copy(new_start_state))
+                        start_state_valid = True
+                    if head_j + self.start_length < self.width:
+                        new_start_state = np.copy(start_state)
+                        for body_length in range(2, 2 + self.start_length):
+                            new_start_state[:, body_length] = [head_i, head_j + body_length - 1]
+                        potential_start_states.append(np.copy(new_start_state))
+                        start_state_valid = True
 
-                for food_i in range(self.height):
-                    for food_j in range(self.width):
-                        if (head_i == food_i) and (head_j == food_j):
-                            continue
+                if not start_state_valid:
+                    continue
 
-                        start_state[:, 1] = [food_i, food_j]
-                        start_states.append(np.copy(start_state))
-                        start_state[:, 1] = [-1, -1]
+                for potential_start_state in potential_start_states:
+                    for food_i in range(self.height):
+                        for food_j in range(self.width):
+                            if (head_i == food_i) and (head_j == food_j):
+                                continue
+                            can_place_food = True
+                            for body_index in range(2, 2 + self.start_length):
+                                if np.array_equal(potential_start_state[:, body_index], [food_i, food_j]):
+                                    can_place_food = False
+                                    break
+                            if not can_place_food:
+                                continue
+
+                            potential_start_state[:, 1] = [food_i, food_j]
+                            start_states.append(np.copy(potential_start_state))
+                            potential_start_state[:, 1] = [-1, -1]
 
         return start_states
 
@@ -306,18 +355,58 @@ class Snake(Environment):
 
         self.current_state = np.full(self.state_shape, -1)
 
-        head_row = rand.randint(0, self.height - 1)
-        head_col = rand.randint(0, self.width - 1)
-        self.current_state[:, 0] = [head_row, head_col]
+        if self.start_length <=0:
+            head_row = rand.randint(0, self.height - 1)
+            head_col = rand.randint(0, self.width - 1)
+            self.current_state[:, 0] = [head_row, head_col]
+        else:
+            start_state_found = False
+            while not start_state_found:
+                head_row = rand.randint(0, self.height - 1)
+                head_col = rand.randint(0, self.width - 1)
+                self.current_state[:, 0] = [head_row, head_col]
+                potential_directions = []
+                if head_row - self.start_length >= 0:
+                    start_state_found = True
+                    potential_directions.append(0)
+                if head_row + self.start_length < self.height:
+                    start_state_found = True
+                    potential_directions.append(1)
+                if head_col - self.start_length >= 0:
+                    start_state_found = True
+                    potential_directions.append(2)
+                if head_col + self.start_length < self.width:
+                    start_state_found = True
+                    potential_directions.append(3)
 
-        food_row = head_row
-        food_col = head_col
-        while (food_row == head_row) and (food_col == head_col):
+            direction = rand.choice(potential_directions)
+            if direction == 0:
+                for body_length in range(2, 2 + self.start_length):
+                    self.current_state[:, body_length] = [head_row - body_length + 1, head_col]
+            elif direction == 1:
+                for body_length in range(2, 2 + self.start_length):
+                    self.current_state[:, body_length] = [head_row + body_length - 1, head_col]
+            elif direction == 2:
+                for body_length in range(2, 2 + self.start_length):
+                    self.current_state[:, body_length] = [head_row, head_col - body_length + 1]
+            elif direction == 3:
+                for body_length in range(2, 2 + self.start_length):
+                    self.current_state[:, body_length] = [head_row, head_col + body_length - 1]
+
+        food_placed = False
+        while not food_placed:
             food_row = rand.randint(0, self.height - 1)
             food_col = rand.randint(0, self.width - 1)
+            if (food_row == head_row) and (food_col == head_col):
+                continue
+            food_placed = True
+            for body_index in range(2, self.start_length + 2):
+                if np.array_equal(self.current_state[:, body_index], [food_row, food_col]):
+                    food_placed = False
+                    break
         self.current_state[:, 1] = [food_row, food_col]
 
-        return self.current_state
+        return np.copy(self.current_state)
 
     def step(
             self,
@@ -399,5 +488,8 @@ class Snake(Environment):
                         break
 
             self.current_state[:, 1] = np.copy(food_array)
+
+        if self.terminal:
+            reward += (self.terminal_reward_per_food * (body_length - self.start_length))
 
         return np.copy(self.current_state), reward, self.terminal, None

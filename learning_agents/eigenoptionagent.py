@@ -48,6 +48,19 @@ class EigenOption(Option):
         self.policy = QLearningAgent(self.possible_actions, alpha, epsilon, gamma)
         return
 
+    def choose_action(
+            self,
+            state: np.ndarray,
+            optimal_choice: bool=True,
+            possible_actions: None|List[int] = None
+    ) -> int:
+        if possible_actions is None:
+            possible_actions = self.possible_actions
+        else:
+            possible_actions = possible_actions + [self.terminate_action]
+
+        return self.policy.choose_action(state, optimal_choice, possible_actions)
+
     def intrinsic_reward(
             self,
             state_str: str,
@@ -127,6 +140,8 @@ class EigenOptionAgent(OptionsAgent):
 
         self.state_to_index_lookup = {}
 
+        self.max_choose_action_cycle: int = 8
+
         return
 
     def choose_action(
@@ -138,20 +153,76 @@ class EigenOptionAgent(OptionsAgent):
         if self.options is None:
             raise AttributeError("Options have not been found yet, run the 'find options' method first")
 
+        choose_action_count: int = 1
+        chosen_action: int = self.terminate_action
+
         self.last_possible_actions = possible_actions
 
-        if self.current_option is None:
-            self.current_option = self.choose_option(state, optimal_choice, possible_actions)
+        option_action_choice_optimal: bool = True
 
-        chosen_action = self.current_option.choose_action(state, possible_actions)
+        while chosen_action == self.terminate_action:
+            if choose_action_count > self.max_choose_action_cycle:
+                optimal_choice = False
+                option_action_choice_optimal = False
 
-        if chosen_action == self.terminate_action:
-            self.terminate_eigenoption(state, possible_actions=possible_actions)
-            return self.choose_action(state, optimal_choice, possible_actions)
+            if self.current_option is None:
+                self.current_option = self.choose_option(state, optimal_choice, possible_actions)
+
+            chosen_action = self.current_option.choose_action(state, option_action_choice_optimal, possible_actions)
+
+            if chosen_action == self.terminate_action:
+                self.terminate_eigenoption(state, possible_actions=possible_actions)
+
+            choose_action_count += 1
 
         self.current_option_step += 1
 
         return chosen_action
+
+    def choose_option(self, state, no_random, possible_actions=None):
+        self.current_option_step = 0
+        self.option_start_state = state
+
+        all_available_options: List[str] = self.get_available_options(state, possible_actions=possible_actions)
+        available_options: List[str] = []
+        for available_option in all_available_options:
+            option: Option = self.options[int(available_option)]
+            if not option.has_policy():
+                available_options.append(available_option)
+            elif option.choose_action(state, True, possible_actions) != self.terminate_action:
+                available_options.append(available_option)
+
+        num_available_options = len(available_options)
+        if num_available_options == 0:
+            return None
+
+        if not no_random and rand.uniform(0, 1) < self.epsilon:
+            self.current_option_index = rand.choice(available_options)
+            return self.options[int(self.current_option_index)]
+
+        option_values = self.get_state_option_values(state, available_options)
+        total_values = min(len(option_values), num_available_options)
+
+        ops = [available_options[0]]
+        try:
+            max_value = option_values[available_options[0]]
+        except KeyError:
+            option_data = list(option_values.values())
+            option_values = {}
+            for i in range(total_values):
+                option_values[available_options[i]] = option_data[i]
+            max_value = option_data[0]
+        for i in range(1, total_values):
+            op = available_options[i]
+            value = option_values[op]
+            if value > max_value:
+                max_value = value
+                ops = [op]
+            elif value == max_value:
+                ops.append(op)
+
+        self.current_option_index = rand.choice(ops)
+        return self.options[int(self.current_option_index)]
 
     def copy_agent(self, copy_from: 'EigenOptionAgent'):
         self.state_option_values = copy_from.state_option_values.copy()
@@ -235,13 +306,13 @@ class EigenOptionAgent(OptionsAgent):
 
     def get_available_options(self, state: np.ndarray, possible_actions: None | List[int]=None) -> List[str]:
         if possible_actions is None:
-            return [str(i) for i in range(len(self.options))]
+            possible_actions = self.actions
 
         available_options: List[str] = []
         for i in range(len(self.options)):
             option = self.options[i]
             if not option.has_policy():
-                if option.actions[0] in possible_actions:
+                if int(option.actions[0]) in possible_actions:
                     available_options.append(str(i))
             else:
                 available_options.append(str(i))
@@ -284,7 +355,7 @@ class EigenOptionAgent(OptionsAgent):
             next_option_values = [all_next_options[option] for option in next_options]
         max_next_option = max(next_option_values)
 
-        state_str = self.state_to_state_str(state)
+        state_str = self.state_to_state_str(self.option_start_state)
 
         self.state_option_values[state_str][self.current_option_index] += self.alpha * \
                                                                     (self.total_option_reward +
@@ -305,7 +376,8 @@ class EigenOptionAgent(OptionsAgent):
             option = Option([action])
             self.options.append(option)
 
-        for i in range(self.num_options):
+        num_actions = len(self.actions)
+        for i in range(num_actions, num_actions + self.num_options):
             option_data = data['options'][str(i)]
             pvf = option_data['pvf']
             eigenvector_index = option_data['eigenvector_index']
@@ -320,7 +392,10 @@ class EigenOptionAgent(OptionsAgent):
             self,
             node: str
     ) -> np.ndarray:
-        state_str = self.state_transition_graph.nodes(data=True)[str(node)]['state']
+        try:
+            state_str = self.state_transition_graph.nodes(data=True)[str(node)]['state']
+        except KeyError:
+            state_str = self.state_transition_graph.nodes(data=True)[int(node)]['state']
         return self.state_str_to_state(state_str)
 
     def option_initiation_function(self, state: np.ndarray, goal_state_index: int) -> bool:
@@ -362,6 +437,7 @@ class EigenOptionAgent(OptionsAgent):
     ):
         terminal = True
         possible_actions = environment.possible_actions
+        total_goal_hits: int = 0
 
         for total_steps in range(training_steps):
             if progress_bar:
@@ -373,29 +449,32 @@ class EigenOptionAgent(OptionsAgent):
                 )
 
             if terminal:
-                state_found = False
-                while not state_found:
-                    state = self.node_to_state(str(random.randint(0, self.num_states - 1)))
-                    state_found = not environment.is_terminal(state)
-                state = environment.reset(state)
+                trajectory = []
+                state = environment.reset()
                 if not all_actions_valid:
-                    possible_actions = environment.get_possible_actions()
+                    possible_actions = environment.get_possible_actions(state)
 
-            action = option.policy.choose_action(state, False, possible_actions=possible_actions)
+            trajectory.append(state.copy())
+
+            action = option.choose_action(state, False, possible_actions=possible_actions)
 
             if action == self.terminate_action:
                 next_state = np.copy(self.eigenoption_terminate_state)
                 terminal = True
                 reward = 0.0
+                total_goal_hits += 1
             else:
                 next_state, _, terminal, _ = environment.step(action)
                 reward = option.intrinsic_reward(self.state_to_state_str(state), self.state_to_state_str(next_state))
 
             if not all_actions_valid:
-                possible_actions = environment.get_possible_actions()
-            option.policy.learn(state, action, reward, next_state, terminal, possible_actions)
+                possible_actions = environment.get_possible_actions(next_state)
+            option.policy.learn(state, action, reward, next_state, terminal, possible_actions + [self.terminate_action])
 
             state = next_state
+
+        if print_progress_bar:
+            print("Total Goal Hits: " + str(total_goal_hits))
 
         return
 
@@ -421,7 +500,7 @@ class EigenOptionAgent(OptionsAgent):
             ()
 
         data = {'options': {}, 'option values': {}}
-        i = 0
+        i = len(self.actions)
         for option in self.options:
             if not option.has_policy():
                 continue

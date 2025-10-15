@@ -5,7 +5,7 @@ import numpy as np
 from progressbar import print_progress_bar
 
 from scipy import sparse
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 
 class Environment:
@@ -19,6 +19,7 @@ class Environment:
         self.environment_name = ""
         self.options = []
         self.state_dtype = int
+        self.state_shape: Tuple[int, ...]
         return
 
     def generate_random_state(self):
@@ -223,6 +224,20 @@ class Environment:
             self.options = set(copy.copy(new_options))
         else:
             self.options.update(copy.copy(new_options))
+
+    def state_str_to_state(self, state_str):
+        if '\n' not in state_str:
+            state = np.fromstring(state_str[1: len(state_str) - 1],
+                                  sep=' ', dtype=self.state_dtype)
+            return state
+
+        state_str = state_str.replace('[', '')
+        state_str = state_str.replace(']', '')
+        state_str = state_str.replace('\n', '')
+        state = np.fromstring(state_str,
+                              sep=' ', dtype=self.state_dtype)
+        state = state.reshape(self.state_shape)
+        return state
 
     def step(self, action) ->(Any, float, bool, Any):
         return None, 0.0, False, None
