@@ -81,15 +81,27 @@ class LouvainAgent(MultiLevelGoalAgent):
         self.available_options = {}
 
         self.num_primitive_options = len(self.primitive_actions)
+
+        self.aggregate_graphs_save_paths: List[str] = []
         return
 
     def apply_louvain(self,
                       resolution: float = 0.1,
                       partition_type: la.VertexPartition.LinearResolutionParameterVertexPartition = None,
-                      return_aggregate_graphs: bool = True,
                       first_levels_to_skip=0, weights=None,
                       state_transition_graph_values=None,
-                      graph_save_path=None):
+                      graph_save_path=None,
+                      aggregate_graphs_save_paths_prefix=None,
+        ):
+        # Clearing any existing graph clusters=
+        level_to_clear = 0
+        while True:
+            try:
+                del self.stg.vs[f"cluster-{level_to_clear}"]
+            except KeyError:
+                break
+            level_to_clear += 1
+
         # Set optimisation metric, define initial partition, initialise optimiser.
         if partition_type is None:
             partition = la.RBConfigurationVertexPartition(self.stg, resolution_parameter=resolution, weights=weights)
@@ -102,9 +114,11 @@ class LouvainAgent(MultiLevelGoalAgent):
         levels = 0
         partition_agg = partition.aggregate_partition()
 
-        if return_aggregate_graphs:
-            self.aggregate_graphs = [partition_agg.cluster_graph()]
-
+        self.aggregate_graphs = [partition_agg.cluster_graph()]
+        if aggregate_graphs_save_paths_prefix is not None:
+            self.aggregate_graphs_save_paths.append(
+                aggregate_graphs_save_paths_prefix + "_louvain_aggregate_graph_base.gexf"
+            )
         while optimiser.move_nodes(
                 partition_agg) > 0:  # Move nodes between neighbouring clusters to improve modularity.
 
@@ -117,10 +131,13 @@ class LouvainAgent(MultiLevelGoalAgent):
             # Store current aggregate graph.
             if levels >= first_levels_to_skip:
                 self.stg.vs[f"cluster-{hierarchy_level}"] = partition.membership
+                if aggregate_graphs_save_paths_prefix is not None:
+                    self.aggregate_graphs_save_paths.append(
+                        aggregate_graphs_save_paths_prefix + "_louvain_aggregate_graph_" + str(hierarchy_level) + ".gexf"
+                    )
                 hierarchy_level += 1
 
-                if return_aggregate_graphs:
-                    self.aggregate_graphs.append(partition_agg.cluster_graph())
+                self.aggregate_graphs.append(partition_agg.cluster_graph())
 
             levels += 1
 
@@ -368,9 +385,17 @@ class LouvainAgent(MultiLevelGoalAgent):
         self.option_state_initiation_lookup = data['agent']['option_initiation_lookup']
         self.nodes_in_cluster = data['agent']['nodes_in_cluster']
         self.available_options = data['agent']['available_options']
+        self.aggregate_graphs_save_paths = data['agent']['aggregate_graphs_save_paths']
 
         self.hierarchy_level = -np.inf
         self.num_clusters = []
+
+        # Getting Aggregate Graphs
+        self.aggregate_graphs = []
+        for i in range(len(self.aggregate_graphs_save_paths)):
+            self.aggregate_graphs.append(
+                ig.Graph.from_networkx(nx.read_gexf(self.aggregate_graphs_save_paths[i]))
+            )
 
         # Getting Option Data
         self.options = []
@@ -434,11 +459,21 @@ class LouvainAgent(MultiLevelGoalAgent):
             data['options'].append(copy.copy(option_data))
 
         # Saving Agent Policy
-        data['agent'] = {'policy': self.state_option_values,
+        data['agent'] = {
+            'policy': self.state_option_values,
                          'state_indexer': self.state_indexer,
                          'option_initiation_lookup': self.option_state_initiation_lookup,
                          'nodes_in_cluster': self.nodes_in_cluster,
-                         'available_options': self.available_options}
+                         'available_options': self.available_options,
+                         'aggregate_graphs_save_paths': self.aggregate_graphs_save_paths
+        }
+
+        # saving aggregate_graphs
+        aggregate_graph = self.aggregate_graphs[0].to_networkx()
+        nx.write_gexf(aggregate_graph, self.aggregate_graphs_save_paths[0])
+        for i in range(1, len(self.aggregate_graphs)):
+            aggregate_graph = self.aggregate_graphs[i].to_networkx()
+            nx.write_gexf(aggregate_graph, self.aggregate_graphs_save_paths[i])
 
         # Saving Data
         with open(save_path, 'w') as f:
@@ -469,12 +504,11 @@ class LouvainAgent(MultiLevelGoalAgent):
                                    suffix='Complete')
 
             if done:
-                start_state = rand.choice(start_states)
-                state = environment.reset(start_state)
+                start_state = np.copy(rand.choice(start_states))
+                state = np.copy(environment.reset(start_state))
                 current_possible_actions = environment.get_possible_actions(state)
-                done = False
 
-            action = option.choose_action(state, current_possible_actions)
+            action = option.choose_action(state, False, current_possible_actions)
             next_state, _, done, _ = environment.step(action)
             current_step += 1
             reward = self.option_training_step_reward

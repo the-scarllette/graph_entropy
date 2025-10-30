@@ -35,22 +35,31 @@ class Snake(Environment):
             self,
             width: int,
             height: int,
-            start_length: int
+            start_length: int,
+            head_food_distance: int
     ):
         self.width: int = width
         self.height: int = height
         self.start_length: int = start_length
+        self.head_food_distance: int = head_food_distance
+
         self.max_body_length: int = (self.height * self.width) - 1
 
         if (self.start_length >= self.width) and (self.start_length >= self.height):
             raise ValueError("start_length must be less than either width or height of environment")
 
         self.environment_name: str = (
-                "snake_" + str(self.width) + "x" + str(self.height) + "_start_length_" + str(self.start_length)
+                "snake_" + str(self.width) + "x" + str(self.height)
         )
+        if self.start_length > 0:
+            self.environment_name += "_start_length_" + str(self.start_length)
+        if self.head_food_distance > 1:
+            self.environment_name += "_head_food_distance_" + str(self.head_food_distance)
 
         self.state_dtype: type=int
         self.state_shape: (int, ) = (2, 2 + self.max_body_length)
+
+        self.terminal_state: np.ndarray = np.full(self.state_shape, -1)
 
         self.current_state: None|np.ndarray = None
         self.terminal: bool=True
@@ -198,50 +207,73 @@ class Snake(Environment):
             for i in range(2, 2 + body_length):
                 if np.array_equal(successor_state[:, 0], successor_state[:, i]):
                     successor_terminal = True
+                    successor_state = np.copy(self.terminal_state)
 
             if np.array_equal(successor_state[:, 0], successor_state[:, 1]):
                 successor_state[:, index] = np.copy(next_body_location)
 
                 if index >= self.max_body_length + 1:
                     successor_terminal = True
-                    successor_state[:, 1] = [-1, -1]
+                    successor_state = np.copy(self.terminal_state)
                     successor_food_generated = True
                 else:
                     successor_food_generated = False
             elif not ((0 <= successor_state[0, 0] < self.height) and (0 <= successor_state[1, 0] < self.width)):
                 successor_terminal = True
-                successor_state[:, 0] = [-1, -1]
-                successor_state[:, 1] = [-1, -1]
+                successor_state = np.copy(self.terminal_state)
 
             if (not successor_terminal) and (not successor_food_generated):
                 # Generate Successors from collecting food
-                num_food_locations: int = self.max_body_length - index + 2
                 can_place_food: bool
                 true_successor: np.ndarray
 
+                all_potential_food_coords: List[np.ndarray] = []
+                food_coords_away_from_head: List[np.ndarray] = []
+                food_coords_to_use: List[np.ndarray]
+                num_food_coords: int
+                num_food_coords_away_from_head: int = 0
+                num_potential_food_coords: int = 0
                 for i in range(self.height):
                     for j in range(self.width):
-                        can_place_food = True
                         potential_food_location = np.array([i, j])
 
-                        if np.array_equal(successor_state[:, 0], potential_food_location):
+                        if np.array_equal(potential_food_location, successor_state[:, 0]):
                             continue
 
-                        for body_index in range(2, 2 + body_length):
-                            if np.array_equal(successor_state[:, body_index], potential_food_location):
+                        can_place_food = True
+                        for index in range(2, self.max_body_length + 2):
+                            if self.is_empty_coords(successor_state[:, index]):
+                                break
+                            if np.array_equal(successor_state[:, index], potential_food_location):
                                 can_place_food = False
                                 break
 
-                        if can_place_food:
-                            true_successor = np.copy(successor_state)
-                            true_successor[:, 1] = np.copy(potential_food_location)
+                        if not can_place_food:
+                            continue
 
-                            num_successor_states += 1
-                            successor_states.append(np.copy(true_successor))
-                            if probability_weights:
-                                weight = 0.25 * (1/num_food_locations)
-                            weights.append(weight)
+                        all_potential_food_coords.append(np.copy(potential_food_location))
+                        num_potential_food_coords += 1
+                        if (
+                                (abs(i - successor_state[0, 0]) >= self.head_food_distance) and
+                                (abs(j - successor_state[1, 0]) >= self.head_food_distance)
+                        ):
+                            food_coords_away_from_head.append(np.copy(potential_food_location))
+                            num_food_coords_away_from_head += 1
 
+                food_coords_to_use = all_potential_food_coords
+                num_food_coords = num_potential_food_coords
+                if num_food_coords_away_from_head > 0:
+                    food_coords_to_use = food_coords_away_from_head
+                    num_food_coords = num_food_coords_away_from_head
+
+                for food_coord in food_coords_to_use:
+                    true_successor = np.copy(successor_state)
+                    true_successor[:, 1] = np.copy(food_coord)
+                    num_successor_states += 1
+                    successor_states.append(np.copy(true_successor))
+                    if probability_weights:
+                        weight = 0.25 * (1 / num_food_coords)
+                    weights.append(weight)
             else:
                 num_successor_states += 1
                 successor_states.append(np.copy(successor_state))
@@ -454,6 +486,7 @@ class Snake(Environment):
             if np.array_equal(self.current_state[:, 0], self.current_state[:, i]):
                 reward += self.failure_reward
                 self.terminal = True
+                self.current_state = np.copy(self.terminal_state)
 
         if np.array_equal(self.current_state[:, 0], self.current_state[:, 1]):
             reward += self.collect_food_reward
@@ -461,33 +494,51 @@ class Snake(Environment):
 
             if index >= self.max_body_length + 1:
                 self.terminal = True
-                self.current_state[:, 1] = [-1, -1]
+                self.current_state = np.copy(self.terminal_state)
                 food_generated = True
             else:
                 food_generated = False
         elif not ((0 <= self.current_state[0, 0] < self.height) and (0 <= self.current_state[1, 0] < self.width)):
             self.terminal = True
-            self.current_state[:, 0] = [-1, -1]
-            self.current_state[:, 1] = [-1, -1]
+            self.current_state = np.copy(self.terminal_state)
             reward += self.failure_reward
 
         if (not self.terminal) and (not food_generated):
-            food_array: None|np.ndarray = None
-            while not food_generated:
-                food_array = np.array([rand.randint(0, self.height - 1), rand.randint(0, self.width - 1)])
+            food_array: np.ndarray
+            all_potential_food_coords: List[np.ndarray] = []
+            food_coords_away_from_head: List[np.ndarray] = []
+            num_food_coords_away_from_head: int = 0
+            for food_i in range(0, self.height):
+                for food_j in range(0, self.width):
+                    food_array = np.array([food_i, food_j])
 
-                if np.array_equal(food_array, self.current_state[:, 0]):
-                    continue
+                    if np.array_equal(food_array, self.current_state[:, 0]):
+                        continue
 
-                food_generated = True
-                for index in range(2, self.max_body_length + 2):
-                    if self.is_empty_coords(self.current_state[:, index]):
-                        break
-                    if np.array_equal(self.current_state[:, index], food_array):
-                        food_generated = False
-                        break
+                    can_place_food = True
+                    for index in range(2, self.max_body_length + 2):
+                        if self.is_empty_coords(self.current_state[:, index]):
+                            break
+                        if np.array_equal(self.current_state[:, index], food_array):
+                            can_place_food = False
+                            break
 
-            self.current_state[:, 1] = np.copy(food_array)
+                    if not can_place_food:
+                        continue
+
+                    all_potential_food_coords.append(np.copy(food_array))
+                    if (
+                        (abs(food_i - self.current_state[0, 0]) >= self.head_food_distance) and
+                        (abs(food_j - self.current_state[1, 0]) >= self.head_food_distance)
+                    ):
+                        food_coords_away_from_head.append(np.copy(food_array))
+                        num_food_coords_away_from_head += 1
+
+            if num_food_coords_away_from_head > 0:
+                food_coord = rand.choice(food_coords_away_from_head)
+            else:
+                food_coord = rand.choice(all_potential_food_coords)
+            self.current_state[:, 1] = np.copy(food_coord)
 
         if self.terminal:
             reward += (self.terminal_reward_per_food * (body_length - self.start_length))

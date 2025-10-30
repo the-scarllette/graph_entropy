@@ -466,8 +466,7 @@ class TaxiCab(Environment):
         self.taxi_y = draw_from_start_state(self.taxi_y, 1)
 
         if self.using_arrival_probabilities:
-            self.passenger_loc = rand.choices(self.possible_passenger_locations,
-                                              self.arrival_probabilities_list)[0]
+            self.passenger_loc = self.no_passenger_index
             self.passenger_loc = draw_from_start_state(self.passenger_loc, 2)
 
             if self.passenger_loc == self.no_passenger_index:

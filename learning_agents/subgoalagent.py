@@ -203,7 +203,7 @@ class SubgoalAgent(OptionsAgent):
                 state = np.copy(rand.choice(option.initiation_set))
                 if environment.is_terminal(state):
                     continue
-                state = environment.reset(state)
+                state = np.copy(environment.reset(state))
                 terminated = False
                 if not all_actions_possible:
                     possible_actions = environment.get_possible_actions(state)
@@ -247,11 +247,14 @@ class SubgoalAgent(OptionsAgent):
 
         if progress_bar:
             print("Training Subgoal Options")
+            total_options_to_train = str(len(self.options) - self.num_actions)
+            current_option = 0
 
         for i in range(self.num_actions, len(self.options)):
             option = self.options[i]
             if progress_bar:
-                print("     Option -> " + option.subgoal)
+                current_option += 1
+                print("     Option -> " + option.subgoal + " " + str(current_option) + "/" + total_options_to_train)
             total_end_states, total_successes = self.train_option(option, environment, training_timesteps,
                                                                   all_actions_possible,
                                                                   progress_bar)

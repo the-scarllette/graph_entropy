@@ -241,7 +241,7 @@ class OptionsAgent(LearningAgent):
             ()
 
         if self.current_option.has_policy():
-            chosen_action = self.current_option.choose_action(state, possible_actions)
+            chosen_action = self.current_option.choose_action(state, True, possible_actions)
         else:
             chosen_action = self.current_option.actions[self.current_option_step]
 
@@ -258,7 +258,7 @@ class OptionsAgent(LearningAgent):
 
     def choose_option(self, state, no_random, possible_actions=None):
         self.current_option_step = 0
-        self.option_start_state = state
+        self.option_start_state = np.copy(state)
 
         available_options = self.get_available_options(state, possible_actions=possible_actions)
         num_available_options = len(available_options)

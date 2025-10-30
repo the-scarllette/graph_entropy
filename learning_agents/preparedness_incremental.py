@@ -128,7 +128,7 @@ class PreparednessSkill(Option):
 class PreparednessIncremental(RODAgent):
 
     skill_training_failure_reward: float = -1.0
-    skill_training_step_reward: float = -0.0001
+    skill_training_step_reward: float = -0.01
     skill_training_success_reward: float = 1.0
 
     def __init__(
@@ -568,31 +568,35 @@ class PreparednessIncremental(RODAgent):
             dtype=np.int32
         )
         self.adjacency_matrix = sparse.csr_matrix(self.adjacency_matrix)
+        distance_matrix = sparse.csgraph.dijkstra(
+            self.adjacency_matrix,
+            True,
+            unweighted=True,
+            limit=self.max_subgoal_height + 1
+        )
 
         subgoals = {}
         subgoals_complete = False
         hop = 1
         while (hop <= self.max_subgoal_height) and not subgoals_complete:
             hop_subgoals = []
-
-            self.compute_graph_preparedness(hop)
-
-            distances = sparse.csgraph.dijkstra(
-                self.adjacency_matrix,
-                True,
-                unweighted=True,
-                limit=hop + 1
-            )
-
             for node in self.state_transition_graph.nodes():
                 is_subgoal = True
-                in_neighbours = np.where(
-                    (distances[:, int(node)] > 0) & (distances[:, int(node)] <= hop)
-                )[0]
-                if in_neighbours.size <= 0:
+                out_neighbours = np.array(
+                    [
+                        int(j) for j in self.state_transition_graph.nodes()
+                        if 0 < distance_matrix[int(node), int(j)] <= hop
+                    ]
+                )
+                if out_neighbours.size <= 0:
                     is_subgoal = False
                 else:
-                    out_neighbours = np.where(distances[int(node), :] <= hop)[0]
+                    in_neighbours = np.array(
+                        [
+                            int(j) for j in self.state_transition_graph.nodes()
+                            if 0 < distance_matrix[int(j), int(node)] <= hop
+                        ]
+                    )
                     value = self.preparedness_values[node][self.preparedness_key(hop)]
                     for neighbour in np.append(in_neighbours, out_neighbours):
                         neighbour_str = str(neighbour)

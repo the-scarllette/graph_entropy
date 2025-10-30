@@ -2807,23 +2807,23 @@ def update_graph_attributes(environment: Environment,
 if __name__ == "__main__":
     # lavaflow = LavaFlow()
     # simple_crafter = SimpleCrafter()
-    snake = Snake(2, 3, start_length=2)
+    snake = Snake(3, 3, 1, 2)
     # tinytown = TinyTown(2, 3)
     # taxicab_classic = TaxiCab(False, False, continuous=False)
     # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72], continuous=True)
     # waterbucket = WaterBucket()
 
     option_discovery_method = 'replace'
-    option_onboarding = 'specific'
+    option_onboarding = 'generic'
     # tinytown=50, snake=50, Taxicab=25, tinytown2x2=25, tinytown2x3=50
-    graphing_window = 25
+    graphing_window = 50
     evaluate_policy_window = 10
     hops = 5
     min_num_hops = 1
     max_num_hops = 4
     num_agents = 5
-    # Taxicab=100, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, simple_crafter=50, taxicab_classic=25, snake=50
-    total_evaluation_steps = 100
+    # Taxicab=200, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, simple_crafter=50, taxicab_classic=25, snake=50
+    total_evaluation_steps = 50
     # simple_crafter: 1_000_000, tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 1_000_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
@@ -2843,50 +2843,288 @@ if __name__ == "__main__":
     # Preparedness flat - EE3377 - 8
 
     filenames = get_filenames(snake)
+    # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    preparedness_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+    with open(snake.environment_name + "_untrained_preparedness_options.json", 'r') as f:
+        untrained_options_dict = json.load(f)
 
-    adj_matrix,
+    training_level = 2
+    untrained_options = untrained_options_dict[str(training_level - 1)]
+    print("Training " + snake.environment_name + " preparedness options " + " level: " + str(training_level))
 
-    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    preparedness_agent = PreparednessAgent(
+        snake.possible_actions,
+        0.9,
+        0.15,
+        0.9,
+        snake.state_dtype,
+        snake.state_shape,
+        state_transition_graph,
+        preparedness_subgoal_graph,
+        option_onboarding='none'
+    )
+    # preparedness_agent.create_options(snake)
+    preparedness_agent.load(filenames['agents'] + '/preparedness_base_agent.json')
+    # preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    untrained_options_level = preparedness_agent.train_options(
+        snake,
+        50_000,
+        min_level=training_level,
+        max_level=training_level,
+        all_actions_possible=True,
+        train_between_options=True,
+        train_onboarding_options=False,
+        train_subgoal_options=False,
+        progress_bar=True,
+        trained_benchmark=0.3,
+        options_to_train=untrained_options
+    )
+    untrained_options_dict[str(training_level - 1)] = untrained_options_level
+    with open(snake.environment_name + "_untrained_preparedness_options.json", 'w') as f:
+        json.dump(untrained_options_dict, f)
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+    print(snake.environment_name + " preparedness training options")
+    exit()
+
+    filenames = get_filenames(taxicab)
+    # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    # preparedness_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    print("Taxicab Louvain")
+    louvain_agent = LouvainAgent(
+        taxicab.possible_actions,
+        state_transition_graph,
+        taxicab.state_dtype,
+        taxicab.state_shape,
+        min_hierarchy_level=0,
+    )
+    print("Loading Agent")
+    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
+
+    print("Training " + taxicab.environment_name + " Louvain Options")
+    louvain_agent.train_options(
+        1_000_000,
+        taxicab,
+        True,
+        True
+    )
+
+    print("Saving Agent and STG Values")
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+
+    nx.set_node_attributes(state_transition_graph, stg_values)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+    print("Training " + snake.environment_name + " betweenness agents")
+
+    train_betweenness_agents(
+        'betweenness_base_agent.json',
+        snake,
+        training_timesteps,
+        5,
+        evaluate_policy_window,
+        True,
+        total_evaluation_steps,
+        continue_training=False,
+        overwrite_existing_agents=True,
+        progress_bar=True
+    )
+    exit()
+
+    filenames = get_filenames(snake)
+    data = graphing.extract_data(
+        filenames['results'],
+        [
+            # 'preparedness_agent_returns_none_onboarding.json',
+            # 'preparedness_agent_returns_generic_onboarding.json',
+            # 'preparedness_agent_returns_specific_onboarding.json',
+            'eigenoptions_epoch_returns.json',
+            # 'louvain agent returns',
+            # 'betweenness_epoch_returns.json',
+            # 'preparedness_flat_epoch_returns.json',
+            'q_learning_epoch_returns.json'
+        ]
+    )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='Snake',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        colours=[
+            # '#332288',
+            # '#117733',
+            # '#88CCEE',
+            '#DDCC77',
+            # '#CC6677',
+            # '#AA4499',
+            '#555555'
+        ],
+        labels=[
+            # 'Preparedness',
+            # 'Preparedness (Generic Onboarding)',
+            # 'Preparedness (Specific Onboarding)',
+            'Eigenoptions',
+            # 'Louvain',
+            # 'Betweenness',
+            # 'Flat Preparedness',
+            'Primitives'
+        ]
+    )
+    exit()
+
+    print("Training taxitown Louvain Agents")
+    train_louvain_agents(
+        taxicab, taxicab.environment_name,
+                         filenames['agents'], filenames['results'],
+                         training_timesteps, 5, evaluate_policy_window,
+                         initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
+                         all_actions_valid=True,
+                         overwrite_existing_agents=True,
+                         total_eval_steps=total_evaluation_steps,
+                         state_dtype=taxicab.state_dtype, state_shape=taxicab.state_shape, progress_bar=True
+    )
+
+    exit()
+
+    filenames = get_filenames(tinytown)
+    # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    # preparedness_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    print("TinyTown Louvain")
+    louvain_agent = LouvainAgent(
+        tinytown.possible_actions,
+        state_transition_graph,
+        tinytown.state_dtype,
+        tinytown.state_shape,
+        min_hierarchy_level=0,
+    )
+    print("Loading Agent")
+    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
+
+    print("Training " + tinytown.environment_name + " Louvain Options")
+    louvain_agent.train_options(
+        1_000_000,
+        tinytown,
+        False,
+        True
+    )
+
+    print("Saving Agent and STG Values")
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+
+    # nx.set_node_attributes(state_transition_graph, stg_values)
+    # nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    # with open(filenames["state transition graph values"], 'w') as f:
+    #     json.dump(stg_values, f)
+    exit()
+
+    filenames = get_filenames(snake)
+    # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     preparedness_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
     with open(filenames['state transition graph values'], 'r') as f:
         stg_values = json.load(f)
 
-    print("Training " + taxicab.environment_name + " eigenoptions")
+    print("Training " + snake.environment_name + " betweenness options")
 
+    betweenness_agent = BetweennessAgent(
+        snake.possible_actions,
+        0.9,
+        0.15,
+        0.9,
+        snake.state_shape,
+        snake.state_dtype,
+        state_transition_graph,
+        30
+    )
+
+    betweenness_agent.load(filenames['agents'] + '/betweenness_base_agent.json')
+
+    betweenness_agent.train_options(
+        snake,
+        10_000,
+        True,
+        True
+    )
+
+    # sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    betweenness_agent.save(filenames['agents'] + '/betweenness_base_agent.json')
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+    # louvain_agent.create_options()
+    # louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+
+    # louvain_agent.train_options(
+    exit()
+
+    filenames = get_filenames(snake)
+
+    print("Training " + snake.environment_name + " eigenoptions agents")
+
+    train_eigenoption_agents(
+        filenames['agents'] + '/eigenoptions_base_agent.json',
+        snake,
+        training_timesteps,
+        5,
+        evaluate_policy_window,
+        True,
+        total_evaluation_steps,
+        False,
+        True,
+        32,
+        progress_bar=True
+    )
+    exit()
+
+    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    # preparedness_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    print("Training " + snake.environment_name + " eigenoptions")
     eigenoption_agent = EigenOptionAgent(
         adj_matrix,
         state_transition_graph,
         0.9,
         0.15,
         0.9,
-        taxicab.possible_actions,
-        taxicab.state_dtype,
-        taxicab.state_shape,
+        snake.possible_actions,
+        snake.state_dtype,
+        snake.state_shape,
         32
     )
-
-    state_transition_graph, stg_values = eigenoption_agent.find_pvfs(
-        stg_values,
-        32
-    )
-
-    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
 
     eigenoption_agent.find_options(
         32,
         False,
+        stg_values
     )
 
     eigenoption_agent.save(filenames['agents'] + '/eigenoptions_base_agent.json')
 
     eigenoption_agent.train_options(
-        taxicab,
+        snake,
         1_000_000,
-        False,
+        True,
         True
     )
 
@@ -2904,7 +3142,6 @@ if __name__ == "__main__":
             # 'preparedness_agent_returns_none_onboarding.json',
             # 'preparedness_incremental_agent_returns_specific_update.json',
             # 'preparedness_incremental_agent_returns_specific_replace.json',
-            # 'preparedness_agent_returns_none_onboarding.json',
             # 'preparedness_agent_returns_generic_onboarding.json',
             # 'preparedness_agent_returns_specific_onboarding.json',
             'eigenoptions_epoch_returns.json',
@@ -2918,7 +3155,7 @@ if __name__ == "__main__":
         data,
         graphing_window,
         evaluate_policy_window,
-        name='Snake',
+        name='Taxicab',
         x_label='Timesteps',
         y_label='Average Epoch Return',
         error_bars=True,
@@ -2951,38 +3188,19 @@ if __name__ == "__main__":
     )
     exit()
 
-    train_eigenoption_agents(
-        filenames['agents'] + '/eigenoptions_base_agent.json',
+    print("Training " + snake.environment_name + " q learning agents")
+
+    train_q_learning_agent(
         snake,
-        50_000,
+        training_timesteps,
         5,
         evaluate_policy_window,
         True,
         total_evaluation_steps,
         False,
         True,
-        32,
         progress_bar=True
     )
-    exit()
-
-    print("Training " + snake.environment_name + " preparedness options")
-
-    preparedness_agent = PreparednessAgent(snake.possible_actions,
-                                           0.9, 0.15, 0.9,
-                                           snake.state_dtype, snake.state_shape,
-                                           state_transition_graph, preparedness_subgoal_graph,
-                                           option_onboarding='none')
-    preparedness_agent.create_options(snake)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
-    preparedness_agent.train_options(snake, 500_000,
-                                     train_between_options=True,
-                                     train_onboarding_options=True,
-                                     train_subgoal_options=True,
-                                     progress_bar=True)
-    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
-    print(snake.environment_name + " preparedness training options")
-    exit()
 
     print("Creating preparedness subgoal graph")
     state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
@@ -3000,66 +3218,13 @@ if __name__ == "__main__":
         json.dump(stg_values, f)
     exit()
 
-    train_q_learning_agent(
-        snake,
-        training_timesteps,
-        5,
-        evaluate_policy_window,
-        True,
-        total_evaluation_steps,
-        continue_training=False,
-        progress_bar=True,
-        overwrite_existing_agents=True
-    )
-    exit()
-
-    print("Snake training betweenness options")
-
-    betweenness_agent = BetweennessAgent(
-        snake.possible_actions,
-        0.9,
-        0.15,
-        0.9,
-        snake.state_shape,
-        snake.state_dtype,
-        state_transition_graph,
-        30
-    )
-
-    betweenness_agent.find_betweenness_subgoals(
-        stg_values,
-        True
-    )
-
-    betweenness_agent.create_options(snake)
-
-    betweenness_agent.train_options(
-        snake,
-        options_training_timesteps,
-        True,
-        True
-    )
-
-    nx.set_node_attributes(state_transition_graph, stg_values)
-
-    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
-    exit()
-
-    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    with open(filenames['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
-
     stg_values = preparedness_efficient(
         adj_matrix,
         0.5,
-        max_num_hops=5,
+        max_num_hops=6,
         compressed_matrix=True,
         existing_stg_values=stg_values,
-        computed_hops_range=[1, 4]
+        computed_hops_range=[1, 5]
     )
 
     nx.set_node_attributes(state_transition_graph, stg_values)
@@ -3091,7 +3256,7 @@ if __name__ == "__main__":
         progress_bar=True
     )
 
-    print("NUm States: " + str(adj_matrix.shape[0]))
+    print(str(adj_matrix.shape[0]) + " nodes/states")
 
     sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
@@ -3099,43 +3264,43 @@ if __name__ == "__main__":
         json.dump(stg_values, f)
     exit()
 
-    data = graphing.extract_data(
-        filenames['results'],
-        [
-            'preparedness_agent_returns_none_onboarding.json',
-            # 'preparedness_agent_returns_generic_onboarding.json',
-            # 'preparedness_agent_returns_specific_onboarding.json',
-            'eigenoptions_epoch_returns.json',
-            # 'louvain agent returns',
-            # 'betweenness_epoch_returns.json',
-            # 'preparedness_flat_epoch_returns.json',
-            'q_learning_epoch_returns.json'
-        ]
+    print("Training " + taxicab.environment_name + " betweenness agents")
+
+    print("Training " + tinytown.environment_name + " eigenoptions")
+
+    adj_matrix, state_transition_graph, stg_values = snake.get_adjacency_matrix(
+        True,
+        True,
+        True,
+        get_state_features=True,
+        progress_bar=True
     )
-    graphing.graph_reward_per_epoch(
-        data,
-        graphing_window,
-        evaluate_policy_window,
-        name='Tinytown',
-        x_label='Timesteps',
-        y_label='Average Epoch Return',
-        error_bars=True,
-        colours=[
-            '#332288',
-            # '#117733',
-            # '#88CCEE',
-            '#DDCC77',
-            # '#CC6677',
-            # '#AA4499',
-            '#555555'
-        ],
-        labels=[
-            'Preparedness',
-            'Eigenoptions',
-            # 'Flat Preparedness',
-            'Primitives'
-        ]
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    adj_matrix, state_transition_graph, stg_values = snake.get_adjacency_matrix(
+        True,
+        True,
+        True,
+        get_state_features=True,
+        progress_bar=True
     )
+
+    print("NUm States: " + str(adj_matrix.shape[0]))
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
     exit()
 
     print("Training " + tinytown.environment_name + " eigenoptions agent")
@@ -3770,18 +3935,6 @@ if __name__ == "__main__":
     )
     exit()
 
-    print("Training tinytown Louvain Agents")
-    train_louvain_agents(tinytown, tinytown.environment_name,
-                         filenames_tinytown['agents'], filenames_tinytown['results'],
-                         training_timesteps, 3, evaluate_policy_window,
-                         initial_load_path=filenames_tinytown['agents'] + '/louvain_base_agent.json',
-                         all_actions_valid=False,
-                         overwrite_existing_agents=False,
-                         total_eval_steps=total_evaluation_steps,
-                         state_dtype=tinytown.state_dtype, state_shape=tinytown.state_shape, progress_bar=True)
-
-    exit()
-
     print("Betweenness agent " + tinytown.environment_name + " agent training")
     train_betweenness_agents('/betweenness_base_agent.json', tinytown,
                              training_timesteps, 5, evaluate_policy_window,
@@ -3977,20 +4130,6 @@ if __name__ == "__main__":
             '#EE3377'
         ]
     )
-    exit()
-
-    print("TinyTown Louvain Training Options")
-    louvain_agent = LouvainAgent(tinytown.possible_actions,
-                                 state_transition_graph,
-                                 tinytown.state_dtype, tinytown.state_shape,
-                                 min_hierarchy_level=0)
-    print("Applying Louvain")
-    louvain_agent.apply_louvain(first_levels_to_skip=2)
-    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
-    louvain_agent.train_options_value_iteration(0.001, tinytown, 1, False, True)
-    # louvain_agent.train_options(options_training_timesteps,
-    #                             tinytown, False, True)
-    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
     exit()
 
     graph_subgoal_count(

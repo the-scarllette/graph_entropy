@@ -272,10 +272,6 @@ def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=N
     if labels is not None:
         ax.legend()
 
-    if name is not None:
-        ax.set_title(name)
-        plt.savefig(name + '.png')
-
     if xlim is not None:
         ax.set_xlim(xlim)
         if x_tick is not None:
@@ -290,6 +286,10 @@ def graph_multiple(data, x=None, name=None, labels=None, x_label=None, y_label=N
     if no_xticks:
         ax.set_xticks([])
         ax.set_xticklabels([])
+
+    if name is not None:
+        ax.set_title(name)
+        plt.savefig(name + '.svg')
 
     plt.show()
     return

@@ -3,7 +3,7 @@ import numpy as np
 import math
 import networkx as nx
 import os
-import random
+import random as rand
 from scipy import sparse
 from typing import Callable, Dict, List, Tuple, Type
 
@@ -77,7 +77,9 @@ class EigenOption(Option):
             self,
             state: np.ndarray
     ) -> bool:
-        return True
+        action_values: Dict[int, float] = self.policy.get_action_values(state)
+        max_value = max(action_values.values())
+        return action_values[int(self.terminate_action)] < max_value
 
     def terminated(
             self,
@@ -183,14 +185,7 @@ class EigenOptionAgent(OptionsAgent):
         self.current_option_step = 0
         self.option_start_state = state
 
-        all_available_options: List[str] = self.get_available_options(state, possible_actions=possible_actions)
-        available_options: List[str] = []
-        for available_option in all_available_options:
-            option: Option = self.options[int(available_option)]
-            if not option.has_policy():
-                available_options.append(available_option)
-            elif option.choose_action(state, True, possible_actions) != self.terminate_action:
-                available_options.append(available_option)
+        available_options: List[str] = self.get_available_options(state, possible_actions=possible_actions)
 
         num_available_options = len(available_options)
         if num_available_options == 0:
@@ -314,7 +309,7 @@ class EigenOptionAgent(OptionsAgent):
             if not option.has_policy():
                 if int(option.actions[0]) in possible_actions:
                     available_options.append(str(i))
-            else:
+            elif option.initiated(state):
                 available_options.append(str(i))
         
         return available_options
@@ -413,7 +408,7 @@ class EigenOptionAgent(OptionsAgent):
         next_option_values = [self.get_state_option_values(state)[option] for option in next_options]
         max_next_option = max(next_option_values)
 
-        state_str = self.state_to_state_str(state)
+        state_str = self.state_to_state_str(self.option_start_state)
 
         self.state_option_values[state_str][self.current_option_index] += self.alpha * \
                                                                           (self.total_option_reward +

@@ -120,7 +120,7 @@ class PreparednessOptionPolicy(OptionsAgent):
 class PreparednessAgent(OptionsAgent):
 
     option_failure_reward = -1.0
-    option_step_reward = -0.0001
+    option_step_reward = -0.1
     option_success_reward = 1.0
 
     preparedness_subgoal_key = 'preparedness subgoal level'
@@ -193,7 +193,7 @@ class PreparednessAgent(OptionsAgent):
 
     def choose_option(self, state, no_random, possible_actions=None):
         self.current_option_step = 0
-        self.option_start_state = state
+        self.option_start_state = np.copy(state)
 
         available_options = self.get_available_options(state, possible_actions)
         if len(available_options) <= 0:
@@ -864,12 +864,12 @@ class PreparednessAgent(OptionsAgent):
                         state = self.node_to_state(state_node)
                     if environment.is_terminal(state):
                         continue
-                    state = environment.reset(state)
+                    state = np.copy(environment.reset(state))
                     option_initiated = option.initiated(state)
                 if not all_actions_possible:
                     possible_actions = environment.get_possible_actions(state)
 
-            action = option.choose_action(state, possible_actions)
+            action = option.choose_action(state, False, possible_actions)
 
             # Occurs if sub-option is not fully trained and takes itself to a state where it terminates
             # but the parent option does not terminate, but has no other options to initiate
