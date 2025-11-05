@@ -1,7 +1,9 @@
+import copy
 import json
 import networkx as nx
 import numpy as np
 import random as rand
+from scipy import sparse, stats
 import sys
 from typing import Callable, Dict, List, Tuple, Type
 
@@ -123,15 +125,17 @@ class PreparednessAgent(OptionsAgent):
     option_step_reward = -0.1
     option_success_reward = 1.0
 
-    preparedness_subgoal_key = 'preparedness subgoal level'
+    preparedness_subgoal_key = 'preparedness-subgoal-height'
 
     def __init__(self, actions: List[int], alpha: float, epsilon: float, gamma: float, state_dtype: Type,
                  state_shape: Tuple[int, int],
                  state_transition_graph: nx.MultiDiGraph,
-                 aggregate_graph: nx.MultiDiGraph,
+                 adjacency_matrix: sparse.csr_matrix,
+                 stg_values: Dict[str, Dict[str, int|str|float]],
+                 subgoal_graph: None|nx.MultiDiGraph,
                  option_onboarding: str,
                  max_option_length: int=np.inf,
-                 max_hierarchy_height : None | int=None):
+                 max_hierarchy_height : int=10):
         assert actions is not None
         assert option_onboarding == 'none' or option_onboarding == 'specific' or option_onboarding == 'generic'
 
@@ -142,7 +146,15 @@ class PreparednessAgent(OptionsAgent):
         self.state_dtype = state_dtype
         self.state_shape = state_shape
         self.state_transition_graph = state_transition_graph
-        self.aggregate_graph = aggregate_graph
+        self.adjacency_matrix = adjacency_matrix
+        self.distance_matrix = sparse.csgraph.dijkstra(
+            adjacency_matrix,
+            True,
+            unweighted=True,
+            limit=max_hierarchy_height
+        )
+        self.subgoal_graph = subgoal_graph
+        self.stg_values = stg_values
         self.option_onboarding = option_onboarding
         self.max_option_length = max_option_length
         self.max_hierarchy_height = max_hierarchy_height
@@ -151,18 +163,19 @@ class PreparednessAgent(OptionsAgent):
         self.max_subgoal_level = -np.inf
         self.subgoals = {}
         self.subgoals_list = []
-        for node, values in self.aggregate_graph.nodes(data=True):
-            subgoal_level = values[self.preparedness_subgoal_key]
-            try:
-                self.subgoals[subgoal_level].append(node)
-            except KeyError:
-                self.subgoals[subgoal_level] = [node]
-            self.subgoals_list.append(node)
-            subgoal_level_int = int(subgoal_level)
-            if subgoal_level_int < self.min_subgoal_level:
-                self.min_subgoal_level = subgoal_level_int
-            elif subgoal_level_int > self.max_subgoal_level:
-                self.max_subgoal_level = subgoal_level_int
+        if self.subgoal_graph is not None:
+            for node, values in self.subgoal_graph.nodes(data=True):
+                subgoal_level = values[self.preparedness_subgoal_key]
+                try:
+                    self.subgoals[subgoal_level].append(node)
+                except KeyError:
+                    self.subgoals[subgoal_level] = [node]
+                self.subgoals_list.append(node)
+                subgoal_level_int = int(subgoal_level)
+                if subgoal_level_int < self.min_subgoal_level:
+                    self.min_subgoal_level = subgoal_level_int
+                elif subgoal_level_int > self.max_subgoal_level:
+                    self.max_subgoal_level = subgoal_level_int
 
         self.specific_onboarding_possible = None
         self.options = []
@@ -188,8 +201,37 @@ class PreparednessAgent(OptionsAgent):
         self.current_option_step = 0
         self.state_option_values = {'none': {}, 'generic': {}, 'specific': {}}
 
-        self.action_transition_probs = {}
+        # {state, next_state, n} -> P(S_{t + n} = next_state | S_{t} = state) actions taken randomly
+        self.random_transition_prob: Dict[Tuple[int, int, int], float] = {}
         return
+
+    def assign_subgoals(
+            self,
+            unassigned_subgoals: Dict[int, List[int]],
+            max_subgoal_height: int,
+            key: str
+    ) -> Dict[int, List[str]]:
+        subgoal_height_found: bool
+        subgoal_height_value: str
+        height: int
+        subgoals = {i: [] for i in range(1, max_subgoal_height + 1)}
+        for node in self.state_transition_graph.nodes():
+            subgoal_height_value = "None"
+
+            subgoal_height_found = False
+            height = max_subgoal_height
+            while height > 0:
+                if int(node) in unassigned_subgoals[height]:
+                    subgoal_height_found = True
+                    break
+                height -= 1
+
+            if subgoal_height_found:
+                subgoals[height].append(node)
+                subgoal_height_value = str(height)
+
+            self.stg_values[node][key] = subgoal_height_value
+        return subgoals
 
     def choose_option(self, state, no_random, possible_actions=None):
         self.current_option_step = 0
@@ -225,6 +267,55 @@ class PreparednessAgent(OptionsAgent):
 
         self.current_option_index = int(rand.choice(ops))
         return self.option_index_lookup(self.current_option_index)
+
+    def compute_preparedness(
+            self,
+            hops: int,
+            use_existing_values: bool,
+            verbose: bool=False
+    ):
+        frequency_entropy: None| float
+        neighbourhood_entropy: None| float
+        preparedness: None| float
+
+        for node in self.stg_values:
+            if verbose:
+                print_progress_bar(
+                    int(node),
+                    self.adjacency_matrix.shape[0],
+                    "Computing Preparedness node " + str(node),
+                    " Complete"
+                )
+
+            frequency_entropy = None
+            neighbourhood_entropy = None
+            preparedness = None
+
+            if use_existing_values:
+                try:
+                    frequency_entropy = self.stg_values[node][self.frequency_entropy_key(hops)]
+                except KeyError:
+                    ()
+                try:
+                    neighbourhood_entropy = self.stg_values[node][self.neighbourhood_entropy_key(hops)]
+                except KeyError:
+                    ()
+                try:
+                    preparedness = self.stg_values[node][self.preparedness_key(hops)]
+                except KeyError:
+                    ()
+
+            if frequency_entropy is None:
+                frequency_entropy = self.frequency_entropy(int(node), hops)
+                self.stg_values[str(node)][PreparednessAgent.frequency_entropy_key(hops)] = frequency_entropy
+            if neighbourhood_entropy is None:
+                neighbourhood_entropy = self.neighbourhood_entropy(int(node), hops)
+                self.stg_values[str(node)][PreparednessAgent.neighbourhood_entropy_key(hops)] = neighbourhood_entropy
+            if preparedness is None:
+                preparedness = frequency_entropy + neighbourhood_entropy
+                self.stg_values[str(node)][PreparednessAgent.preparedness_key(hops)] = preparedness
+
+        return
 
     def copy_agent(self, copy_from: 'PreparednessAgent') -> None:
         self.specific_onboarding_possible = copy_from.specific_onboarding_possible
@@ -315,17 +406,17 @@ class PreparednessAgent(OptionsAgent):
                                     initiation_func, continuation_func,
                                     primitive_actions,
                                     self.alpha, self.epsilon, self.gamma,
-                                    self.state_dtype, self.aggregate_graph)
+                                    self.state_dtype, self.subgoal_graph)
         return option
 
     def create_options(self, environment: Environment) -> None:
         # An option from subgoals i -> j is in level k where k is the length of shortest path from i -> j in the
         # aggregate graph. If there is no such path, then there is no such option.
 
-        aggregate_graph_distances = nx.floyd_warshall(self.aggregate_graph)
+        aggregate_graph_distances = nx.floyd_warshall(self.subgoal_graph)
         max_option_level = -np.inf
-        for start_node in self.aggregate_graph.nodes(data=False):
-            for end_node in self.aggregate_graph.nodes(data=False):
+        for start_node in self.subgoal_graph.nodes(data=False):
+            for end_node in self.subgoal_graph.nodes(data=False):
                 distance = aggregate_graph_distances[start_node][end_node]
                 if distance >= np.inf:
                     continue
@@ -342,9 +433,9 @@ class PreparednessAgent(OptionsAgent):
 
         # Options Between Subgoals
         for k in range(1, max_option_level + 1):
-            for start_node, start_values in self.aggregate_graph.nodes(data=True):
+            for start_node, start_values in self.subgoal_graph.nodes(data=True):
                 start_node_str = start_values['state']
-                for end_node, end_values in self.aggregate_graph.nodes(data=True):
+                for end_node, end_values in self.subgoal_graph.nodes(data=True):
                     if k != aggregate_graph_distances[start_node][end_node]:
                         continue
                     if self.max_option_length != np.inf:
@@ -379,8 +470,8 @@ class PreparednessAgent(OptionsAgent):
         # Specific Onboarding
         self.specific_onboarding_possible = False
         specific_onboarding_nodes = []
-        for node, values in self.aggregate_graph.nodes(data=True):
-            if len(self.aggregate_graph.in_edges(node)) <= 0:
+        for node, values in self.subgoal_graph.nodes(data=True):
+            if len(self.subgoal_graph.in_edges(node)) <= 0:
                 self.specific_onboarding_possible = True
                 specific_onboarding_nodes.append(node)
                 option = self.create_option(None, node, None, values['state'],
@@ -395,7 +486,7 @@ class PreparednessAgent(OptionsAgent):
         # Generic Onboarding Subgoal Options
         # Can initiate from any state where there is a path to their subgoal
         options_for_generic_onboarding_subgoal_option = options_for_option + [self.generic_onboarding_option]
-        for node, values in self.aggregate_graph.nodes(data=True):
+        for node, values in self.subgoal_graph.nodes(data=True):
             node_str = values['state']
             option = self.create_option(None, node, None, node_str,
                                         max_option_level + 1,
@@ -410,7 +501,7 @@ class PreparednessAgent(OptionsAgent):
         if not self.specific_onboarding_possible:
             return
         options_for_specific_onboarding_subgoal_option = options_for_option + self.specific_onboarding_options
-        for node, values in self.aggregate_graph.nodes(data=True):
+        for node, values in self.subgoal_graph.nodes(data=True):
             if node in specific_onboarding_nodes:
                 continue
             node_str = values['state']
@@ -428,15 +519,15 @@ class PreparednessAgent(OptionsAgent):
             if state_node == subgoal:
                 return False
 
-            for node in self.aggregate_graph.nodes(data=False):
+            for node in self.subgoal_graph.nodes(data=False):
                 if state_node != node:
                     continue
-                if nx.has_path(self.aggregate_graph, node, subgoal):
+                if nx.has_path(self.subgoal_graph, node, subgoal):
                     return True
 
             for option in self.specific_onboarding_options:
                 onboarding_subgoal = option.end_node
-                if not nx.has_path(self.aggregate_graph, onboarding_subgoal, subgoal):
+                if not nx.has_path(self.subgoal_graph, onboarding_subgoal, subgoal):
                     continue
                 if self.has_path_to_node(state, onboarding_subgoal):
                     return True
@@ -444,6 +535,236 @@ class PreparednessAgent(OptionsAgent):
             return False
 
         return initiation_function
+
+    def create_subgoal_graph(
+            self
+    ) -> nx.MultiDiGraph:
+
+        h_low: int
+        h_high: int
+        connection_found: bool
+        connecting_subgoals: List[str]
+
+        max_height: int = max(self.subgoals.keys())
+        self.subgoal_graph = nx.MultiDiGraph()
+
+        for height in self.subgoals:
+            for start_subgoal in self.subgoals[height]:
+                connecting_subgoals = []
+                if not self.subgoal_graph.has_node(start_subgoal):
+                    self.subgoal_graph.add_node(start_subgoal)
+
+                # Connections to subgoals of lower heights
+                h_low = height - 1
+                connection_found = False
+                while (h_low >= 1) and (not connection_found):
+                    for end_subgoal in self.subgoals[h_low]:
+                        if nx.has_path(
+                                self.state_transition_graph,
+                                start_subgoal,
+                                end_subgoal
+                        ):
+                            connection_found = True
+                            connecting_subgoals.append(end_subgoal)
+                    h_low -= 1
+
+                # Connections to subgoals of higher heights
+                h_high = height + 1
+                connection_found = False
+                while (h_high <= max_height) and (not connection_found):
+                    for end_subgoal in self.subgoals[h_high]:
+                        if nx.has_path(
+                                self.state_transition_graph,
+                                start_subgoal,
+                                end_subgoal
+                        ):
+                            connection_found = True
+                            connecting_subgoals.append(end_subgoal)
+                    h_high += 1
+
+                # Adding connections to subgoal graph
+                for end_subgoal in connecting_subgoals:
+                    if not self.subgoal_graph.has_node(end_subgoal):
+                        self.subgoal_graph.add_node(end_subgoal)
+                    self.subgoal_graph.add_edge(
+                        start_subgoal,
+                        end_subgoal
+                    )
+
+        nx.set_node_attributes(self.subgoal_graph, self.stg_values)
+        return self.subgoal_graph
+
+    def find_local_maxima(
+            self,
+            key: str,
+            hops: int
+    ) -> List[int]:
+        local_maxima: List[int] = []
+        local_maxima_key: str = key + "-local-maxima"
+        is_subgoal: str
+        node_value: float
+
+        for node in self.state_transition_graph.nodes():
+            is_subgoal = 'True'
+
+            out_neighbourhood = self.get_out_neighbourhood(int(node), hops)
+            in_neighbourhood = self.get_in_neighbourhood(int(node), hops)
+
+            if (len(out_neighbourhood) <= 0) or (len(in_neighbourhood) <= 0):
+                self.stg_values[node][local_maxima_key] = 'False'
+                continue
+
+            node_value = self.stg_values[node][key]
+
+            for neighbour in out_neighbourhood + in_neighbourhood:
+                if int(node) == int(neighbour):
+                    continue
+                neighbour_value = self.stg_values[str(neighbour)][key]
+                if node_value <= neighbour_value:
+                    is_subgoal = 'False'
+                    break
+
+            self.stg_values[node][local_maxima_key] = is_subgoal
+
+            if is_subgoal == 'True':
+                local_maxima.append(int(node))
+
+        return local_maxima
+
+    def find_preparedness_subgoals(
+            self,
+            find_frequency_entropy_subgoals: bool=False,
+            find_neighbourhood_entropy_subgoals: bool=False,
+            use_existing_values: bool=False,
+            verbose: bool=False
+    ):
+        subgoals: Dict[int, List[int]] = {}
+        frequency_entropy_subgoals: Dict[int, List[int]] = {}
+        neighbourhood_entropy_subgoals: Dict[int, List[int]] = {}
+        preparedness_subgoals_found: bool = False
+        frequency_entropy_subgoals_found: bool = not find_frequency_entropy_subgoals
+        neighbourhood_entropy_subgoals_found: bool = not find_neighbourhood_entropy_subgoals
+        max_subgoal_height: int = self.max_hierarchy_height
+        max_frequency_entropy_height: int = self.max_hierarchy_height
+        max_neighbourhood_entropy_height: int = self.max_hierarchy_height
+
+        for hops in range(1, self.max_hierarchy_height + 1):
+            if verbose:
+                print("Finding Subgoals for height " + str(hops))
+                print("     Computing Preparedness at height " + str(hops))
+
+            self.compute_preparedness(hops, use_existing_values, verbose)
+
+            if not preparedness_subgoals_found:
+                if verbose:
+                    print("     Finding preparedness local maxima at height " + str(hops))
+                subgoals[hops] = copy.copy(self.find_local_maxima(self.preparedness_key(hops), hops))
+
+            if not frequency_entropy_subgoals_found:
+                if verbose:
+                    print("     Finding frequency entropy local maxima at height " + str(hops))
+                frequency_entropy_subgoals[hops] = copy.copy(
+                    self.find_local_maxima(self.frequency_entropy_key(hops), hops)
+                )
+            if not neighbourhood_entropy_subgoals_found:
+                if verbose:
+                    print("     Finding neighbourhood entropy local maxima at height " + str(hops))
+                neighbourhood_entropy_subgoals[hops] = copy.copy(
+                    self.find_local_maxima(self.neighbourhood_entropy_key(hops), hops)
+                )
+
+            if hops > 1:
+                if not preparedness_subgoals_found:
+                    if subgoals[hops] == subgoals[hops - 1]:
+                        preparedness_subgoals_found = True
+                        max_subgoal_height = hops
+                    elif subgoals[hops] == []:
+                        preparedness_subgoals_found = True
+                        max_subgoal_height = hops - 1
+                    if preparedness_subgoals_found:
+                        if verbose:
+                            print("Preparedness subgoals found")
+                if not frequency_entropy_subgoals_found:
+                    if frequency_entropy_subgoals[hops] == frequency_entropy_subgoals[hops - 1]:
+                        frequency_entropy_subgoals_found = True
+                        max_frequency_entropy_height = hops
+                    elif frequency_entropy_subgoals[hops] == []:
+                        frequency_entropy_subgoals_found = True
+                        max_frequency_entropy_height = hops - 1
+                    if frequency_entropy_subgoals_found:
+                        if verbose:
+                            print("Frequency entropy subgoals found")
+                if not neighbourhood_entropy_subgoals_found:
+                    if neighbourhood_entropy_subgoals[hops] == neighbourhood_entropy_subgoals[hops - 1]:
+                        neighbourhood_entropy_subgoals_found = True
+                        max_neighbourhood_entropy_height = hops
+                    elif neighbourhood_entropy_subgoals[hops] == []:
+                        neighbourhood_entropy_subgoals_found = True
+                        max_neighbourhood_entropy_height = hops - 1
+                    if neighbourhood_entropy_subgoals_found:
+                        if verbose:
+                            print("Neighbourhood entropy subgoals found")
+
+
+            if (
+                    preparedness_subgoals_found and
+                    frequency_entropy_subgoals_found and
+                    neighbourhood_entropy_subgoals_found
+            ):
+                break
+
+        if not preparedness_subgoals_found and verbose:
+            print("Preparedness Subgoal Height maxed-out")
+        if not frequency_entropy_subgoals_found and verbose:
+            print("Frequency Entropy Subgoal Height maxed-out")
+        if not neighbourhood_entropy_subgoals_found and verbose:
+            print("Neighbourhood Entropy Subgoal Height maxed-out")
+
+        self.subgoals = self.assign_subgoals(
+            subgoals,
+            max_subgoal_height,
+            'preparedness-subgoal-height'
+        )
+        self.subgoals_list = []
+        for key in self.subgoals:
+            self.subgoals_list += self.subgoals[key]
+
+        if find_frequency_entropy_subgoals:
+            _ = self.assign_subgoals(
+                frequency_entropy_subgoals,
+                max_frequency_entropy_height,
+                'frequency-entropy-subgoal-height'
+            )
+        if find_neighbourhood_entropy_subgoals:
+            _ = self.assign_subgoals(
+                neighbourhood_entropy_subgoals,
+                max_neighbourhood_entropy_height,
+                'neighbourhood-entropy-subgoal-height'
+            )
+
+        nx.set_node_attributes(self.state_transition_graph, self.stg_values)
+        return
+
+    def frequency_entropy(
+            self,
+            node: int,
+            hops: int
+    ) -> float:
+        prob_values: List[float] = []
+        out_neighbourhood = self.get_out_neighbourhood(node, hops)
+        for neighbour in out_neighbourhood:
+            prob_values.append(self.get_random_transition_prob(node, neighbour, hops))
+
+        if sum(prob_values) <= 0:
+            return 0.0
+        frequency_entropy = stats.entropy(prob_values, base=2)
+        return frequency_entropy
+
+    @staticmethod
+    def frequency_entropy_key(
+            hops: int
+    ) -> str:
+        return str(hops) + "-frequency-entropy"
 
     def generic_onboarding_initiation_function(self, state: np.ndarray) -> bool:
         for subgoal in self.subgoals_list:
@@ -493,6 +814,57 @@ class PreparednessAgent(OptionsAgent):
 
 
         return available_options
+
+    def get_in_neighbourhood(
+            self,
+            node: int,
+            hops: int
+    ) -> List[int]:
+        in_neighbourhood: List[int] = [
+            j for j in range(self.distance_matrix.shape[0]) if 0 < self.distance_matrix[j, node] <= hops
+        ]
+        return in_neighbourhood
+
+    def get_out_neighbourhood(
+            self,
+            node: int,
+            hops: int
+    ) -> List[int]:
+        out_neighbourhood: List[int] = [
+            j for j in range(self.distance_matrix.shape[0]) if 0 < self.distance_matrix[node, j] <= hops
+        ]
+        return out_neighbourhood
+
+    def get_random_transition_prob(
+            self,
+            start_node: int,
+            end_node: int,
+            hops: int
+    ) -> float:
+        if hops <= 0:
+            if start_node == end_node:
+                return 1.0
+            else:
+                return 0.0
+        elif hops == 1:
+            return self.adjacency_matrix[start_node, end_node]
+
+        try:
+            trans_prob = self.random_transition_prob[(start_node, end_node, hops)]
+            return trans_prob
+        except KeyError:
+            ()
+
+        out_neighbourhood = self.get_out_neighbourhood(start_node, 1)
+        trans_prob = 0.0
+        for out_neighbour in out_neighbourhood:
+            trans_prob += (
+                    self.adjacency_matrix[start_node, out_neighbour] *
+                    self.get_random_transition_prob(out_neighbour, end_node, hops - 1)
+            )
+
+        self.random_transition_prob[(start_node, end_node, hops)] = trans_prob
+        return trans_prob
 
     def get_state_node(self, state: np.ndarray) -> str:
         state_str = np.array2string(state.astype(self.state_dtype))
@@ -693,8 +1065,39 @@ class PreparednessAgent(OptionsAgent):
         self.state_node_lookup = agent_save_file['state node lookup']
         self.path_lookup = agent_save_file['path lookup']
         self.state_option_values = agent_save_file['state option values']
-        # self.max_option_length = agent_save_file['max option length']
+        self.random_transition_prob = agent_save_file['random transition prob']
         return
+
+    def neighbourhood_entropy(
+            self,
+            node: int,
+            hops: int
+    ) -> float:
+        out_neighbourhood = self.get_out_neighbourhood(node, hops)
+        if node not in out_neighbourhood:
+            out_neighbourhood.append(node)
+        probs: List[float] = []
+
+        for end_node in out_neighbourhood:
+            transition_prob: float = 0.0
+            for start_node in out_neighbourhood:
+                transition_prob += self.get_random_transition_prob(start_node, end_node, hops)
+            probs.append(transition_prob)
+
+        prob_sum: float = sum(probs)
+        if prob_sum <= 0.0:
+            return 0.0
+
+        probs = [prob / prob_sum for prob in probs]
+
+        neighbourhood_entropy = stats.entropy(probs, base=2)
+        return neighbourhood_entropy
+
+    @staticmethod
+    def neighbourhood_entropy_key(
+            hops: int
+    ) -> str:
+        return str(hops) + "-neighbourhood-entropy"
 
     def node_to_state(self, node: str) -> np.ndarray:
         state_str = self.state_transition_graph.nodes(data=True)[node]['state']
@@ -738,8 +1141,15 @@ class PreparednessAgent(OptionsAgent):
         option = subgoal_options[option_index]
         return option
 
+    @staticmethod
+    def preparedness_key(
+            hops: int
+    ) -> str:
+        return str(hops) + "-preparedness"
+
     def save(self, save_path: str) -> None:
-        agent_save_file = {'options between subgoals': {level: [{'start node': option.start_node[0],
+        agent_save_file = {
+            'options between subgoals': {level: [{'start node': option.start_node[0],
                                                          'end node': option.end_node,
                                                          'start state str': option.start_state_str[0],
                                                          'end state str': option.end_state_str,
@@ -748,30 +1158,32 @@ class PreparednessAgent(OptionsAgent):
                                                          'option lookup': option.get_option_lookup()
                                                          } for option in self.options_between_subgoals[level]]
                                                         for level in self.options_between_subgoals},
-                           'generic onboarding option': {'policy':
-                                                             self.generic_onboarding_option.policy.q_values},
-                           'generic onboarding index': self.generic_onboarding_index,
-                           'specific onboarding options': [{'end node': option.end_node,
-                                                            'end state str': option.end_state_str,
-                                                            'policy': option.get_state_values(),
-                                                            'option lookup': option.get_option_lookup()}
-                                                           for option in self.specific_onboarding_options],
-                           'generic onboarding subgoal options': [{'end node': option.end_node,
-                                                                   'end state str': option.end_state_str,
-                                                                   'policy': option.get_state_values(),
-                                                                   'option lookup': option.get_option_lookup()}
-                                                                  for option in self.generic_onboarding_subgoal_options],
-                           'specific onboarding subgoal options': [{'end node': option.end_node,
-                                                                    'end state str': option.end_state_str,
-                                                                    'policy': option.get_state_values(),
-                                                                    'option lookup': option.get_option_lookup()}
-                                                                   for option in self.specific_onboarding_subgoal_options],
-                           'state node lookup': self.state_node_lookup,
-                           'path lookup': self.path_lookup,
-                           'environment start states str': self.environment_start_states_str,
-                           'environment start nodes': self.environment_start_nodes,
-                           'state option values': self.state_option_values,
-                           'max option length': self.max_option_length}
+           'generic onboarding option': {'policy':
+                                             self.generic_onboarding_option.policy.q_values},
+           'generic onboarding index': self.generic_onboarding_index,
+           'specific onboarding options': [{'end node': option.end_node,
+                                            'end state str': option.end_state_str,
+                                            'policy': option.get_state_values(),
+                                            'option lookup': option.get_option_lookup()}
+                                           for option in self.specific_onboarding_options],
+           'generic onboarding subgoal options': [{'end node': option.end_node,
+                                                   'end state str': option.end_state_str,
+                                                   'policy': option.get_state_values(),
+                                                   'option lookup': option.get_option_lookup()}
+                                                  for option in self.generic_onboarding_subgoal_options],
+           'specific onboarding subgoal options': [{'end node': option.end_node,
+                                                    'end state str': option.end_state_str,
+                                                    'policy': option.get_state_values(),
+                                                    'option lookup': option.get_option_lookup()}
+                                                   for option in self.specific_onboarding_subgoal_options],
+           'state node lookup': self.state_node_lookup,
+           'path lookup': self.path_lookup,
+           'environment start states str': self.environment_start_states_str,
+           'environment start nodes': self.environment_start_nodes,
+           'state option values': self.state_option_values,
+           'max option length': self.max_option_length,
+           'random transition prob': self.random_transition_prob
+        }
 
         with open(save_path, 'w') as f:
             json.dump(agent_save_file, f)
@@ -796,14 +1208,14 @@ class PreparednessAgent(OptionsAgent):
         return
 
     def set_option_by_pathing(self, option: PreparednessOption) -> None:
-        for node, values in self.aggregate_graph.nodes(data=True):
+        for node, values in self.subgoal_graph.nodes(data=True):
             start_state = self.state_str_to_state(values['state'])
             if option.terminated(start_state):
                 continue
-            if (node != option.start_node[0]) and (not nx.has_path(self.aggregate_graph, node, option.start_node[0])):
+            if (node != option.start_node[0]) and (not nx.has_path(self.subgoal_graph, node, option.start_node[0])):
                 continue
 
-            path = nx.dijkstra_path(self.aggregate_graph, node, option.end_node)
+            path = nx.dijkstra_path(self.subgoal_graph, node, option.end_node)
 
             for i in range(len(path) - 1):
                 first_node = path[i]
@@ -902,130 +1314,6 @@ class PreparednessAgent(OptionsAgent):
 
         return total_end_states, total_successes
 
-    def train_option_value_iteration(self, option: Option, environment: Environment,
-                                     option_success_states: List[str],
-                                     final_delta: float, option_rollouts: int,
-                                     all_actions_valid: bool=False) -> None:
-        try:
-            primitive_option = option.hierarchy_level <=  1
-        except AttributeError:
-            primitive_option = True
-
-        def t(start_state: np.ndarray, o: Option | int) -> Dict[str, float]:
-            start_state_str = self.state_to_state_str(start_state)
-            if primitive_option:
-                try:
-                    probabilities = self.action_transition_probs[(start_state_str, o)]
-                    return probabilities
-                except KeyError:
-                    self.action_transition_probs[(start_state_str, o)] = {}
-                    for _ in range(option_rollouts):
-                        _ = environment.reset(start_state)
-                        next_state, _, done, _ = environment.step(o)
-                        next_state_str = self.state_to_state_str(next_state)
-                        try:
-                            self.action_transition_probs[(start_state_str, o)][next_state_str] += (1 / option_rollouts)
-                        except KeyError:
-                            self.action_transition_probs[(start_state_str, o)][next_state_str] = (1 / option_rollouts)
-                    probabilities = self.action_transition_probs[(start_state_str, o)]
-                    return probabilities
-            try:
-                option_key = (start_state_str, o.start_node[0], o.end_node)
-            except AttributeError:
-                option_key = (start_state_str, self.generic_onboarding_index)
-
-            try:
-                probabilities = self.action_transition_probs[option_key]
-                return probabilities
-            except KeyError:
-                pass
-
-            self.action_transition_probs[option_key] = {}
-            for _ in range(option_rollouts):
-                next_state = environment.reset(start_state)
-                option_terminal = False
-                while not option_terminal:
-                    action = o.choose_action(next_state, environment.get_possible_actions(next_state))
-                    next_state, _, done, _ = environment.step(action)
-                    option_terminal = done or o.terminated(next_state)
-                next_state_str = self.state_to_state_str(next_state)
-
-                try:
-                    self.action_transition_probs[option_key][next_state_str] += (1/option_rollouts)
-                except KeyError:
-                    self.action_transition_probs[option_key][next_state_str] = (1 / option_rollouts)
-
-            probabilities = self.action_transition_probs[option_key]
-            return probabilities
-
-        def v(s: np.ndarray) -> float:
-            if primitive_option:
-                state_values = option.policy.get_action_values(s)
-            else:
-                state_values = option.policy.get_state_option_values(s)
-            if not state_values.values():
-                return 0.0
-            return max(state_values.values())
-
-        possible_actions = environment.possible_actions
-        delta = np.inf
-
-        nodes = []
-        for node in self.state_transition_graph.nodes(data=False):
-            state = self.node_to_state(node)
-            if option.terminated(state):
-                continue
-            nodes.append(node)
-
-        while delta > final_delta:
-            delta = 0
-            for node in nodes:
-                state = self.node_to_state(node)
-                if option.terminated(state):
-                    continue
-
-                temp = v(state)
-
-                if not all_actions_valid:
-                    possible_actions = environment.get_possible_actions(state)
-                if primitive_option:
-                    possible_options = possible_actions
-                else:
-                    possible_options = option.policy.get_available_options(state, possible_actions)
-
-                option_values = {possible_option: 0.0 for possible_option in possible_options}
-                for possible_option in possible_options:
-                    if primitive_option:
-                        transition_probabilities = t(state, possible_option)
-                    else:
-                        transition_probabilities = t(state, option.policy.options[possible_option])
-                    option_value = 0.0
-                    for tilde_state_str in list(transition_probabilities.keys()):
-                        tilde_state = self.state_str_to_state(tilde_state_str)
-
-                        transition_prob = transition_probabilities[tilde_state_str]
-                        if transition_prob <= 0.0:
-                            continue
-
-                        reward = self.option_step_reward
-                        if tilde_state_str in option_success_states:
-                            reward = self.option_success_reward
-                        elif option.terminated(tilde_state):
-                            reward = self.option_failure_reward
-
-                        option_value += transition_prob * (reward + (self.gamma * v(tilde_state)))
-
-                    option_values[possible_option] = option_value
-
-                if primitive_option:
-                    option.policy.q_values[self.state_to_state_str(state)] = option_values
-                else:
-                    option.policy.set_state_option_values(option_values, state)
-
-                delta = max(delta, abs(temp - v(state)))
-
-        return
-
     def train_options(self, environment: Environment,
                       training_timesteps: int,
                       min_level: None | int=None, max_level: None | int=None,
@@ -1089,7 +1377,7 @@ class PreparednessAgent(OptionsAgent):
             if progress_bar:
                 print("Training Generic Onboarding option")
             success_states = [values['state']
-                              for _, values in self.aggregate_graph.nodes(data=True)]
+                              for _, values in self.subgoal_graph.nodes(data=True)]
             total_end_states, total_successes = self.train_option(self.generic_onboarding_option, environment,
                                                                   training_timesteps,
                                                                   success_states, None,
@@ -1157,93 +1445,3 @@ class PreparednessAgent(OptionsAgent):
         for untrained_option in untrained_options:
             print("     " + untrained_option[0] + ' -> ' + untrained_option[1])
         return untrained_options
-
-    def train_options_value_iteration(self, environment: Environment,
-                                      final_delta: float, option_rollouts: int,
-                                      min_level: None | int=None, max_level: None | int=None,
-                                      train_between_options: bool=True,
-                                      train_onboarding_options: bool=True, train_subgoal_options: bool=True,
-                                      all_actions_possible: bool=False,
-                                      progress_bar: bool=False) -> None:
-
-        if min_level is None:
-            min_level = 1
-        if max_level is None:
-            max_level = np.inf
-
-        total_options = 0
-        if train_onboarding_options:
-            total_options += len(self.specific_onboarding_options) + 1
-        if train_subgoal_options:
-            total_options += (len(self.generic_onboarding_subgoal_options)
-                              + len(self.specific_onboarding_subgoal_options))
-        if train_between_options:
-            level = min_level
-            while level <= max_level:
-                try:
-                    total_options += len(self.options_between_subgoals[str(level)])
-                except KeyError:
-                    max_level = level - 1
-                level += 1
-
-        option_count = 0
-
-        # Options between subgoals
-        if train_between_options:
-            if progress_bar:
-                print("Training Options Between Subgoals")
-            for level in range(min_level, max_level + 1):
-                if progress_bar:
-                    print("     Training Options at level: " + str(level))
-                for option in self.options_between_subgoals[str(level)]:
-                    if progress_bar:
-                        option_count += 1
-                        print("         Option: " + str(option.start_node[0]) + " -> " + str(option.end_node) +
-                              " - " + str(option_count) + "/" + str(total_options))
-                    success_states = [option.end_state_str]
-
-                    self.train_option_value_iteration(option, environment, success_states,
-                                                      final_delta, option_rollouts,
-                                                      all_actions_possible)
-
-        # Onboarding Options
-        # Generic Onboarding Options
-        if train_onboarding_options:
-            if progress_bar:
-                print("Training Generic Onboarding option")
-            success_states = [values['state']
-                              for _, values in self.aggregate_graph.nodes(data=True)]
-            self.train_option_value_iteration(self.generic_onboarding_option, environment, success_states,
-                                              final_delta, option_rollouts,
-                                              all_actions_possible)
-            if progress_bar:
-                print("Training Specific Onboarding Options")
-            # Specific onboarding options
-            for option in self.specific_onboarding_options:
-                if progress_bar:
-                    print("     Option towards state: " + option.end_node)
-                self.train_option_value_iteration(option, environment, [option.end_state_str],
-                                                  final_delta, option_rollouts,
-                                                  all_actions_possible)
-
-        # Subgoal Options
-        # Generic Subgoal Options
-        if train_subgoal_options:
-            if progress_bar:
-                print("Training Generic Subgoal Options")
-            for option in self.generic_onboarding_subgoal_options:
-                if progress_bar:
-                    print("     Options towards state: " + option.end_node)
-                self.train_option_value_iteration(option, environment, [option.end_state_str],
-                                                  final_delta, option_rollouts,
-                                                  all_actions_possible)
-            # Specific Subgoal Options
-            if progress_bar:
-                print("Training Specific Subgoal Options")
-            for option in self.specific_onboarding_subgoal_options:
-                if progress_bar:
-                    print("     Option towards state: " + option.end_node)
-                self.train_option_value_iteration(option, environment, [option.end_state_str],
-                                                  final_delta, option_rollouts,
-                                                  all_actions_possible)
-        return

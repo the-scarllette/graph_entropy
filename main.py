@@ -29,7 +29,7 @@ from learning_agents.multilevelgoalagent import MultiLevelGoalAgent
 from learning_agents.optionsagent import Option, OptionsAgent, create_option_goal_initiation_func, \
     generate_option_to_goal
 from learning_agents.preparednessagent import PreparednessAgent
-from learning_agents.preparedness_incremental import PreparednessIncremental
+from learning_agents.preparednessincremental import PreparednessIncremental
 from learning_agents.qlearningagent import QLearningAgent
 from learning_agents.rodagent import RODAgent
 from learning_agents.subgoalagent import SubgoalAgent
@@ -41,7 +41,7 @@ def add_eigenoptions_to_stg(agent: EigenOptionAgent, environment: Environment):
     stg_filename = filenames[2]
     stg_values_filename = filenames[3]
 
-    with open(stg_values_filename , 'r') as f:
+    with open(stg_values_filename, 'r') as f:
         state_transition_graph_values = json.load(f)
 
     for node in state_transition_graph_values:
@@ -140,8 +140,6 @@ def add_preparedness_subgoals_to_file(env_name, min_num_subgoals, min_num_hops=1
     return
 
 
-
-
 def add_subgoals(env_name,
                  compressed_matrix=False,
                  beta=0.5, beta_values=None, min_num_hops=1, max_num_hops=10,
@@ -210,7 +208,7 @@ def betweenness(stg: nx.Graph, existing_stg_values=None):
     for node in existing_stg_values:
         betweenness_value = existing_stg_values[node]['betweenness']
         local_maxima_str = 'True'
-        for adjacent_node  in stg.neighbors(node):
+        for adjacent_node in stg.neighbors(node):
             adjacent_betweenness_value = existing_stg_values[adjacent_node]['betweenness']
             if betweenness_value <= adjacent_betweenness_value:
                 local_maxima_str = 'False'
@@ -223,8 +221,8 @@ def betweenness(stg: nx.Graph, existing_stg_values=None):
     return stg, existing_stg_values
 
 
-def count_clusters(environment: Environment, cluster_key: str, count_states: bool=False)\
-    -> Dict[int, int] | Tuple[Dict[int, int], int]:
+def count_clusters(environment: Environment, cluster_key: str, count_states: bool = False) \
+        -> Dict[int, int] | Tuple[Dict[int, int], int]:
     env_filenames = get_filenames(environment)
     with open(env_filenames['state transition graph values'], 'r') as f:
         state_transition_graph_values = json.load(f)
@@ -261,8 +259,8 @@ def count_clusters(environment: Environment, cluster_key: str, count_states: boo
     return cluster_count, num_states
 
 
-def count_subgoals(environment: Environment, subgoal_key: str, multiple_levels: bool=False,
-                   count_states: bool=False)\
+def count_subgoals(environment: Environment, subgoal_key: str, multiple_levels: bool = False,
+                   count_states: bool = False) \
         -> Dict[int, int] | Tuple[Dict[int, int], int]:
     env_filenames = get_filenames(environment)
     with open(env_filenames['state transition graph values'], 'r') as f:
@@ -357,12 +355,13 @@ def compute_entropy(distribution, log_base=10):
 
 
 def create_subgoal_graph(state_transition_graph: nx.MultiDiGraph,
-                         stg_values : Dict[str, Dict[str, str | float | int]],
+                         stg_values: Dict[str, Dict[str, str | float | int]],
                          subgoals: Dict[str, List[str]],
-                         max_distance: int=np.inf) -> (
-        nx.MultiDiGraph, nx.MultiDiGraph, Dict[str, Dict[str, float|str]]):
+                         max_distance: int = np.inf) -> (
+        nx.MultiDiGraph, nx.MultiDiGraph, Dict[str, Dict[str, float | str]]):
     def connect_nodes(node_1: str, node_2: str) -> bool:
         return nx.has_path(state_transition_graph, node_1, node_2)
+
     if max_distance != np.inf:
         def connect_nodes(node_1: str, node_2: str) -> bool:
             shortest_path_distance = nx.shortest_path_length(state_transition_graph, node_1, node_2)
@@ -409,7 +408,8 @@ def extract_graph_entropy_values(values_dict):
                                  for node in values_dict}
     return extracted_graph_entropies
 
-def find_flat_subgoals(stg_values: Dict[str, Dict[str, str|float]],
+
+def find_flat_subgoals(stg_values: Dict[str, Dict[str, str | float]],
                        subgoal_key: str) -> List[str]:
     subgoals = []
 
@@ -690,8 +690,8 @@ def get_preparedness_subgoals(environment: Environment, beta=None, compressed_ma
     return filtered_subgoals
 
 
-def get_state_transition_graph(environment: Environment, directed: bool=True, probability_weights: bool=True,
-                               compressed_matrix: bool=True, progress_bar: bool=True):
+def get_state_transition_graph(environment: Environment, directed: bool = True, probability_weights: bool = True,
+                               compressed_matrix: bool = True, progress_bar: bool = True):
     filenames = get_filenames(environment)
     adjacency_matrix, state_transition_graph, state_transition_graph_values = environment.get_adjacency_matrix(
         directed, probability_weights, compressed_matrix, progress_bar=progress_bar)
@@ -720,11 +720,11 @@ def get_undirected_connected_nodes(adjacency_matrix, node):
 
 def graph_available_skills(env: Environment, agents: List[OptionsAgent],
                            agent_labels: List[str],
-                           all_actions_valid: bool=False,
-                           graph_name: None|str=None,
-                           colours: None|List[str]=None,
-                           save_data_path: None|str=None,
-                           verbose: bool=True):
+                           all_actions_valid: bool = False,
+                           graph_name: None | str = None,
+                           colours: None | List[str] = None,
+                           save_data_path: None | str = None,
+                           verbose: bool = True):
     agents_len = len(agents)
     possible_actions = env.possible_actions
     env_filenames = get_filenames(env)
@@ -776,15 +776,16 @@ def graph_available_skills(env: Environment, agents: List[OptionsAgent],
             json.dump(save_data, save_data_file)
     return
 
+
 def graph_available_skills_from_file(skills_filepath: str,
                                      agent_labels: List[str],
-                                     graph_name: None|str=None,
-                                     legend: bool=True,
-                                     colours: None|List[str]=None,
-                                     y_lim: None|List[int]=None,
-                                     y_tick: None|int=None,
-                                     log_plot: bool=False,
-                                     smoothing_window: None|int=None):
+                                     graph_name: None | str = None,
+                                     legend: bool = True,
+                                     colours: None | List[str] = None,
+                                     y_lim: None | List[int] = None,
+                                     y_tick: None | int = None,
+                                     log_plot: bool = False,
+                                     smoothing_window: None | int = None):
     with open(skills_filepath, 'r') as skills_file:
         skills_data = json.load(skills_file)
     plot_data = []
@@ -838,15 +839,16 @@ def graph_available_skills_from_file(skills_filepath: str,
     )
     return
 
+
 def graph_average_available_skills_from_file(skills_filepaths: List[str],
                                              agent_labels: List[str],
                                              presentation_labels: List[str],
                                              env_names: List[str],
-                                             graph_name: None|str=None,
-                                             error_bars: bool=False,
-                                             width: float=0.5,
-                                             y_lims: None|List[List[int]]=None, y_ticks: None|int=None,
-                                             colours: None|List[str]=None,
+                                             graph_name: None | str = None,
+                                             error_bars: bool = False,
+                                             width: float = 0.5,
+                                             y_lims: None | List[List[int]] = None, y_ticks: None | int = None,
+                                             colours: None | List[str] = None,
                                              ):
     num_envs = len(env_names)
     num_agents = len(agent_labels)
@@ -875,7 +877,7 @@ def graph_average_available_skills_from_file(skills_filepaths: List[str],
             standard_dev = 0
             for value in skills_per_state:
                 standard_dev += np.square(value - mean)
-            errors[i][j] = standard_dev/num_states
+            errors[i][j] = standard_dev / num_states
         print(plot_data[i]["Level 1"])
         print(errors[i])
 
@@ -902,10 +904,11 @@ def graph_average_available_skills_from_file(skills_filepaths: List[str],
 
 def graph_multiple_skill_count(agents: List[List[OptionsAgent]],
                                agent_labels: List[List[str]], env_names: List[str],
-                               graph_name: None|str=None,
-                               legend_axes: None|int=None, legend_location: None|str=None,
-                               width: float=0.5, y_lims: None|List[List[int]]=None, y_ticks: None|List[int]=None,
-                               colours: None|List[str]=None):
+                               graph_name: None | str = None,
+                               legend_axes: None | int = None, legend_location: None | str = None,
+                               width: float = 0.5, y_lims: None | List[List[int]] = None,
+                               y_ticks: None | List[int] = None,
+                               colours: None | List[str] = None):
     num_envs = len(env_names)
     max_level = 0
     skill_counts = [{} for _ in range(num_envs)]
@@ -920,7 +923,7 @@ def graph_multiple_skill_count(agents: List[List[OptionsAgent]],
             max_level = max(max(skill_counts[i][agent_label].keys()), max_level)
 
     plot_data = [{"Level " + str(level): np.zeros(num_agents[i])
-                 for level in range(1, max_level + 1)} for i in range(num_envs)]
+                  for level in range(1, max_level + 1)} for i in range(num_envs)]
 
     for i in range(num_envs):
         for j in range(num_agents[i]):
@@ -945,14 +948,15 @@ def graph_multiple_skill_count(agents: List[List[OptionsAgent]],
                                              graph_name,
                                              False,
                                              colours
-    )
+                                             )
     return
+
 
 def graph_multiple_skill_count_by_state_size(agents: List[List[PreparednessAgent]],
                                              agent_labels: List[str],
-                                             name: str|None=None,
-                                             verbose: bool=False,
-                                             colours: List[str]|None=None):
+                                             name: str | None = None,
+                                             verbose: bool = False,
+                                             colours: List[str] | None = None):
     to_plot = []
     x = []
 
@@ -992,15 +996,17 @@ def graph_multiple_skill_count_by_state_size(agents: List[List[PreparednessAgent
 
     return
 
+
 def graph_multiple_subgoal_count(envs: List[Environment], env_names: List[str],
                                  subgoal_keys: List[str], multiple_levels: List[bool],
-                                 clusters: None|List[bool]=None,
-                                 plot_percentage: bool=False,
-                                 labels: None|List[str]=None, graph_name: None|str=None,
-                                 legend_axes: None|int=None, legend_location: str="upper right",
-                                 width: float=0.5, y_lims: None|List[List[int]]=None, y_ticks: None|List[int]=None,
-                                 percentage: bool=False,
-                                 colours: None|List[str]=None):
+                                 clusters: None | List[bool] = None,
+                                 plot_percentage: bool = False,
+                                 labels: None | List[str] = None, graph_name: None | str = None,
+                                 legend_axes: None | int = None, legend_location: str = "upper right",
+                                 width: float = 0.5, y_lims: None | List[List[int]] = None,
+                                 y_ticks: None | List[int] = None,
+                                 percentage: bool = False,
+                                 colours: None | List[str] = None):
     num_keys = len(subgoal_keys)
     num_envs = len(envs)
     max_level = 0
@@ -1017,12 +1023,12 @@ def graph_multiple_subgoal_count(envs: List[Environment], env_names: List[str],
         for j in range(num_keys):
             if not clusters[j]:
                 subgoal_counts[i][subgoal_keys[j]], state_count = count_subgoals(envs[i], subgoal_keys[j],
-                                                                             multiple_levels[j],
-                                                                             True)
+                                                                                 multiple_levels[j],
+                                                                                 True)
                 num_states[i] = state_count
             else:
                 subgoal_counts[i][subgoal_keys[j]] = count_clusters(envs[i], subgoal_keys[j],
-                                                                 False)
+                                                                    False)
                 any_clusters = True
 
             height = max(subgoal_counts[i][subgoal_keys[j]].keys())
@@ -1071,8 +1077,8 @@ def graph_multiple_subgoal_count(envs: List[Environment], env_names: List[str],
 
 
 def graph_skill_count(agents: List[OptionsAgent], agent_labels: List[str],
-                      graph_name: None|str=None, legend_location: None|str=None,
-                      width: float=0.5, y_lim: None|List[int]=None, colours: None|List[str]=None):
+                      graph_name: None | str = None, legend_location: None | str = None,
+                      width: float = 0.5, y_lim: None | List[int] = None, colours: None | List[str] = None):
     num_labels = len(agents)
     skill_counts = {}
     max_level = 0
@@ -1108,9 +1114,10 @@ def graph_skill_count(agents: List[OptionsAgent], agent_labels: List[str],
                                     )
     return
 
+
 def graph_skill_count_by_state_size(agents: List[PreparednessAgent],
-                                    name: str|None=None,
-                                    verbose: bool=False):
+                                    name: str | None = None,
+                                    verbose: bool = False):
     y = []
     x = []
 
@@ -1140,8 +1147,9 @@ def graph_skill_count_by_state_size(agents: List[PreparednessAgent],
     )
     return
 
+
 def graph_skill_count_by_state_size_from_file(filepath: str,
-                                              name: str|None=None):
+                                              name: str | None = None):
     with open(filepath, 'r') as f:
         skill_counts = json.load(f)
 
@@ -1172,12 +1180,13 @@ def graph_skill_count_by_state_size_from_file(filepath: str,
     )
     return
 
+
 def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multiple_levels: List[bool],
-                        clusters: None|List[bool]=None,
-                        plot_percentage: bool=False,
-                        plot_num_states: bool=False,
-                        labels: None|List[str]=None, graph_name: None|str=None, legend: bool=True,
-                        width: float=0.5, y_lim: None|List[int]=None, colours: None|List[str]=None):
+                        clusters: None | List[bool] = None,
+                        plot_percentage: bool = False,
+                        plot_num_states: bool = False,
+                        labels: None | List[str] = None, graph_name: None | str = None, legend: bool = True,
+                        width: float = 0.5, y_lim: None | List[int] = None, colours: None | List[str] = None):
     num_keys = len(subgoal_keys)
     subgoal_counts = {}
     max_level = 0
@@ -1189,11 +1198,12 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
 
     for i in range(num_keys):
         if not clusters[i]:
-            subgoal_counts[subgoal_keys[i]], num_states = count_subgoals(environment, subgoal_keys[i], multiple_levels[i],
+            subgoal_counts[subgoal_keys[i]], num_states = count_subgoals(environment, subgoal_keys[i],
+                                                                         multiple_levels[i],
                                                                          True)
         else:
             subgoal_counts[subgoal_keys[i]] = count_clusters(environment, subgoal_keys[i],
-                                                                         False)
+                                                             False)
             any_clusters = True
         height = max(subgoal_counts[subgoal_keys[i]].keys())
         if height > max_level:
@@ -1245,15 +1255,15 @@ def graph_subgoal_count(environment: Environment, subgoal_keys: List[str], multi
 def label_subgoals(
         adj_matrix: sparse.csr_matrix,
         stg: nx.MultiDiGraph,
-        stg_values: Dict[str, Dict[str, float|str]],
+        stg_values: Dict[str, Dict[str, float | str]],
         value_key: str,
-        value_key_suffix: str="",
-        min_level: None|int=None,
-        max_level: None|int=None,
-        min_subgoals: bool=False,
-        growing_neighbourhood: bool=True,
-        use_in_neighbourhood: bool=True
-) -> Tuple[nx.MultiDiGraph, Dict[str, Dict[str, float|str]], Dict[int, List[str]]]:
+        value_key_suffix: str = "",
+        min_level: None | int = None,
+        max_level: None | int = None,
+        min_subgoals: bool = False,
+        growing_neighbourhood: bool = True,
+        use_in_neighbourhood: bool = True
+) -> Tuple[nx.MultiDiGraph, Dict[str, Dict[str, float | str]], Dict[int, List[str]]]:
     subgoal_level_key = value_key + " subgoal level"
     subgoal_found = False
     key_end = " - local maxima"
@@ -1275,7 +1285,7 @@ def label_subgoals(
         get_subgoal_key = lambda _: value_key + key_end
     else:
         get_value_key = lambda level: value_key + " - " + str(level) + " hops" + value_key_suffix
-        get_subgoal_key = lambda level: value_key + " - "+ str(level) + " hops" + value_key_suffix + key_end
+        get_subgoal_key = lambda level: value_key + " - " + str(level) + " hops" + value_key_suffix + key_end
 
     if min_level is None:
         min_level = 1
@@ -1309,7 +1319,10 @@ def label_subgoals(
             if growing_neighbourhood:
                 neighbourhood_range = level
             out_neighbours = np.array(
-                [int(j) for j in stg_values if 0 < distance_matrix[int(node), int(j)] <= neighbourhood_range]
+                [
+                    int(j) for j in stg_values if 0 < distance_matrix[int(node), int(j)] <= neighbourhood_range and
+                                                  int(j) != int(node)
+                ]
             )
 
             if out_neighbours.size <= 0:
@@ -1317,7 +1330,10 @@ def label_subgoals(
             else:
                 if use_in_neighbourhood:
                     in_neighbours = np.array(
-                        [int(j) for j in stg_values if 0 < distance_matrix[int(j), int(node)] <= neighbourhood_range]
+                        [
+                            int(j) for j in stg_values if 0 < distance_matrix[int(j), int(node)] <= neighbourhood_range
+                                                          and int(j) != int(node)
+                        ]
                     )
                 else:
                     in_neighbours = np.array([])
@@ -1368,10 +1384,10 @@ def label_subgoals(
 
 
 def label_preparedness_subgoals(adj_matrix: sparse.csr_matrix, stg: nx.MultiDiGraph,
-                                stg_values: Dict[str, Dict[str, float|str]], beta: float=0.5,
-                                min_level: int=1, max_level: None|int=None,
-                                min_subgoals: bool=False
-                                ) -> Tuple[nx.MultiDiGraph, Dict[str, float|str], Dict[int, List[str]]]:
+                                stg_values: Dict[str, Dict[str, float | str]], beta: float = 0.5,
+                                min_level: int = 1, max_level: None | int = None,
+                                min_subgoals: bool = False
+                                ) -> Tuple[nx.MultiDiGraph, Dict[str, float | str], Dict[int, List[str]]]:
     return label_subgoals(
         adj_matrix,
         stg,
@@ -1392,10 +1408,11 @@ def make_entropy_intrinsic_reward(graph_entropies):
 
     return intrinsic_reward_func
 
+
 def merge_stg_values(
-        merge_from: Dict[str, Dict[str, str|float]],
-        merge_into: Dict[str, Dict[str, str|float]]
-) -> Dict[str, Dict[str, str|float]]:
+        merge_from: Dict[str, Dict[str, str | float]],
+        merge_into: Dict[str, Dict[str, str | float]]
+) -> Dict[str, Dict[str, str | float]]:
     for key in merge_from.keys():
         try:
             _ = merge_into[key]
@@ -1405,6 +1422,7 @@ def merge_stg_values(
         for new_key in merge_from[key].keys():
             merge_into[key][new_key] = merge_from[key][new_key]
     return merge_into
+
 
 def node_frequency_entropy(adjacency_matrix: np.matrix, node, num_hops=1,
                            log_base=10, accuracy=4, compressed_matrix=False,
@@ -1419,7 +1437,7 @@ def node_frequency_entropy(adjacency_matrix: np.matrix, node, num_hops=1,
         W_start_node = 0.0
         for j in neighbours:
             W_start_node += adjacency_matrix[int(start_node), int(j)]
-        if (W_start_node <= 0)  and (start_node == goal_node):
+        if (W_start_node <= 0) and (start_node == goal_node):
             return 1.0
         if hops_away == 1:
             if W_start_node <= 0:
@@ -1511,9 +1529,9 @@ def node_structural_entropy(adjacency_matrix: np.matrix, node, num_hops=1,
 
 
 def normalise_key(
-        stg_values: Dict[str, Dict[str, float|str]],
+        stg_values: Dict[str, Dict[str, float | str]],
         key: str
-) -> Dict[str, Dict[str, float|str]]:
+) -> Dict[str, Dict[str, float | str]]:
     reduced_dict = {node: stg_values[node][key] for node in stg_values}
     values = reduced_dict.values()
 
@@ -1600,14 +1618,15 @@ def preparedness(adjacency_matrix, beta=None, beta_values=None,
 def preparedness_aggregate_graph(environment: Environment,
                                  adjacency_matrix: sparse.csr_matrix,
                                  state_transition_graph: nx.MultiDiGraph,
-                                 stg_values : Dict[str, Dict[str, str | float | int]],
-                                 preparedness_subgoals: Dict[str, List[str]] | None=None,
-                                 min_hop: int=1,
-                                 max_hop: int | None=None,
-                                 beta: float=0.5,
-                                 max_distance: int=np.inf) -> (nx.MultiDiGraph, nx.MultiDiGraph, Dict[str, Dict]):
+                                 stg_values: Dict[str, Dict[str, str | float | int]],
+                                 preparedness_subgoals: Dict[str, List[str]] | None = None,
+                                 min_hop: int = 1,
+                                 max_hop: int | None = None,
+                                 beta: float = 0.5,
+                                 max_distance: int = np.inf) -> (nx.MultiDiGraph, nx.MultiDiGraph, Dict[str, Dict]):
     def connect_nodes(node_1, node_2):
         return nx.has_path(state_transition_graph, node_1, node_2)
+
     if max_distance != np.inf:
         def connect_nodes(node_1, node_2):
             shortest_path_distance = nx.shortest_path_length(state_transition_graph, node_1, node_2)
@@ -1711,6 +1730,8 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
         if existing_stg_values is None:
             preparedness_values[str(node)] = {}
         for num_hops in range(min_num_hops, max_num_hops + 1):
+            if min_computed_hops <= num_hops <= max_computed_hops:
+                continue
             name_suffix = get_name_suffix(num_hops)
 
             neighbours = np.where((0 < distances) & (distances <= num_hops))[0]
@@ -1724,13 +1745,11 @@ def preparedness_efficient(adjacency_matrix, beta=None, beta_values=None,
                     frequency_entropy = None
             if frequency_entropy is None:
                 frequency_entropy = \
-                    node_frequency_entropy(adjacency_matrix, node, min_num_hops, log_base,
+                    node_frequency_entropy(adjacency_matrix, node, num_hops, log_base,
                                            accuracy, compressed_matrix, neighbours)
             preparedness_values[str(node)]['frequency entropy ' + name_suffix] = frequency_entropy
-            if min_computed_hops <= num_hops <= max_computed_hops:
-                continue
             preparedness_values[str(node)]['structural entropy ' + name_suffix] = \
-                node_structural_entropy(adjacency_matrix, node, min_num_hops, log_base,
+                node_structural_entropy(adjacency_matrix, node, num_hops, log_base,
                                         accuracy, compressed_matrix, neighbours)
 
             for beta_value in beta_values:
@@ -1749,10 +1768,10 @@ def print_eigenoptions_subgoals(state_transition_graph_values):
 
 
 def print_preparedness_subgoals(environment: Environment, subgoal_level: int, beta: float):
-    #all_states_filename = environment.environment_name + '_all_states.npy'
+    # all_states_filename = environment.environment_name + '_all_states.npy'
     values_filename = environment.environment_name + '_stg_values.json'
 
-    #all_states = np.load(all_states_filename)
+    # all_states = np.load(all_states_filename)
     with open(values_filename, 'r') as f:
         values = json.load(f)
 
@@ -1767,8 +1786,8 @@ def print_preparedness_subgoals(environment: Environment, subgoal_level: int, be
         print(values[i]['state'])
         num_subgoal_states += 1
 
-    print(str(num_subgoal_states) + '/' + str(num_states) + " subgoals (" +\
-          str(round((num_subgoal_states/num_states) * 100, 3)) + "%)")
+    print(str(num_subgoal_states) + '/' + str(num_states) + " subgoals (" + \
+          str(round((num_subgoal_states / num_states) * 100, 3)) + "%)")
     return
 
 
@@ -1997,9 +2016,9 @@ def run_episode(env: Environment,
 def run_epoch(env: Environment,
               agent: LearningAgent,
               num_steps: int,
-              seed: None | int=None,
-              all_actions_valid: bool=True,
-              progress_bar: bool=True):
+              seed: None | int = None,
+              all_actions_valid: bool = True,
+              progress_bar: bool = True):
     current_possible_actions = env.possible_actions
     epoch_return = 0
     total_steps = 0
@@ -2043,6 +2062,7 @@ def run_epoch(env: Environment,
 
     return epoch_return
 
+
 def train_betweenness_agents(base_agent_save_path: str,
                              environment: Environment,
                              training_timesteps, num_agents, evaluate_policy_window=10,
@@ -2050,7 +2070,7 @@ def train_betweenness_agents(base_agent_save_path: str,
                              total_eval_steps=np.inf,
                              continue_training=False,
                              overwrite_existing_agents=True,
-                             alpha=0.9, epsilon=0.1, gamma=0.9, subgoal_distance: int=30,
+                             alpha=0.9, epsilon=0.1, gamma=0.9, subgoal_distance: int = 30,
                              progress_bar=False):
     all_agent_training_returns = {str(i): [] for i in range(num_agents)}
     all_agent_returns = {str(i): [] for i in range(num_agents)}
@@ -2288,7 +2308,7 @@ def train_louvain_agents(environment: Environment, file_name_prefix,
                                                                    all_actions_valid,
                                                                    agent_save_path=(
                                                                            agent_directory
-                                                                           +'/louvain_agent_' + str(i) + '.json'),
+                                                                           + '/louvain_agent_' + str(i) + '.json'),
                                                                    total_eval_steps=total_eval_steps,
                                                                    copy_agent=False,
                                                                    progress_bar=progress_bar)
@@ -2303,38 +2323,48 @@ def train_louvain_agents(environment: Environment, file_name_prefix,
 
     return
 
+
 def train_preparedness_agents(base_agent_save_path: str,
                               option_onboarding: str,
                               environment: Environment,
-                              training_timesteps: int, num_agents: int, evaluate_policy_window: int=10,
-                              all_actions_valid: bool=True,
-                              total_eval_steps: int=np.inf,
-                              continue_training: bool=False,
+                              training_timesteps: int, num_agents: int, evaluate_policy_window: int = 10,
+                              all_actions_valid: bool = True,
+                              total_eval_steps: int = np.inf,
+                              continue_training: bool = False,
                               overwrite_existing_agents=False,
-                              alpha: float=0.9, epsilon: float=0.1, gamma: float=0.9,
-                              max_option_length: int=np.inf, max_hierarchy_height: None | int=None,
-                              progress_bar: bool=False) -> None:
+                              alpha: float = 0.9, epsilon: float = 0.1, gamma: float = 0.9,
+                              max_option_length: int = np.inf, max_hierarchy_height: None | int = None,
+                              progress_bar: bool = False) -> None:
     agent_results_file = 'preparedness_agent_returns_' + option_onboarding + '_onboarding.json'
     agent_training_results_file = 'preparedness_agent_training_returns_' + option_onboarding + '_onboarding.json'
     filenames = get_filenames(environment)
 
+    adjacency_matrix = sparse.load_npz(filenames['adjacency matrix'])
     state_transition_graph = nx.read_gexf(filenames['state transition graph'])
     aggregate_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
 
     base_agent = PreparednessAgent(environment.possible_actions,
                                    alpha, epsilon, gamma,
                                    environment.state_dtype,
                                    environment.state_shape,
-                                   state_transition_graph, aggregate_graph,
+                                   state_transition_graph,
+                                   adjacency_matrix,
+                                   stg_values,
+                                   aggregate_graph,
                                    option_onboarding,
-                                   max_option_length, max_hierarchy_height)
+                                   max_option_length)
     training_agent = PreparednessAgent(environment.possible_actions,
-                                   alpha, epsilon, gamma,
-                                   environment.state_dtype,
-                                   environment.state_shape,
-                                   state_transition_graph, aggregate_graph,
-                                   option_onboarding,
-                                   max_option_length, max_hierarchy_height)
+                                       alpha, epsilon, gamma,
+                                       environment.state_dtype,
+                                       environment.state_shape,
+                                       state_transition_graph,
+                                       adjacency_matrix,
+                                       stg_values,
+                                       aggregate_graph,
+                                       option_onboarding,
+                                       max_option_length)
     base_agent.load(base_agent_save_path)
 
     directories_to_make = [filenames['agents'], filenames['results']]
@@ -2400,6 +2430,7 @@ def train_preparedness_agents(base_agent_save_path: str,
 
     return
 
+
 def train_preparedness_flat_agents(base_agent_save_path: str,
                                    environment: Environment,
                                    alpha: float, epsilon: float, gamma: float,
@@ -2407,9 +2438,9 @@ def train_preparedness_flat_agents(base_agent_save_path: str,
                                    evaluate_policy_window: int,
                                    training_timesteps: int,
                                    total_eval_steps: int,
-                                   all_actions_valid: bool=False,
-                                   continue_training: bool=False, overwrite_existing_agents: bool=False,
-                                   progress_bar: bool=False
+                                   all_actions_valid: bool = False,
+                                   continue_training: bool = False, overwrite_existing_agents: bool = False,
+                                   progress_bar: bool = False
                                    ):
     all_agent_training_returns = {str(i): [] for i in range(num_agents)}
     all_agent_returns = {str(i): [] for i in range(num_agents)}
@@ -2504,119 +2535,110 @@ def train_preparedness_flat_agents(base_agent_save_path: str,
 
 
 def train_preparedness_incremental_agents(
-        option_onboarding: str,
-        option_discovery_method: str,
         environment: Environment,
-        training_timesteps: int,
-        behaviour_window: int,
-        skill_training_window: int,
+        alpha: float,
+        epsilon: float,
+        gamma: float,
+        graph_save_paths_prefix: str,
         num_agents: int,
-        evaluate_policy_window: int,
-        all_actions_valid: bool=False,
-        continue_training: bool=False,
-        overwrite_existing_agents: bool=False,
-        alpha: float=0.9,
-        epsilon: float=0.1,
-        gamma: float=0.9,
-        max_hierarchy_height: int=5,
-        checkpoint: None|int=None,
-        save_representation: bool=False,
-        progress_bar: bool=False
+        behaviour_timesteps: List[int],
+        behaviours: List[AgentBehaviour],
+        training_timesteps: int,
+        file_save_name: str = "preparedness_incremental",
+        checkpoint_window: int | None = None,
+        all_actions_valid: bool = False,
+        progress_bar: bool = False
 ):
-    agent_results_file = "preparedness_incremental_agent_returns_" + option_onboarding + "_" + option_discovery_method + ".json"
-    agent_training_results_file = "preparedness_incremental_agent_training_returns_" + option_onboarding + "_" + option_discovery_method + ".json"
+    possible_actions = environment.possible_actions
+    num_behaviours = len(behaviours)
+
+    all_agent_training_returns = {str(i): [] for i in range(num_agents)}
+
     filenames = get_filenames(environment)
 
-    base_agent = PreparednessIncremental(
-        environment.possible_actions,
-        skill_training_window,
-        alpha,
-        epsilon,
-        gamma,
-        environment.state_dtype,
-        environment.state_shape,
-        max_hierarchy_height,
-        option_onboarding,
-        option_discovery_method
-    )
-    training_agent = PreparednessIncremental(
-        environment.possible_actions,
-        skill_training_window,
-        alpha,
-        epsilon,
-        gamma,
-        environment.state_dtype,
-        environment.state_shape,
-        max_hierarchy_height,
-        option_onboarding,
-        option_discovery_method
-    )
-
+    agent_training_results_file = filenames['results'] + '/' + file_save_name + '_training_returns.json'
     directories_to_make = [filenames['agents'], filenames['results']]
     for directory in directories_to_make:
         if not os.path.isdir(directory):
             os.mkdir(directory)
 
-    all_agent_returns = {str(i): [] for i in range(num_agents)}
-    all_agent_training_returns = {str(i): [] for i in range(num_agents)}
-    existing_results = False
-    if continue_training or not overwrite_existing_agents:
-        if os.path.exists(agent_results_file):
-            existing_results = True
-            with open(agent_results_file, 'r') as f:
-                all_agent_returns = json.load(f)
-        if os.path.exists(agent_training_results_file):
-            existing_results = True
-            with open(agent_training_results_file, 'r') as f:
-                all_agent_training_returns = json.load(f)
-
-    agent_start_index = 0
-    existing_agents_index = 0
-    if (not overwrite_existing_agents) and existing_results:
-        existing_agents_index = len(all_agent_training_returns)
-        num_agents += existing_agents_index
-        for i in range(existing_agents_index, num_agents):
-            all_agent_returns[str(i)] = []
-            all_agent_training_returns[str(i)] = []
-        if not continue_training:
-            agent_start_index = existing_agents_index
-
-    for i in range(agent_start_index, num_agents):
-        i_str = str(i)
+    for i in range(num_agents):
         if progress_bar:
-            print("Training Preparedness Incremental agent " + option_onboarding + " onboarding: " +
-                  i_str + '/' + str(num_agents - 1))
+            print("Training Preparedness Incremental agent " + str(i))
 
-        agent_save_path = "preparedness_incremental_agent_" + option_onboarding + "_" + option_discovery_method + i_str
-
-        if continue_training and (i < existing_agents_index):
-            training_agent.load(agent_save_path)
-        else:
-            training_agent.copy_agent(base_agent)
-
-        training_agent, agent_training_returns, agent_returns = train_rod_agent(
-            environment,
-            training_agent,
-            training_timesteps,
-            behaviour_window,
-            total_evaluation_steps,
-            evaluate_policy_window,
-            all_actions_valid,
-            filenames['agents'] + '/' + agent_save_path,
-            checkpoint,
-            save_representation,
-            progress_bar
+        agent = PreparednessIncremental(
+            environment.possible_actions,
+            alpha,
+            epsilon,
+            gamma,
+            environment.state_dtype,
+            environment.state_shape,
+            filenames['agents'] + '/' + graph_save_paths_prefix + "_" + str(i)
         )
+        agent.set_behaviour(behaviours[0])
 
-        all_agent_training_returns[i_str] += agent_training_returns
-        all_agent_returns[i_str] += agent_returns
+        training_returns = []
+        terminal = True
+        current_training_timesteps = 0
+        current_behaviour_timesteps = 0
+        current_behaviour_index = 0
+        while current_training_timesteps < training_timesteps:
+            if progress_bar:
+                print_progress_bar(
+                    current_training_timesteps,
+                    training_timesteps,
+                    decimals=3,
+                    prefix='Agent Training: ',
+                    suffix='Complete'
+                )
 
-        training_agent.save(filenames['agents'] + '/' + agent_save_path)
+            if terminal:
+                state = environment.reset()
+                if not all_actions_valid:
+                    possible_actions = environment.get_possible_actions(state)
 
-        with open(filenames['results'] + '/' + agent_training_results_file, 'w') as f:
+            action = agent.choose_action(state, False, possible_actions)
+
+            next_state, reward, terminal, _ = environment.step(action)
+
+            if not all_actions_valid:
+                possible_actions = environment.get_possible_actions(next_state)
+
+            agent.learn(
+                state,
+                action,
+                reward,
+                next_state,
+                terminal,
+                possible_actions
+            )
+
+            state = next_state
+            training_returns.append(reward)
+
+            current_training_timesteps += 1
+            current_behaviour_timesteps += 1
+
+            if current_behaviour_timesteps >= behaviour_timesteps[current_behaviour_index]:
+                current_behaviour_index = (current_behaviour_index + 1) % num_behaviours
+                agent.set_behaviour(behaviours[current_behaviour_index])
+                current_behaviour_timesteps = 0
+
+            if current_training_timesteps % checkpoint_window == 0:
+                agent.graph_save_paths_prefix = (
+                        filenames['agents'] + '/' +
+                        graph_save_paths_prefix + "_" + str(i) +
+                        '_checkpoint_' + str(current_training_timesteps)
+                )
+                agent.save(
+                    filenames['agents'] + '/' + file_save_name + '_checkpoint_' + str(current_training_timesteps)
+                )
+                agent.graph_save_paths_prefix = filenames['agents'] + '/' + graph_save_paths_prefix
+
+        all_agent_training_returns[str(i)].append(training_returns.copy())
+        agent.save(filenames['agents'] + '/' + file_save_name + '_' + str(i) + '.json')
+        with open(agent_training_results_file, 'w') as f:
             json.dump(all_agent_training_returns, f)
-        with open(filenames['results'] + '/' + agent_results_file, 'w') as f:
-            json.dump(all_agent_returns, f)
 
     return
 
@@ -2691,18 +2713,19 @@ def train_q_learning_agent(environment: Environment,
 
     return
 
+
 def train_rod_agent(
         environment: Environment,
         rod_agent: RODAgent,
         training_steps: int,
         behaviour_window: int,
         total_eval_steps: int,
-        evaluate_policy_window: int=10,
-        all_actions_valid: bool=False,
-        file_prefix: str='rod_agent',
-        checkpoint: None|int=None,
-        save_representation: bool=False,
-        progress_bar: bool=False
+        evaluate_policy_window: int = 10,
+        all_actions_valid: bool = False,
+        file_prefix: str = 'rod_agent',
+        checkpoint: None | int = None,
+        save_representation: bool = False,
+        progress_bar: bool = False
 ) -> Tuple[RODAgent, List[float], List[float]]:
     behaviours = [
         AgentBehaviour.EXPLORE,
@@ -2779,8 +2802,9 @@ def train_rod_agent(
 
     return rod_agent, training_returns, epoch_returns
 
+
 def update_graph_attributes(environment: Environment,
-                            attributes: Dict[str, Dict[str, str|float]]) -> None:
+                            attributes: Dict[str, Dict[str, str | float]]) -> None:
     graph_filenames = get_filenames(environment)
 
     for path in [graph_filenames['state transition graph'],
@@ -2805,9 +2829,9 @@ def update_graph_attributes(environment: Environment,
 # Writing: Related Work, future work
 
 if __name__ == "__main__":
-    # lavaflow = LavaFlow()
+    lavaflow = LavaFlow()
     # simple_crafter = SimpleCrafter()
-    snake = Snake(3, 3, 1, 2)
+    # snake = Snake(3, 3, 1, 2)
     # tinytown = TinyTown(2, 3)
     # taxicab_classic = TaxiCab(False, False, continuous=False)
     # taxicab = TaxiCab(False, False, [0.25, 0.01, 0.01, 0.01, 0.72], continuous=True)
@@ -2823,12 +2847,12 @@ if __name__ == "__main__":
     max_num_hops = 4
     num_agents = 5
     # Taxicab=200, Simple_wind_gridworld_4x7x7=25, tinytown_3x3=100, tinytown_2x2=np.inf, tinytown_2x3=35, lavaflow_room=50, simple_crafter=50, taxicab_classic=25, snake=50
-    total_evaluation_steps = 50
+    total_evaluation_steps = 200
     # simple_crafter: 1_000_000, tinytown 2x2: 25_000, tinytown(choice)2x3=50_000, taxicab_arrival-prob 500_000, lavaflow_room=100_000, lavaflow_pipes=2_000
     options_training_timesteps = 1_000_000
     # tinytown_2x2=20_000, tinytown_2x3(choice)=200_000, tinytown_3x3=1_000_000, simple_wind_gridworld_4x7x7=50_000
     # lavaflow_room=50_000, lavaflow_pipes=50_000, snake=100_000 taxicab=50_000, taxicab_classic=100_000
-    training_timesteps = 100_000
+    training_timesteps = 50_000
     # Min Hops: Taxicab=1, lavaflow=1, tinytown(2x2)=2, tinytown(2x3)=1(but all level 1 subgoals are level 2)
     behaviour_window = 500
 
@@ -2841,6 +2865,260 @@ if __name__ == "__main__":
     # Betweenness - AA4499 - 6
     # Primitives - 555555 - 7
     # Preparedness flat - EE3377 - 8
+
+    filenames = get_filenames(lavaflow)
+    # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    # preparedness_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    print("Snake Louvain")
+    louvain_agent = LouvainAgent(
+        lavaflow.possible_actions,
+        state_transition_graph,
+        lavaflow.state_dtype,
+        lavaflow.state_shape,
+        min_hierarchy_level=0,
+    )
+
+    print("Loading Agent")
+    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
+
+    louvain_agent.train_options(
+        1_000_000,
+        lavaflow,
+        True,
+        True
+    )
+
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+    exit()
+
+    filenames = get_filenames(taxicab)
+
+    print("Training " + taxicab.environment_name + " " + option_onboarding + " Preparedness Agent")
+    train_preparedness_agents(
+        filenames['agents'] + '/preparedness_base_agent.json',
+        option_onboarding,
+        taxicab,
+        training_timesteps,
+        5,
+        evaluate_policy_window,
+        True,
+        total_evaluation_steps,
+        continue_training=False,
+        overwrite_existing_agents=True,
+        progress_bar=True
+    )
+    exit()
+
+    filenames = get_filenames(taxicab)
+    data = graphing.extract_data(
+        filenames['results'],
+        [
+            'preparedness_agent_returns_none_onboarding.json',
+            # 'preparedness_agent_returns_generic_onboarding.json',
+            # 'preparedness_agent_returns_specific_onboarding.json',
+            'eigenoptions_epoch_returns.json',
+            'louvain agent returns',
+            'betweenness_epoch_returns.json',
+            # 'preparedness_flat_epoch_returns.json',
+            'q_learning_epoch_returns.json'
+        ]
+    )
+    graphing.graph_reward_per_epoch(
+        data,
+        graphing_window,
+        evaluate_policy_window,
+        name='Taxicab',
+        x_label='Timesteps',
+        y_label='Average Epoch Return',
+        error_bars=True,
+        colours=[
+            '#332288',
+            # '#117733',
+            # '#88CCEE',
+            '#DDCC77',
+            '#CC6677',
+            '#AA4499',
+            '#555555'
+        ],
+        labels=[
+            'Preparedness',
+            # 'Preparedness (Generic Onboarding)',
+            # 'Preparedness (Specific Onboarding)',
+            'Eigenoptions',
+            'Louvain',
+            'Betweenness',
+            # 'Flat Preparedness',
+            'Primitives'
+        ]
+    )
+    exit()
+
+    print("Applying Louvain")
+    stg_values = louvain_agent.apply_louvain(
+        first_levels_to_skip=2,
+        state_transition_graph_values=stg_values,
+        graph_save_path=filenames['state transition graph'],
+        aggregate_graphs_save_paths_prefix=lavaflow.environment_name
+    )
+
+    print("Creating Options")
+    louvain_agent.create_options()
+
+    print("Saving Agent and STG Values")
+    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
+
+    nx.set_node_attributes(state_transition_graph, stg_values)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+    filenames = get_filenames(snake)
+    preparedness_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+
+    filenames = get_filenames(taxicab)
+    adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
+    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
+    preparedness_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
+    with open(filenames['state transition graph values'], 'r') as f:
+        stg_values = json.load(f)
+
+    print("Creating Snake Agent")
+    preparedness_agent = PreparednessAgent(
+        snake.possible_actions,
+        0.9,
+        0.15,
+        0.9,
+        snake.state_dtype,
+        snake.state_shape,
+        state_transition_graph,
+        adj_matrix,
+        stg_values,
+        preparedness_subgoal_graph,
+        'none',
+        max_hierarchy_height=10
+    )
+
+    preparedness_agent.create_options(
+        snake
+    )
+
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+
+    preparedness_agent.train_options(
+        snake,
+        10_000,
+        train_between_options=True,
+        train_onboarding_options=False,
+        train_subgoal_options=False,
+        progress_bar=True
+    )
+
+    preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
+
+    exit()
+
+    preparedness_agent.find_preparedness_subgoals(
+        True,
+        True,
+        True,
+        True
+    )
+
+    stg_values = preparedness_agent.stg_values
+    state_transition_graph = preparedness_agent.state_transition_graph
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    # nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+    stg_values = preparedness_agent.stg_values
+    state_transition_graph = preparedness_agent.state_transition_graph
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+    exit()
+
+    print("Training taxitown Louvain Agents")
+    train_louvain_agents(
+        taxicab,
+        taxicab.environment_name,
+        filenames['agents'],
+        filenames['results'],
+        training_timesteps,
+        5,
+        evaluate_policy_window,
+        initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
+        all_actions_valid=True,
+        overwrite_existing_agents=True,
+        total_eval_steps=total_evaluation_steps,
+        state_dtype=taxicab.state_dtype,
+        state_shape=taxicab.state_shape,
+        progress_bar=True
+    )
+
+    exit()
+
+    stg_values = preparedness_efficient(
+        adj_matrix,
+        0.5,
+        max_num_hops=4,
+        compressed_matrix=True,
+        existing_stg_values=stg_values
+    )
+
+    nx.set_node_attributes(state_transition_graph, stg_values)
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+
+    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
+        adj_matrix,
+        state_transition_graph,
+        stg_values,
+    )
+
+    nx.set_node_attributes(state_transition_graph, stg_values)
+
+    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    with open(filenames["state transition graph values"], 'w') as f:
+        json.dump(stg_values, f)
+
+    print("Creating preparedness subgoal graph")
+    state_transition_graph, preparedness_subgoal_graph, stg_values = preparedness_aggregate_graph(
+        taxicab, adj_matrix, state_transition_graph, stg_values,
+    )
+
+    nx.set_node_attributes(preparedness_subgoal_graph, stg_values)
+
+    nx.write_gexf(preparedness_subgoal_graph, filenames['preparedness aggregate graph'])
+    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
+    exit()
+
+    print("Training " + snake.environment_name + " betweenness agents")
+
+    train_betweenness_agents(
+        'betweenness_base_agent.json',
+        snake,
+        training_timesteps,
+        5,
+        evaluate_policy_window,
+        True,
+        total_evaluation_steps,
+        continue_training=False,
+        overwrite_existing_agents=True,
+        progress_bar=True
+    )
+    exit()
 
     filenames = get_filenames(snake)
     # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
@@ -2871,7 +3149,7 @@ if __name__ == "__main__":
     # preparedness_agent.save(filenames['agents'] + '/preparedness_base_agent.json')
     untrained_options_level = preparedness_agent.train_options(
         snake,
-        50_000,
+        10_000,
         min_level=training_level,
         max_level=training_level,
         all_actions_possible=True,
@@ -2889,113 +3167,20 @@ if __name__ == "__main__":
     print(snake.environment_name + " preparedness training options")
     exit()
 
-    filenames = get_filenames(taxicab)
-    # adj_matrix = sparse.load_npz(filenames['adjacency matrix'])
-    state_transition_graph = nx.read_gexf(filenames['state transition graph'])
-    # preparedness_subgoal_graph = nx.read_gexf(filenames['preparedness aggregate graph'])
-    with open(filenames['state transition graph values'], 'r') as f:
-        stg_values = json.load(f)
-
-    print("Taxicab Louvain")
-    louvain_agent = LouvainAgent(
-        taxicab.possible_actions,
-        state_transition_graph,
-        taxicab.state_dtype,
-        taxicab.state_shape,
-        min_hierarchy_level=0,
-    )
-    print("Loading Agent")
-    louvain_agent.load(filenames['agents'] + '/louvain_base_agent.json')
-
-    print("Training " + taxicab.environment_name + " Louvain Options")
-    louvain_agent.train_options(
-        1_000_000,
-        taxicab,
-        True,
-        True
-    )
-
-    print("Saving Agent and STG Values")
-    louvain_agent.save(filenames['agents'] + '/louvain_base_agent.json')
-
-    nx.set_node_attributes(state_transition_graph, stg_values)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
-    exit()
-
-    print("Training " + snake.environment_name + " betweenness agents")
-
-    train_betweenness_agents(
-        'betweenness_base_agent.json',
-        snake,
-        training_timesteps,
-        5,
-        evaluate_policy_window,
-        True,
-        total_evaluation_steps,
-        continue_training=False,
-        overwrite_existing_agents=True,
+    train_preparedness_incremental_agents(
+        tinytown,
+        0.9,
+        0.15,
+        0.9,
+        'preparedness_incremental',
+        1,
+        [1_000],
+        [AgentBehaviour.EXPLORE],
+        1_000,
+        checkpoint_window=250,
+        all_actions_valid=False,
         progress_bar=True
     )
-    exit()
-
-    filenames = get_filenames(snake)
-    data = graphing.extract_data(
-        filenames['results'],
-        [
-            # 'preparedness_agent_returns_none_onboarding.json',
-            # 'preparedness_agent_returns_generic_onboarding.json',
-            # 'preparedness_agent_returns_specific_onboarding.json',
-            'eigenoptions_epoch_returns.json',
-            # 'louvain agent returns',
-            # 'betweenness_epoch_returns.json',
-            # 'preparedness_flat_epoch_returns.json',
-            'q_learning_epoch_returns.json'
-        ]
-    )
-    graphing.graph_reward_per_epoch(
-        data,
-        graphing_window,
-        evaluate_policy_window,
-        name='Snake',
-        x_label='Timesteps',
-        y_label='Average Epoch Return',
-        error_bars=True,
-        colours=[
-            # '#332288',
-            # '#117733',
-            # '#88CCEE',
-            '#DDCC77',
-            # '#CC6677',
-            # '#AA4499',
-            '#555555'
-        ],
-        labels=[
-            # 'Preparedness',
-            # 'Preparedness (Generic Onboarding)',
-            # 'Preparedness (Specific Onboarding)',
-            'Eigenoptions',
-            # 'Louvain',
-            # 'Betweenness',
-            # 'Flat Preparedness',
-            'Primitives'
-        ]
-    )
-    exit()
-
-    print("Training taxitown Louvain Agents")
-    train_louvain_agents(
-        taxicab, taxicab.environment_name,
-                         filenames['agents'], filenames['results'],
-                         training_timesteps, 5, evaluate_policy_window,
-                         initial_load_path=filenames['agents'] + '/louvain_base_agent.json',
-                         all_actions_valid=True,
-                         overwrite_existing_agents=True,
-                         total_eval_steps=total_evaluation_steps,
-                         state_dtype=taxicab.state_dtype, state_shape=taxicab.state_shape, progress_bar=True
-    )
-
     exit()
 
     filenames = get_filenames(tinytown)
@@ -3211,36 +3396,6 @@ if __name__ == "__main__":
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
 
     update_graph_attributes(snake, stg_values)
-
-    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
-    exit()
-
-    stg_values = preparedness_efficient(
-        adj_matrix,
-        0.5,
-        max_num_hops=6,
-        compressed_matrix=True,
-        existing_stg_values=stg_values,
-        computed_hops_range=[1, 5]
-    )
-
-    nx.set_node_attributes(state_transition_graph, stg_values)
-
-    sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
-    nx.write_gexf(state_transition_graph, filenames['state transition graph'])
-    with open(filenames["state transition graph values"], 'w') as f:
-        json.dump(stg_values, f)
-
-    state_transition_graph, stg_values, preparedness_subgoals = label_preparedness_subgoals(
-        adj_matrix,
-        state_transition_graph,
-        stg_values,
-    )
-
-    nx.set_node_attributes(state_transition_graph, stg_values)
 
     sparse.save_npz(filenames['adjacency matrix'], adj_matrix)
     nx.write_gexf(state_transition_graph, filenames['state transition graph'])
@@ -3547,7 +3702,7 @@ if __name__ == "__main__":
     # taxicab_classic = TaxiCab(
     #     False,
     #     False
-    #)
+    # )
 
     train_preparedness_incremental_agents(
         option_onboarding,
@@ -3566,18 +3721,6 @@ if __name__ == "__main__":
         save_representation=True,
         progress_bar=True
     )
-    exit()
-
-    filenames_taxicab = get_filenames(taxicab_classic)
-    preparedness_subgoal_graph = nx.read_gexf(filenames_taxicab['preparedness aggregate graph'])
-
-    print("Training " + taxicab_classic.environment_name + " " + option_onboarding + " Preparedness Agent")
-    train_preparedness_agents(filenames_taxicab['agents'] + '/preparedness_base_agent.json',
-                              option_onboarding, taxicab_classic,
-                              training_timesteps, 5, evaluate_policy_window,
-                              True, total_evaluation_steps,
-                              continue_training=False, overwrite_existing_agents=True,
-                              progress_bar=True)
     exit()
 
     taxicab_classic = TaxiCab(False, False)
@@ -3677,9 +3820,9 @@ if __name__ == "__main__":
             'preparedness_agent_returns_none_onboarding.json',
             'preparedness_agent_returns_generic_onboarding.json',
             'preparedness_agent_returns_specific_onboarding.json',
-            #'eigenoptions_epoch_returns.json',
-            #'louvain agent returns',
-            #'betweenness_epoch_returns.json',
+            # 'eigenoptions_epoch_returns.json',
+            # 'louvain agent returns',
+            # 'betweenness_epoch_returns.json',
             'preparedness_flat_epoch_returns.json',
             'q_learning_epoch_returns.json'
         ]
@@ -3696,8 +3839,8 @@ if __name__ == "__main__":
                  '#117733',
                  '#88CCEE',
                  '#DDCC77',
-                 #'#CC6677',
-                 #'#AA4499',
+                 # '#CC6677',
+                 # '#AA4499',
                  '#555555'
                  ]
     )
@@ -4157,25 +4300,25 @@ if __name__ == "__main__":
         ],
         True,
         labels=[
-             'Preparedness',
-             'Frequency Entropy',
-             'Neighbourhood Entropy',
-             'Betweenness',
-             'Louvain'
-         ],
+            'Preparedness',
+            'Frequency Entropy',
+            'Neighbourhood Entropy',
+            'Betweenness',
+            'Louvain'
+        ],
         graph_name="TinyTown Percentage Subgoals/Clusters",
         legend=True,
         y_lim=[0, 10.5],
         colours=[
-                 '#332288',
-                 '#117733',
-                 '#88CCEE',
-                 '#DDCC77',
-                 '#CC6677',
-                 '#AA4499',
-                 '#555555',
-                 '#EE3377'
-             ]
+            '#332288',
+            '#117733',
+            '#88CCEE',
+            '#DDCC77',
+            '#CC6677',
+            '#AA4499',
+            '#555555',
+            '#EE3377'
+        ]
     )
     exit()
 

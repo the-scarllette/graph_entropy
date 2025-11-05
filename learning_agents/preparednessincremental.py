@@ -20,6 +20,7 @@ class PreparednessIncremental(OptionsAgent):
             alpha: float,
             epsilon: float,
             gamma: float,
+            max_hops: int,
             state_dtype: Type,
             state_shape: Tuple[int, ...],
             graph_save_paths_prefix: str,
@@ -28,11 +29,14 @@ class PreparednessIncremental(OptionsAgent):
         self.alpha: float = alpha
         self.epsilon: float = epsilon
         self.gamma: float = gamma
+        self.max_hops: int = max_hops
         self.state_dtype: Type = state_dtype
         self.state_shape: Tuple[int, ...] = state_shape
         self.graph_save_paths_prefix: str = graph_save_paths_prefix
 
         self.state_transition_graph: nx.DiGraph = nx.DiGraph()
+        self.adjacency_matrix: None|sparse.spmatrix = None
+        self.distance_matrix: None|sparse.csr_matrix = None
         self.num_nodes: int = 0
         self.stg_values: Dict[str, Dict[str, str|float]] = {}
         self.subgoal_graph: nx.DiGraph = nx.DiGraph()
@@ -64,6 +68,13 @@ class PreparednessIncremental(OptionsAgent):
             self,
             copy_from: 'PreparednessIncremental'
     ):
+        pass
+
+    def get_out_neighbourhood(
+            self,
+            node: str,
+            hops: int
+    ) -> List[str]:
         pass
 
     def learn(
@@ -99,6 +110,15 @@ class PreparednessIncremental(OptionsAgent):
         nx.set_node_attributes(self.subgoal_graph, self.stg_values)
         return
 
+    def node_frequency_entropy(
+            self,
+            node: str,
+            hops: int,
+            log_base: float=2.0,
+            accuracy: float=2
+    ):
+        pass
+
     def save(
             self,
             save_path: str,
@@ -119,8 +139,23 @@ class PreparednessIncremental(OptionsAgent):
         with open(save_path, 'w') as f:
             json.dump(agent_save_file, f)
 
-        nx.write_gexf(stg_save_path, self.state_transition_graph)
-        nx.write_gexf(subgoal_graph_save_path, self.subgoal_graph)
+        nx.write_gexf(self.state_transition_graph, stg_save_path)
+        nx.write_gexf(self.subgoal_graph, subgoal_graph_save_path)
+        return
+
+    def set_behaviour(
+            self,
+            behaviour: AgentBehaviour
+    ):
+        self.behaviour = behaviour
+
+        if behaviour == AgentBehaviour.TRAIN_SKILLS:
+            # Update distance matrix
+            self.update_distance_matrix()
+            # Run Preparedness
+            # Find subgoals
+            # Find Skills
+
         return
 
     def state_to_node(
@@ -131,9 +166,25 @@ class PreparednessIncremental(OptionsAgent):
         try:
             state_node = self.state_node_lookup[state_str]
         except KeyError:
-            self.state_node_lookup[state_str] = str(self.num_nodes)
+            state_node = str(self.num_nodes)
+            self.state_node_lookup[state_str] = state_node
             self.num_nodes += 1
         return state_node
+
+    def update_distance_matrix(
+            self
+    ):
+        self.adjacency_matrix = nx.to_scipy_sparse_matrix(
+            self.state_transition_graph
+        )
+
+        self.distance_matrix = sparse.csgraph.dijkstra(
+            self.adjacency_matrix,
+            True,
+            unweighted=True,
+            limit=self.max_hops
+        )
+        return
 
     def update_state_transition_graph(
             self,
@@ -141,23 +192,37 @@ class PreparednessIncremental(OptionsAgent):
             next_state: np.ndarray
     ):
         state_str: str = self.state_to_state_str(state)
-        next_state_str: str = self.state_to_str(next_state)
+        next_state_str: str = self.state_to_state_str(next_state)
         state_node: str = self.state_to_node(state)
         next_state_node: str = self.state_to_node(next_state)
 
         if not self.state_transition_graph.has_node(state_node):
-            self.state_transition_graph.add_node(state_node)
-            self.total_transitions[state_node] = {}
-            self.stg_values[state_node] = {}
+            self.state_transition_graph.add_node(state_node, state=state_str)
+            self.total_transitions[state_str] = {}
+            self.stg_values[state_node] = {'state': state_str}
 
         if not self.state_transition_graph.has_node(next_state_node):
-            self.state_transition_graph.add_node(next_state_node)
-            self.stg_values[next_state_node] = {}
+            self.state_transition_graph.add_node(next_state_node, state=next_state_str)
+            self.total_transitions[next_state_str] = {}
+            self.stg_values[next_state_node] = {'state': next_state_str}
 
         if not self.state_transition_graph.has_edge(state_node, next_state_node):
-            self.state_transition_graph.add_edge(state_node, next_state_node)
+            self.state_transition_graph.add_edge(state_node, next_state_node, weight=1.0)
             self.total_transitions[state_str][next_state_str] = 1
         else:
             self.total_transitions[state_str][next_state_str] += 1
 
+        self.update_state_transition_graph_weights(state_node)
+        return
+
+    def update_state_transition_graph_weights(
+            self,
+            node: str
+    ):
+        start_state_str: str = self.state_transition_graph.nodes[node]['state']
+        total_out_transitions: int = sum(self.total_transitions[start_state_str].values())
+        for end_node in self.state_transition_graph.neighbors(node):
+            end_state_str: str = self.state_transition_graph.nodes[end_node]['state']
+            weight: float = self.total_transitions[start_state_str][end_state_str] / total_out_transitions
+            self.state_transition_graph.edges[node, end_node]['weight'] = weight
         return
